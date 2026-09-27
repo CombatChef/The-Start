@@ -70,7 +70,10 @@
 
   // ------------------------------------------------------------------ stage fit
   function fit() {
-    const s = Math.min(root.innerWidth / 1280, root.innerHeight / 960);
+    const vp = $('#viewport');
+    const w = vp.clientWidth || root.innerWidth;
+    const h = vp.clientHeight || root.innerHeight;
+    const s = Math.min(w / 1280, h / 960);
     stage.style.transform = `translate(-50%, -50%) scale(${s})`;
   }
 

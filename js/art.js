@@ -1,0 +1,892 @@
+/*
+ * SLASHCO VR — TURN-BASED BATTLE
+ * art.js — everything drawn in code: the locker hallway, Sid, icons, the FIGHT!/RUN...
+ * banners, and the portrait cards (backdrop + portrait + status effects).
+ *
+ * Coordinates are in art pixels; the page shows them at 2x (the hallway is 640x480
+ * art pixels on a 1280x960 stage).
+ */
+(function (root) {
+  'use strict';
+  const SC = (root.SC = root.SC || {});
+  const { Pix, hex, ramp, noise, bayer, clamp01 } = SC.Pixel;
+
+  const R = (list) => list.map((c) => hex(c));
+
+  // ------------------------------------------------------------------ palettes
+  const PAL = {
+    wall: R(['#2e281c', '#4a4030', '#6d5f45', '#958363', '#bba77e', '#d6c497', '#e9dbb0']),
+    wainscot: R(['#2a2217', '#433726', '#655339', '#8b7450', '#ad9267', '#c4a878']),
+    stripe: R(['#0d2015', '#183b26', '#255a37', '#347a49', '#46985b']),
+    trim: R(['#1f1b14', '#383126', '#544a39', '#6e634d']),
+    greenDoor: R(['#07110c', '#0f2218', '#193725', '#244d34', '#306545', '#3d7c55']),
+    vent: R(['#101315', '#1f2427', '#343b3f', '#4d565b', '#6c767b']),
+    maroon: R(['#140607', '#260c0e', '#3d1416', '#561e20', '#6f2a29', '#883733']),
+    locker: R(['#08090b', '#121417', '#1d2024', '#2a2e33', '#393e45', '#4b5159']),
+    blueDoor: R(['#05080f', '#0b1226', '#131e3d', '#1c2b57', '#273b73', '#344c8f']),
+    paper: R(['#2e2e2b', '#4f4f4b', '#76766f', '#9c9c94', '#bcbcb2', '#d8d8ce']),
+    ink: R(['#151514', '#262624']),
+    metal: R(['#1d2023', '#3d4247', '#6a7178', '#a2a9b0', '#d2d8dd']),
+    ceiling: R(['#121210', '#1f1e1b', '#2f2e2a', '#43423c', '#58574f', '#6d6c63']),
+    floor: R(['#15181a', '#23282b', '#343a3e', '#475055', '#5d676d', '#737e84', '#8b969c', '#a3aeb3']),
+    grout: R(['#0b0d0e', '#16191b', '#22272a']),
+    tube: R(['#9fb3bf', '#dbe9f0', '#f6fcff']),
+  };
+
+  // ------------------------------------------------------------------ perspective
+  // Maps the unit square (s, t) onto a screen quad [p(0,0), p(1,0), p(1,1), p(0,1)].
+  function homography(q) {
+    const [x0, y0] = q[0];
+    const [x1, y1] = q[1];
+    const [x2, y2] = q[2];
+    const [x3, y3] = q[3];
+    const dx1 = x1 - x2;
+    const dx2 = x3 - x2;
+    const dx3 = x0 - x1 + x2 - x3;
+    const dy1 = y1 - y2;
+    const dy2 = y3 - y2;
+    const dy3 = y0 - y1 + y2 - y3;
+    const den = dx1 * dy2 - dx2 * dy1;
+    const g = (dx3 * dy2 - dx2 * dy3) / den;
+    const h = (dx1 * dy3 - dx3 * dy1) / den;
+    const m = [x1 - x0 + g * x1, x3 - x0 + h * x3, x0, y1 - y0 + g * y1, y3 - y0 + h * y3, y0, g, h, 1];
+    // Inverse of the 3x3 matrix, for screen → (s, t).
+    const [a, b, c, d, e, f, gg, hh, i] = m;
+    const A = e * i - f * hh;
+    const B = -(d * i - f * gg);
+    const C = d * hh - e * gg;
+    const det = a * A + b * B + c * C;
+    const inv = [
+      A / det,
+      -(b * i - c * hh) / det,
+      (b * f - c * e) / det,
+      B / det,
+      (a * i - c * gg) / det,
+      -(a * f - c * d) / det,
+      C / det,
+      -(a * hh - b * gg) / det,
+      (a * e - b * d) / det,
+    ];
+    return {
+      toScreen(s, t) {
+        const w = gg * s + hh * t + i;
+        return [(a * s + b * t + c) / w, (d * s + e * t + f) / w];
+      },
+      toPlane(x, y) {
+        const w = inv[6] * x + inv[7] * y + inv[8];
+        return [(inv[0] * x + inv[1] * y + inv[2]) / w, (inv[3] * x + inv[4] * y + inv[5]) / w];
+      },
+    };
+  }
+
+  // A tiny 3x5 font for the NOTICE poster.
+  const MINI = {
+    N: ['101', '111', '111', '111', '101'],
+    O: ['111', '101', '101', '101', '111'],
+    T: ['111', '010', '010', '010', '010'],
+    I: ['111', '010', '010', '010', '111'],
+    C: ['111', '100', '100', '100', '111'],
+    E: ['111', '100', '110', '100', '111'],
+  };
+
+  // ------------------------------------------------------------------ the hallway
+  const WALL_LEN = 12; // metres along the wall
+  const WALL_H = 3; // metres floor to ceiling
+  const LIGHTS = [2.4, 8.2]; // where the ceiling lights are, along the wall
+
+  // Things on the wall, in metres: u0..u1 along it, v0..v1 up it.
+  const PROPS = [
+    { kind: 'door', mat: 'greenDoor', u0: 0.3, u1: 1.45, v0: 0, v1: 2.1, side: 0.1 },
+    { kind: 'notice', u0: 1.95, u1: 2.95, v0: 1.12, v1: 1.95 },
+    { kind: 'door', mat: 'maroon', u0: 3.05, u1: 3.95, v0: 0, v1: 2.2, side: 0.14, cabinet: true },
+    { kind: 'lockers', u0: 5.35, u1: 7.25, v0: 0, v1: 1.9, side: 0.12, count: 3 },
+    { kind: 'door', mat: 'blueDoor', u0: 8.35, u1: 9.3, v0: 0, v1: 2.05, side: 0.12, cabinet: true },
+  ];
+
+  function lightAt(u) {
+    let l = 0.3;
+    for (const c of LIGHTS) l += 0.62 * Math.exp(-(((u - c) / 2.3) ** 2));
+    return l;
+  }
+
+  function wallShade(u, v, x, y) {
+    // Ambient + the two fluorescent lights, brighter up high, darker by the floor.
+    let b = lightAt(u) * (0.78 + 0.22 * (v / WALL_H));
+    b *= 0.62 + 0.38 * clamp01(v / 0.5);
+    // Grime and water stains.
+    const n = noise(Math.floor(u * 22), Math.floor(v * 22), 3);
+    const stain = noise(Math.floor(u * 3), Math.floor(v * 2.5), 9);
+    b -= n * 0.07 + (stain > 0.82 ? 0.08 : 0);
+    let mat;
+    if (v > WALL_H - 0.06) mat = PAL.trim;
+    else if (v < 0.09) {
+      mat = PAL.trim;
+      b *= 0.8;
+    } else if (v < 1.0) mat = PAL.wainscot;
+    else if (v < 1.08) mat = PAL.stripe;
+    else mat = PAL.wall;
+    // Props override the wall.
+    for (const p of PROPS) {
+      if (u < p.u0 - (p.side || 0) || u > p.u1 || v < p.v0 || v > p.v1) continue;
+      const c = propColor(p, u, v, x, y, b);
+      if (c) return c;
+    }
+    return ramp(mat, b * 0.92, x, y);
+  }
+
+  function propColor(p, u, v, x, y, light) {
+    const lu = (u - p.u0) / (p.u1 - p.u0); // 0..1 across the prop
+    const lv = (v - p.v0) / (p.v1 - p.v0); // 0..1 up the prop
+    const mat = p.mat ? PAL[p.mat] : PAL.locker;
+    // Cabinets stick out of the wall: we see their left side face.
+    if (u < p.u0) {
+      if (!p.side) return null;
+      return ramp(mat, light * 0.35, x, y);
+    }
+    if (p.kind === 'notice') {
+      const px = Math.floor(lu * 48);
+      const py = Math.floor((1 - lv) * 34);
+      let b = light * (0.75 + 0.1 * noise(px, py, 4));
+      if (px < 1 || px > 46 || py < 1 || py > 32) return ramp(PAL.paper, b * 0.55, x, y);
+      // "NOTICE" title
+      const word = 'NOTICE';
+      if (py >= 3 && py < 8 && px >= 3 && px < 3 + word.length * 4) {
+        const ch = MINI[word[Math.floor((px - 3) / 4)]];
+        const cx = (px - 3) % 4;
+        if (cx < 3 && ch[py - 3][cx] === '1') return PAL.ink[0];
+      }
+      // Lines of small print.
+      if (py >= 11 && py <= 30 && py % 3 === 0 && px >= 3 && px <= 44) {
+        if (noise(Math.floor(px / 3), py, 12) > 0.18) return PAL.ink[1];
+      }
+      if (px >= 30 && px <= 44 && py >= 3 && py <= 7 && py % 2 === 1 && noise(px, py, 5) > 0.3) return PAL.ink[1];
+      b -= noise(Math.floor(px / 6), Math.floor(py / 5), 8) * 0.12;
+      return ramp(PAL.paper, b, x, y);
+    }
+    if (p.kind === 'lockers') {
+      const n = p.count;
+      const which = Math.min(n - 1, Math.floor(lu * n));
+      const cu = lu * n - which; // 0..1 inside one locker
+      let b = light * 0.95;
+      if (cu < 0.04 || cu > 0.96) return ramp(PAL.locker, b * 0.25, x, y); // gaps between lockers
+      if (lv > 0.985 || lv < 0.02) return ramp(PAL.locker, b * 0.35, x, y);
+      // Top vents: short horizontal slits.
+      if (lv > 0.8 && lv < 0.93 && cu > 0.2 && cu < 0.8) {
+        const slit = Math.floor(lv * 95) % 2 === 0;
+        return ramp(PAL.locker, slit ? b * 0.15 : b * 0.7, x, y);
+      }
+      if (lv > 0.1 && lv < 0.18 && cu > 0.2 && cu < 0.8) {
+        const slit = Math.floor(lv * 95) % 2 === 0;
+        return ramp(PAL.locker, slit ? b * 0.15 : b * 0.65, x, y);
+      }
+      // Handle.
+      if (cu > 0.72 && cu < 0.84 && lv > 0.5 && lv < 0.6) return ramp(PAL.metal, 0.35 + light * 0.4, x, y);
+      // Panel edge highlight and dents.
+      const edge = cu < 0.1 ? 0.2 : cu > 0.9 ? -0.15 : 0;
+      b += edge - noise(Math.floor(cu * 12) + which * 30, Math.floor(lv * 40), 6) * 0.1;
+      return ramp(PAL.locker, b * 0.9, x, y);
+    }
+    // Doors (and door-like cabinets).
+    let b = light * 0.95;
+    const frame = lu < 0.06 || lu > 0.94 || lv > 0.965;
+    if (frame) return ramp(mat, b * (lu < 0.06 ? 0.75 : 0.45), x, y);
+    // Vents near the top and bottom.
+    const ventTop = lv > 0.72 && lv < 0.86 && lu > 0.16 && lu < 0.84;
+    const ventBot = lv > 0.08 && lv < 0.2 && lu > 0.16 && lu < 0.84;
+    if (ventTop || ventBot) {
+      const band = ventTop ? (lv - 0.72) / 0.14 : (lv - 0.08) / 0.12;
+      const slit = Math.floor(band * 9) % 2 === 0;
+      return ramp(PAL.vent, slit ? 0.1 : 0.35 + light * 0.3, x, y);
+    }
+    // Handle.
+    if (lu > 0.8 && lu < 0.9 && lv > 0.44 && lv < 0.5) return ramp(PAL.metal, 0.4 + light * 0.45, x, y);
+    b += (lu < 0.14 ? 0.12 : 0) - noise(Math.floor(lu * 14), Math.floor(lv * 30), p.u0 * 7) * 0.12;
+    if (p.cabinet && lv < 0.03) b *= 0.5;
+    return ramp(mat, b * 0.88, x, y);
+  }
+
+  function hallway() {
+    const W = 640;
+    const H = 480;
+    const px = new Pix(W, H);
+    const wall = homography([
+      [-40, 322],
+      [680, 282],
+      [680, 118],
+      [-40, 38],
+    ]);
+    const floor = homography([
+      [-40, 322],
+      [680, 282],
+      [860, 560],
+      [-380, 600],
+    ]);
+    const ceiling = homography([
+      [-40, 38],
+      [680, 118],
+      [860, -60],
+      [-380, -120],
+    ]);
+    const topY = (x) => 38 + ((x + 40) / 720) * 80;
+    const botY = (x) => 322 - ((x + 40) / 720) * 40;
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let c;
+        if (y >= topY(x) && y <= botY(x)) {
+          const [s, t] = wall.toPlane(x + 0.5, y + 0.5);
+          c = wallShade(s * WALL_LEN, t * WALL_H, x, y);
+        } else if (y > botY(x)) {
+          const [s, t] = floor.toPlane(x + 0.5, y + 0.5);
+          c = floorShade(s * WALL_LEN, t * 5, x, y);
+        } else {
+          const [s, t] = ceiling.toPlane(x + 0.5, y + 0.5);
+          c = ceilingShade(s * WALL_LEN, t * 4, x, y);
+        }
+        px.set(x, y, c);
+      }
+    }
+    // Vignette: fade the edges into the dark with dithering.
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const dx = (x - W / 2) / (W / 2);
+        const dy = (y - H * 0.55) / (H / 2);
+        const d = Math.sqrt(dx * dx * 0.8 + dy * dy);
+        const dark = clamp01((d - 0.72) * 1.4);
+        if (dark > bayer(x, y)) {
+          const c = px.get(x, y);
+          px.set(x, y, [c[0] * 0.35, c[1] * 0.35, c[2] * 0.4, 255]);
+        }
+      }
+    }
+    return px;
+  }
+
+  function floorShade(u, w, x, y) {
+    // w = metres out from the wall toward the viewer.
+    const tile = 0.6;
+    const tu = u / tile;
+    const tw = w / tile;
+    const fu = tu - Math.floor(tu);
+    const fw = tw - Math.floor(tw);
+    const gw = 0.06;
+    let b = lightAt(u) * (1 - Math.min(0.55, w * 0.12));
+    if (fu < gw || fw < gw) return ramp(PAL.grout, b * 0.9, x, y);
+    const id = Math.floor(tu) * 31 + Math.floor(tw) * 17;
+    b *= 0.82 + noise(Math.floor(tu), Math.floor(tw), 21) * 0.18;
+    b -= noise(Math.floor(u * 25), Math.floor(w * 25), id) * 0.1;
+    // Soft reflection of the lights near the wall.
+    for (const c of LIGHTS) b += 0.18 * Math.exp(-(((u - c) / 0.8) ** 2) - ((w - 0.8) / 0.7) ** 2);
+    return ramp(PAL.floor, b * 0.8, x, y);
+  }
+
+  function ceilingShade(u, w, x, y) {
+    let b = 0.35 + 0.25 * lightAt(u) - w * 0.04;
+    for (const c of LIGHTS) {
+      // A long fixture running away from the wall.
+      if (Math.abs(u - c) < 0.16 && w > 0.4 && w < 2.6) {
+        if (Math.abs(u - c) < 0.08) return ramp(PAL.tube, 0.8, x, y);
+        return ramp(PAL.metal, 0.3, x, y);
+      }
+      b += 0.25 * Math.exp(-(((u - c) / 0.9) ** 2));
+    }
+    b -= noise(Math.floor(u * 18), Math.floor(w * 18), 2) * 0.08;
+    return ramp(PAL.ceiling, b, x, y);
+  }
+
+  // ------------------------------------------------------------------ Sid
+  // A tall figure in a filthy blue Cookie Monster suit (see assets/source/sid_ingame.png):
+  // costume head with googly eyes, a long stained body, arms hanging to the thighs.
+  const SID_W = 210;
+  const SID_H = 252;
+  const FUR = R(['#020409', '#060c1a', '#0b152d', '#111f42', '#192c58', '#223a6e', '#2d4984', '#3c5b9a', '#4f70ae']);
+  const STAIN = R(['#0d0304', '#1f0707', '#330d0b', '#4a1712', '#5c2217']);
+  const EYE = R(['#6f6f63', '#a9a99b', '#d8d8cb', '#f5f5ec']);
+  const MOUTH = R(['#030204', '#0e070b', '#1d0e15', '#361b22']);
+  const GUN = R(['#0b0c0e', '#26292d', '#474c52', '#747a82', '#b0b7be']);
+  const COOKIE = R(['#2a1606', '#5a3410', '#8a5620', '#b98038']);
+  const OUTLINE = hex('#020309');
+
+  // Smooth value noise (bilinear between hashed grid points), for organic shapes.
+  function vnoise(x, y, scale, seed) {
+    const gx = x / scale;
+    const gy = y / scale;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const fx = gx - x0;
+    const fy = gy - y0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const a = noise(x0, y0, seed);
+    const b = noise(x0 + 1, y0, seed);
+    const c = noise(x0, y0 + 1, seed);
+    const d = noise(x0 + 1, y0 + 1, seed);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+
+  // Fur shading: `light` in 0..1 from the shape's lighting, plus strands and grime.
+  function fur(x, y, light, seed) {
+    const strand = noise(x, Math.floor(y / 3) + ((x * 7) % 3), seed) - 0.5;
+    const clump = vnoise(x, y, 5, seed + 1) - 0.5;
+    const grime = vnoise(x, y, 14, seed + 2) - 0.5;
+    return clamp01(light * 0.86 + strand * 0.2 + clump * 0.2 + grime * 0.16);
+  }
+
+  // Dried blood: organic splotches with a few drips running down from them.
+  function stained(x, y, amount) {
+    const v = vnoise(x, y, 9, 77) * 0.7 + vnoise(x, y, 3.5, 78) * 0.3;
+    if (v > 1 - amount) return true;
+    // Drips: thin vertical runs under a splotch.
+    if (noise(x, 0, 79) > 0.86) {
+      for (let k = 1; k < 12; k++) {
+        const above = vnoise(x, y - k, 9, 77) * 0.7 + vnoise(x, y - k, 3.5, 78) * 0.3;
+        if (above > 1 - amount) return k < 4 + noise(x, 1, 80) * 8;
+      }
+    }
+    return false;
+  }
+
+  function limb(px, x0, y0, x1, y1, r0, r1, seed, shadeMul) {
+    px.stroke(x0, y0, x1, y1, r0, r1, (x, y, nx) => {
+      // Cylinder lighting across the limb, light from the left.
+      const l = clamp01(0.62 - nx * 0.42) * (shadeMul || 1);
+      if (noise(x, y, seed + 9) > 0.93 && Math.abs(nx) > 0.7) return null; // ragged fur edge
+      return ramp(FUR, fur(x, y, l, seed), x, y);
+    });
+  }
+
+  function blob(px, cx, cy, rx, ry, seed, opts) {
+    opts = opts || {};
+    const lx = opts.lx == null ? -0.5 : opts.lx;
+    const ly = opts.ly == null ? -0.55 : opts.ly;
+    px.ellipse(cx, cy, rx + 1.5, ry + 1.5, (x, y, nx, ny) => {
+      // Furry, ragged silhouette: jitter the edge.
+      const edge = nx * nx + ny * ny;
+      const jag = (noise(x, y, seed + 4) - 0.5) * 0.22;
+      if (edge > 0.86 + jag) return null;
+      let l = SC.Pixel.sphere(nx * 0.95, ny * 0.95, lx, ly);
+      l = 0.12 + l * 0.85;
+      if (opts.stain && stained(x, y, opts.stain)) return ramp(STAIN, l * 0.9, x, y);
+      return ramp(FUR, fur(x, y, l * (opts.mul || 1), seed), x, y);
+    });
+  }
+
+  function drawGun(px, hx, hy) {
+    // Desert Eagle, side view, pointing right from the hand at (hx, hy): a long boxy
+    // slide, a chunky grip going down through the fist, a small trigger guard.
+    const slide = [
+      [hx - 4, hy - 10],
+      [hx + 34, hy - 10],
+      [hx + 35, hy - 9],
+      [hx + 35, hy - 2],
+      [hx - 4, hy - 2],
+    ];
+    px.poly(slide, (x, y, nx, ny) => {
+      let l = 0.62 - ny * 0.28;
+      if (y === hy - 10) l += 0.3; // top edge catches the light
+      if (x > hx + 8 && x < hx + 30 && y === hy - 6) l -= 0.3; // slide groove
+      return ramp(GUN, l, x, y);
+    });
+    px.rect(hx - 4, hy - 2, 14, 3, (x, y) => ramp(GUN, 0.35, x, y)); // frame under the slide
+    px.poly(
+      [
+        [hx - 3, hy],
+        [hx + 7, hy],
+        [hx + 4, hy + 14],
+        [hx - 6, hy + 13],
+      ],
+      (x, y, nx) => ramp(GUN, 0.22 - nx * 0.08 + (noise(x, y, 70) > 0.8 ? 0.12 : 0), x, y)
+    );
+    px.rect(hx + 7, hy + 1, 5, 1, GUN[1]); // trigger guard
+    px.rect(hx + 11, hy + 1, 1, 4, GUN[1]);
+    px.rect(hx + 7, hy + 4, 5, 1, GUN[1]);
+    px.rect(hx + 33, hy - 8, 2, 4, GUN[0]); // muzzle
+  }
+
+  function drawCookie(px, cx, cy) {
+    px.ellipse(cx, cy, 8, 8, (x, y, nx, ny) => {
+      if (noise(x, y, 55) > 0.8 && nx * nx + ny * ny > 0.7) return null; // bitten edge
+      if (noise(Math.floor(x / 2), Math.floor(y / 2), 56) > 0.8) return COOKIE[0]; // chips
+      return ramp(COOKIE, 0.75 - ny * 0.3, x, y);
+    });
+  }
+
+  function mitten(px, x, y, rx, ry, light, seed) {
+    px.ellipse(x, y, rx, ry, (xx, yy, nx, ny) => ramp(FUR, fur(xx, yy, light - nx * 0.2 - ny * 0.15, seed), xx, yy));
+  }
+
+  // pose: 'idle' | 'gun' | 'cookie' | 'down'
+  function sidBody(pose, breathe) {
+    const px = new Pix(SID_W, SID_H);
+    const cx = 95;
+    const down = pose === 'down';
+    const b = breathe ? 1 : 0;
+    const top = (down ? 16 : 0) + b; // how far the upper body sinks
+
+    // Shadow on the floor.
+    px.ellipse(cx + 2, 246, 58, 6, (x, y, nx, ny) => (0.55 - (nx * nx + ny * ny) * 0.5 > bayer(x, y) ? [0, 0, 0, 150] : null));
+
+    // Legs and feet (knees buckle when he is down).
+    const kneeOut = down ? 8 : 0;
+    limb(px, cx - 11, 188, cx - 14 - kneeOut, 214, 9.5, 8.5, 11);
+    limb(px, cx - 14 - kneeOut, 214, cx - 14, 238, 8.5, 8, 11);
+    limb(px, cx + 11, 188, cx + 14 + kneeOut, 214, 9.5, 8.5, 12, 0.85);
+    limb(px, cx + 14 + kneeOut, 214, cx + 16, 238, 8.5, 8, 12, 0.85);
+    mitten(px, cx - 18, 243, 12, 5.5, 0.38, 13);
+    mitten(px, cx + 20, 243, 12, 5.5, 0.3, 14);
+
+    // Sid's left arm (our right) is behind the body.
+    if (pose === 'gun') {
+      limb(px, cx + 28, 86 + top, cx + 48, 108 + top, 9.5, 8.5, 21, 0.9);
+      limb(px, cx + 48, 108 + top, cx + 72, 118 + top, 8.5, 7.5, 22, 0.95);
+      drawGun(px, cx + 74, 118 + top);
+      mitten(px, cx + 73, 119 + top, 7.5, 7, 0.5, 23);
+    } else if (pose === 'cookie') {
+      limb(px, cx + 28, 86 + top, cx + 42, 114 + top, 9.5, 8.5, 21, 0.9);
+      limb(px, cx + 42, 114 + top, cx + 20, 72 + top, 8.5, 7.5, 22, 0.95);
+    } else {
+      const hang = down ? 10 : 0;
+      limb(px, cx + 29, 86 + top, cx + 38, 130 + top, 9.5, 8.5, 21, 0.85);
+      limb(px, cx + 38, 130 + top, cx + 35, 172 + top + hang, 8.5, 7.5, 22, 0.85);
+      mitten(px, cx + 35, 176 + top + hang, 7.5, 8.5, 0.4, 23);
+    }
+
+    // Torso: sloped shoulders, a slight hunch, a long robe that flares at the hem.
+    const T = (y) => y + top * (1 - (y - 70) / 130);
+    const outline = [
+      [cx - 20, T(70)],
+      [cx + 20, T(70)],
+      [cx + 31, T(82)],
+      [cx + 35, T(100)],
+      [cx + 33, T(135)],
+      [cx + 36, 170],
+      [cx + 39, 194],
+      [cx - 39, 194],
+      [cx - 37, 170],
+      [cx - 34, T(135)],
+      [cx - 36, T(100)],
+      [cx - 33, T(80)],
+    ];
+    px.poly(outline, (x, y, nx, ny) => {
+      // Rounded-body lighting: bright upper left, dark right side and low down.
+      const round = 1 - nx * nx;
+      let l = 0.2 + 0.5 * round - nx * 0.28 - Math.max(0, ny) * 0.12;
+      if (ny < -0.75) l += 0.12; // shoulders catch the ceiling light
+      if (stained(x, y, ny < 0.3 ? 0.3 : 0.2)) return ramp(STAIN, clamp01(l * 1.1), x, y);
+      return ramp(FUR, fur(x, y, clamp01(l), 32), x, y);
+    });
+    // Ragged, matted hem.
+    for (let x = cx - 39; x <= cx + 39; x++) {
+      const len = 1 + Math.floor(vnoise(x, 5, 3, 33) * 7);
+      for (let y = 194; y < 194 + len; y++) px.set(x, y, ramp(FUR, 0.18 + noise(x, y, 34) * 0.12, x, y));
+    }
+
+    // Sid's right arm (our left), in front.
+    const hangL = down ? 10 : 0;
+    limb(px, cx - 29, 86 + top, cx - 39, 130 + top, 9.5, 8.5, 41, 1.08);
+    limb(px, cx - 39, 130 + top, cx - 35, 172 + top + hangL, 8.5, 7.5, 42, 1.05);
+    mitten(px, cx - 35, 176 + top + hangL, 7.5, 8.5, 0.6, 43);
+
+    // Head: the costume head sits low and forward on the shoulders.
+    const hx = cx + (down ? -7 : 2);
+    const hy = 54 + top + (down ? 6 : 0);
+    blob(px, hx, hy, 31, 24, 51, { ly: -0.75 });
+    // Mouth: wide, open, dark, with a pale lower lip.
+    const open = pose === 'cookie' ? 1.3 : down ? 0.7 : 1;
+    px.ellipse(hx + 1, hy + 8, 20, 7.5 * open, (x, y, nx, ny) => {
+      if (ny > 0.5) return ramp(MOUTH, 0.7, x, y);
+      return ramp(MOUTH, 0.05 + (ny + 1) * 0.18, x, y);
+    });
+    px.ellipse(hx + 1, hy + 8 + 6.5 * open, 16, 2.3, (x, y, nx) => ramp(FUR, fur(x, y, 0.55 - nx * 0.2, 52), x, y));
+    // Crumbs stuck in the fur around the mouth.
+    for (let i = 0; i < 9; i++) {
+      const x = hx - 17 + Math.floor(noise(i, 1, 57) * 36);
+      const y = hy + 12 + Math.floor(noise(i, 2, 57) * 6);
+      px.set(x, y, COOKIE[1 + (i % 2)]);
+    }
+    if (pose === 'cookie') {
+      drawCookie(px, cx + 12, 66 + top);
+      mitten(px, cx + 20, 74 + top, 7.5, 7, 0.55, 23);
+    }
+
+    px.outline(OUTLINE);
+    return { px, eyes: [[hx - 12, hy - 21], [hx + 12, hy - 23]], eyeR: 8.5, down };
+  }
+
+  // Eyes are drawn every frame so the pupils can wander.
+  function sidEyes(px, body, opts) {
+    opts = opts || {};
+    body.eyes.forEach(([ex, ey], i) => {
+      const r = body.eyeR - (i ? 0.5 : 0);
+      px.ellipse(ex, ey, r + 1, r + 1, OUTLINE);
+      px.ellipse(ex, ey, r, r, (x, y, nx, ny) => {
+        const l = SC.Pixel.sphere(nx, ny, -0.4, -0.6);
+        if (opts.angry && noise(x, y, 60 + i) > 0.84 && nx * nx + ny * ny > 0.3) return hex('#9e1b1b');
+        return ramp(EYE, 0.3 + l * 0.75, x, y);
+      });
+      const p = (opts.pupils && opts.pupils[i]) || [0, 0];
+      const pr = opts.angry ? 2.4 : 3.4;
+      if (opts.dizzy) {
+        // Spiral-ish dizzy eyes.
+        for (let a = 0; a < 14; a++) {
+          const t = a / 14;
+          const ang = t * Math.PI * 3 + (opts.frame || 0) * 0.6 + i;
+          px.set(Math.round(ex + Math.cos(ang) * t * (r - 2)), Math.round(ey + Math.sin(ang) * t * (r - 2)), OUTLINE);
+        }
+      } else {
+        px.ellipse(ex + p[0] * (r - pr - 1), ey + p[1] * (r - pr - 1), pr, pr, OUTLINE);
+        px.set(Math.round(ex + p[0] * (r - pr - 1) - 1), Math.round(ey + p[1] * (r - pr - 1) - 1), hex('#3a3a3a'));
+      }
+    });
+  }
+
+  const sidCache = {};
+  function sid(opts) {
+    opts = opts || {};
+    const pose = opts.pose || 'idle';
+    const key = pose + (opts.breathe ? 1 : 0);
+    const body = sidCache[key] || (sidCache[key] = sidBody(pose, opts.breathe));
+    const px = body.px.clone();
+    sidEyes(px, body, { pupils: opts.pupils, angry: opts.angry, dizzy: pose === 'down' || opts.dizzy, frame: opts.frame });
+    return px;
+  }
+  // Where the gun's muzzle and Sid's mouth are, for effects (art pixels in the sprite).
+  const SID_POINTS = { muzzle: [206, 112], mouth: [98, 62], head: [97, 50], body: [95, 130], feet: [95, 246], w: SID_W, h: SID_H };
+
+  // ------------------------------------------------------------------ icons
+  const K = hex('#000000');
+  const W = hex('#ffffff');
+  const ICON_KEYS = {
+    k: K,
+    w: W,
+    r: hex('#e8202a'),
+    R: hex('#9c0c14'),
+    p: hex('#ff8a8a'),
+    t: hex('#1fb5a6'),
+    T: hex('#0b6f66'),
+    c: hex('#9ff5ea'),
+    y: hex('#ffd23f'),
+    Y: hex('#c98a00'),
+    g: hex('#9a9a9a'),
+    b: hex('#6fb6ff'),
+    B: hex('#2a64c8'),
+  };
+  const ICONS = {
+    heart: [
+      '.kkk...kkk.',
+      'kpprk.krrrk',
+      'kprrrkrrrRk',
+      'krrrrrrrrRk',
+      'krrrrrrrrRk',
+      '.krrrrrrRk.',
+      '..krrrrRk..',
+      '...krrRk...',
+      '....kRk....',
+      '.....k.....',
+    ],
+    drop: [
+      '....k....',
+      '...kck...',
+      '...ktk...',
+      '..kcttk..',
+      '.kcttttk.',
+      'kcttttttk',
+      'kctttttTk',
+      'kttttttTk',
+      '.kttttTk.',
+      '..kkkkk..',
+    ],
+    anger: [
+      '.rr.....rr.',
+      'rRr.....rRr',
+      'rR.......Rr',
+      '...........',
+      '...........',
+      '...........',
+      'rR.......Rr',
+      'rRr.....rRr',
+      '.rr.....rr.',
+    ],
+    hand: [
+      '..........kk....',
+      '.........kwwk...',
+      'kkkkkkkkkkwwk...',
+      'kwwwwwwwwwwwkkkk',
+      'kkkkkkkkwwwwwwwk',
+      '......kwwwwwwwwk',
+      '......kkkkwwwwwk',
+      '......kwwwwwwwk.',
+      '.......kkkkkkk..',
+    ],
+    star: ['..y..', '.yYy.', 'yyyyy', '.yYy.', 'y...y'],
+    body: [
+      '..kkk..',
+      '.kgggk.',
+      '.kgggk.',
+      'kkgggkk',
+      'kgggggk',
+      'kgkgkgk',
+      '.kk.kk.',
+    ],
+    skull: [
+      '.kkkkkk.',
+      'kwwwwwwk',
+      'kwkwwkwk',
+      'kwkwwkwk',
+      'kwwkkwwk',
+      '.kwwwwk.',
+      '.kwkwkk.',
+      '..kkkk..',
+    ],
+    bolt: ['..kk', '.kk.', 'kkkk', '.kk.', 'kk..'],
+  };
+  function icon(name) {
+    const rows = ICONS[name];
+    const px = new Pix(rows[0].length, rows.length);
+    px.stamp(rows, 0, 0, ICON_KEYS);
+    return px;
+  }
+
+  // ------------------------------------------------------------------ banners
+  // OMORI-style FIGHT! / RUN... strips (the text itself is page text on top).
+  function banner(kind) {
+    const w = 360;
+    const h = 36;
+    const px = new Pix(w, h);
+    if (kind === 'fight') {
+      const bg = R(['#5a0b52', '#8b1270', '#b8177a', '#dc1d6e', '#ef3f63']);
+      px.fill((x, y) => {
+        const t = 0.8 - (x / w) * 0.55 + (y < 6 ? 0.08 : 0) + (noise(x, y, 90) - 0.5) * 0.45;
+        return ramp(bg, t, x, y);
+      });
+      // Green spikes, then an orange starburst behind the word.
+      const burst = (r1, r2, n, rot, paint) => {
+        const pts = [];
+        for (let i = 0; i < n * 2; i++) {
+          const a = (i / (n * 2)) * Math.PI * 2 + rot;
+          const r = i % 2 ? r2 : r1;
+          pts.push([w / 2 + Math.cos(a) * r * 2.9, h / 2 + Math.sin(a) * r * 0.62]);
+        }
+        px.poly(pts, paint);
+      };
+      const green = R(['#1c6b1a', '#3fae2c', '#8ae04a']);
+      const fire = R(['#b3200d', '#e0501a', '#f5901f', '#ffd23a']);
+      burst(34, 18, 9, 0.35, (x, y) => ramp(green, 0.3 + noise(x, y, 91) * 0.7, x, y));
+      burst(26, 17, 12, 0, (x, y, nx, ny) => ramp(fire, 0.9 - Math.sqrt(nx * nx + ny * ny) * 0.6 + (noise(x, y, 92) - 0.5) * 0.5, x, y));
+    } else {
+      const bg = R(['#0b1470', '#1428b0', '#1f3fd6', '#3a60ea', '#5d86f5']);
+      px.fill((x, y) => ramp(bg, 0.55 + (noise(x, y, 93) - 0.5) * 0.5 - (y > h - 6 ? 0.1 : 0), x, y));
+      // Loopy white strings on both sides, like OMORI's RUN button.
+      const line = (x0, x1, phase) => {
+        let prev = null;
+        for (let x = x0; x <= x1; x++) {
+          const y = Math.round(h / 2 + Math.sin(x * 0.09 + phase) * 3 + Math.sin(x * 0.31) * 0.8);
+          if (prev != null) px.line(x - 1, prev, x, y, W);
+          prev = y;
+        }
+      };
+      line(26, 128, 0);
+      line(232, 330, 1.3);
+      for (let a = 0; a < 20; a++) {
+        const t = (a / 20) * Math.PI * 2;
+        px.set(Math.round(60 + Math.cos(t) * 4), Math.round(h / 2 - 1 + Math.sin(t) * 3), W);
+      }
+      // A little leaf at the far right.
+      px.ellipse(338, h / 2, 6, 4, (x, y, nx, ny) => (Math.abs(nx * nx + ny * ny - 0.8) < 0.3 ? W : null));
+      px.line(333, h / 2 + 3, 343, h / 2 - 3, W);
+    }
+    return px;
+  }
+
+  // ------------------------------------------------------------------ portrait cards
+  // Backdrop colours behind a portrait, like OMORI's emotion colours.
+  const MOODS = {
+    neutral: R(['#050505', '#1c1c1f', '#3a3a3f', '#5c5c63']),
+    sated: R(['#1a1402', '#5c4508', '#b08a14', '#f0cf3a']),
+    hurt: R(['#070506', '#1f1618', '#3a2a2c', '#5a4346']),
+    critical: R(['#0c0000', '#3a0305', '#7a0910', '#b3141b']),
+    afraid: R(['#01030c', '#0a1a4a', '#1a3c93', '#2f64d6']),
+    confused: R(['#06020c', '#2a0f4a', '#5a228f', '#9446d6']),
+    berserk: R(['#0c0100', '#4a0600', '#9a1400', '#e8420a']),
+    sleep: R(['#010208', '#0b1030', '#1a2460', '#2e3d8f']),
+    drained: R(['#040404', '#151515', '#262626', '#383838']),
+    ghost: R(['#05020a', '#1d0f33', '#3b2166', '#5f3d9a']),
+    dead: R(['#000000', '#0a0a0a', '#161616', '#222222']),
+    slasher: R(['#000000', '#1c0000', '#420000', '#6e0303']),
+    furious: R(['#050000', '#3d0000', '#8c0000', '#d10a0a']),
+    frozen: R(['#00060c', '#0b2a40', '#1f5a80', '#4fa3cf']),
+  };
+
+  const portraitPix = {};
+  function loadPortraits() {
+    const srcs = SC.PORTRAITS || {};
+    return Promise.all(
+      Object.keys(srcs).map(
+        (name) =>
+          new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const cv = root.document.createElement('canvas');
+              cv.width = img.width;
+              cv.height = img.height;
+              const ctx = cv.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              const data = ctx.getImageData(0, 0, img.width, img.height);
+              const px = new Pix(img.width, img.height);
+              px.d.set(data.data);
+              portraitPix[name] = px;
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = srcs[name];
+          })
+      )
+    );
+  }
+
+  // Where things sit on each 128x128 portrait, for the status effects.
+  const ANCHORS = {
+    john: { head: [64, 44], brow: [64, 52], cheek: [82, 70], top: [64, 12] },
+    mel: { head: [76, 36], brow: [76, 44], cheek: [92, 58], top: [80, 6] },
+    purpl: { head: [62, 56], brow: [60, 52], cheek: [72, 78], top: [56, 14] },
+    sid: { head: [60, 18], brow: [60, 18], cheek: [66, 30], top: [58, 4] },
+  };
+
+  const BLOOD = R(['#3d0006', '#7a000c', '#c0101c']);
+  const SWEAT = R(['#1b4f8c', '#7fc0ff', '#dff1ff']);
+
+  function sweat(px, x, y) {
+    px.stamp(['...k...', '..kbk..', '..kbk..', '.kbwbk.', 'kbwbbbk', 'kbbbbBk', 'kbbbBBk', '.kbBBk.', '..kkk..'], x, y, ICON_KEYS);
+  }
+  function blood(px, a, amount, seed) {
+    for (let i = 0; i < amount; i++) {
+      const x = Math.round(a[0] - 26 + noise(i, 3, seed) * 52);
+      const y0 = Math.round(a[1] - 6 + noise(i, 4, seed) * 16);
+      const len = 6 + Math.floor(noise(i, 5, seed) * 22);
+      for (let y = y0; y < y0 + len; y++) {
+        px.set(x, y, BLOOD[y > y0 + len - 3 ? 2 : 1]);
+        if (noise(i, y, seed) > 0.7) px.set(x + 1, y, BLOOD[0]);
+      }
+      px.ellipse(x + 0.5, y0 + len, 1.3, 1.6, BLOOD[1]);
+    }
+  }
+  function crack(px, x, y, len, seed, color) {
+    let cx = x;
+    let cy = y;
+    for (let i = 0; i < len; i++) {
+      px.set(cx, cy, color || K);
+      cx += noise(i, 1, seed) > 0.5 ? 1 : -1;
+      cy += 1;
+      if (noise(i, 2, seed) > 0.8) {
+        px.set(cx + 1, cy, color || K);
+        cx += 2;
+      }
+    }
+  }
+  function zzz(px, x, y) {
+    const key = { w: hex('#dfe7ff'), k: K };
+    px.stamp(['kkkkkkkk', 'kwwwwwwk', 'kkkkwwkk', '.kkwwkk.', 'kkwwkkkk', 'kwwwwwwk', 'kkkkkkkk'], x, y, key);
+    px.stamp(['kkkkkk', 'kwwwwk', 'kkwwkk', 'kwwwwk', 'kkkkkk'], x + 10, y - 9, key);
+  }
+  function swirl(px, x, y, color) {
+    for (let a = 0; a < 26; a++) {
+      const t = a / 26;
+      const ang = t * Math.PI * 4;
+      px.set(Math.round(x + Math.cos(ang) * t * 6), Math.round(y + Math.sin(ang) * t * 6), color);
+    }
+  }
+
+  // state: { id, variant, mood, fx: ['sweat','blood','cracks','zzz','swirl','veins','stars','frost','cookie','shatter'], fade, frame }
+  function card(state) {
+    const px = new Pix(128, 128);
+    const mood = MOODS[state.mood] || MOODS.neutral;
+    const f = state.frame || 0;
+    // Dithered glow behind the character.
+    px.fill((x, y) => {
+      const dx = (x - 64) / 64;
+      const dy = (y - 58) / 64;
+      const t = 0.95 - Math.sqrt(dx * dx + dy * dy) * 0.95 + (state.mood === 'critical' || state.mood === 'furious' ? Math.sin(f * 0.5) * 0.08 : 0);
+      return ramp(mood, t, x, y);
+    });
+    const src = portraitPix[state.variant || state.id];
+    const light = state.mood === 'neutral' || state.mood === 'hurt' || state.mood === 'dead' || state.mood === 'drained';
+    const ring = state.id === 'sid' ? hex('#ff5a5a') : state.id === 'purpl' ? hex('#d8c2ff') : light ? W : K;
+    if (src) {
+      const fade = state.fade == null ? 1 : state.fade;
+      for (let y = 0; y < 128; y++) {
+        for (let x = 0; x < 128; x++) {
+          const i = (y * src.w + x) * 4;
+          if (!src.d[i + 3]) continue;
+          if (fade < 1 && fade < bayer(x + f, y)) continue; // ghostly fade
+          let c = [src.d[i], src.d[i + 1], src.d[i + 2], 255];
+          if (c[0] === 255 && c[1] === 0 && c[2] === 255) c = ring;
+          else if (state.mood === 'dead') c = [c[0] * 0.45, c[1] * 0.45, c[2] * 0.5, 255];
+          else if (state.mood === 'drained') c = [c[0] * 0.7, c[1] * 0.7, c[2] * 0.72, 255];
+          px.set(x, y, c);
+        }
+      }
+    }
+    const a = ANCHORS[state.id] || ANCHORS.john;
+    const fx = state.fx || [];
+    if (fx.includes('cracks')) {
+      crack(px, a.top[0] + 8, a.top[1] + 6, 22, 5);
+      crack(px, a.top[0] - 10, a.top[1] + 14, 14, 6);
+    }
+    if (fx.includes('shatter')) {
+      // Half of the mannequin head, gone (doc: "nearly half of his skull being shattered").
+      px.poly(
+        [
+          [a.top[0] - 4, a.top[1] - 6],
+          [a.top[0] + 34, a.top[1] - 6],
+          [a.top[0] + 34, a.top[1] + 30],
+          [a.top[0] + 18, a.top[1] + 22],
+          [a.top[0] + 10, a.top[1] + 30],
+          [a.top[0] + 4, a.top[1] + 14],
+        ],
+        K
+      );
+      crack(px, a.top[0] + 2, a.top[1] + 14, 30, 7);
+      crack(px, a.top[0] + 12, a.top[1] + 28, 24, 8);
+    }
+    if (fx.includes('scratches')) {
+      for (let i = 0; i < 3; i++) px.line(a.cheek[0] - 6 + i * 4, a.cheek[1] - 6, a.cheek[0] + i * 4, a.cheek[1] + 4, BLOOD[1]);
+    }
+    if (fx.includes('blood')) blood(px, a.brow, state.bloodAmount || 4, 31);
+    if (fx.includes('sweat')) {
+      sweat(px, a.brow[0] + 22, a.brow[1] - 18 + (f % 4 < 2 ? 0 : 1));
+      sweat(px, a.brow[0] - 28, a.brow[1] - 10 + (f % 4 < 2 ? 1 : 0));
+    }
+    if (fx.includes('zzz')) zzz(px, 96, 26 - (f % 6));
+    if (fx.includes('swirl')) {
+      swirl(px, 18, 18, hex('#e7d4ff'));
+      swirl(px, 108, 26, hex('#e7d4ff'));
+    }
+    if (fx.includes('veins')) px.blit(icon('anger'), 104, 10);
+    if (fx.includes('stars')) {
+      for (let i = 0; i < 4; i++) {
+        const ang = f * 0.35 + (i * Math.PI) / 2;
+        px.blit(icon('star'), Math.round(a.head[0] + Math.cos(ang) * 22 - 2), Math.round(a.head[1] - 4 + Math.sin(ang) * 6));
+      }
+    }
+    if (fx.includes('frost')) {
+      px.fill((x, y) => {
+        const edge = Math.min(x, y, 127 - x, 127 - y);
+        return edge < 10 && noise(x, y, 97) > 0.55 + edge * 0.04 ? hex('#bfe8ff') : null;
+      });
+    }
+    if (fx.includes('cookie')) drawCookie(px, 100, 104);
+    return px;
+  }
+
+  SC.Art = SC.Art || {};
+  SC.Art.hallway = hallway;
+  SC.Art.sid = sid;
+  SC.Art.icon = icon;
+  SC.Art.banner = banner;
+  SC.Art.card = card;
+  SC.Art.loadPortraits = loadPortraits;
+  SC.Art.MOODS = MOODS;
+  SC.Art.SID_POINTS = SID_POINTS;
+  SC.Art.PAL = PAL;
+  SC.Art.homography = homography;
+})(typeof window !== 'undefined' ? window : globalThis);

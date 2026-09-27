@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SlashCo VR Battle</title>
+    <meta name="description" content="A turn-based, OMORI-style battle based on SlashCo VR: Mel, John and Purpl Lady against Sid." />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="viewport">
+      <div id="stage">
+        <canvas id="bg" class="px" width="640" height="480"></canvas>
+        <div id="flicker"></div>
+
+        <div id="sid-wrap">
+          <div id="sid-label">SID</div>
+          <canvas id="sid" class="px" width="210" height="252"></canvas>
+        </div>
+
+        <div id="log">
+          <div id="log-lines"></div>
+          <div class="more"></div>
+        </div>
+        <div class="chip" id="turn-chip">TURN 1</div>
+        <div class="chip" id="credits-chip">CREDITS 0</div>
+        <button class="chip btn" id="log-btn" title="Battle log (L)">LOG</button>
+        <button class="chip btn" id="fast-btn" title="Fast text (F)">FAST</button>
+        <button class="chip btn" id="mute-btn" title="Sound (M)">SOUND</button>
+
+        <div id="escape" title="Click for the breakdown">
+          <div class="track"><div class="fill"></div><div class="label">ESCAPE CHANCE</div></div>
+          <div class="pct">--</div>
+        </div>
+        <div id="escape-tip"></div>
+
+        <div id="command"></div>
+        <div id="panel"></div>
+        <div id="skillcheck"></div>
+
+        <div id="fx"></div>
+        <div id="flash"></div>
+        <div class="hand" id="hand" style="display: none"></div>
+
+        <div class="overlay" id="screen"></div>
+        <div class="overlay" id="help"></div>
+        <div class="overlay" id="history"></div>
+      </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/pixel.js"></script>
+    <script src="js/portraits.js"></script>
+    <script src="js/art.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/battle.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

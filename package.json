@@ -1,0 +1,10 @@
+{
+  "name": "slashco-vr-battle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An OMORI-style turn-based battle based on SlashCo VR: Mel, John and Purpl Lady vs Sid.",
+  "scripts": {
+    "test": "node tests/simulate.js",
+    "portraits": "python3 tools/make_portraits.py"
+  }
+}

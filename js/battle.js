@@ -1,0 +1,1745 @@
+/*
+ * SLASHCO VR — TURN-BASED BATTLE
+ * battle.js — the turn engine.
+ *
+ * No DOM in here. The engine talks to the screen through `io`:
+ *   await io.say(text, { tone })     one battle-log line
+ *   await io.fx(event)               an animation cue (the UI may ignore any of them)
+ *   await io.skillCheck(options)     the timing mini-game, resolves true/false
+ *   io.refresh()                     redraw the HUD from the current state
+ * so the same rules run in the browser and in the headless tests.
+ */
+(function (root) {
+  'use strict';
+  const SC = (root.SC = root.SC || {});
+
+  // ---------------------------------------------------------------- helpers
+  function makeRng(seed) {
+    let a = seed >>> 0;
+    const rng = function () {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    rng.int = (lo, hi) => lo + Math.floor(rng() * (hi - lo + 1));
+    rng.range = (r) => rng.int(r[0], r[1]);
+    rng.float = (r) => r[0] + rng() * (r[1] - r[0]);
+    rng.pick = (arr) => arr[Math.floor(rng() * arr.length)];
+    rng.chance = (p) => rng() < p;
+    rng.weighted = (pairs) => {
+      const total = pairs.reduce((s, p) => s + p[1], 0);
+      let r = rng() * total;
+      for (const [value, weight] of pairs) {
+        r -= weight;
+        if (r < 0) return value;
+      }
+      return pairs[pairs.length - 1][0];
+    };
+    return rng;
+  }
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  function joinNames(names) {
+    if (names.length <= 1) return names.join('');
+    return names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1];
+  }
+
+  const nullIo = {
+    say: async () => {},
+    fx: async () => {},
+    skillCheck: async () => false,
+    refresh: () => {},
+  };
+
+  // ---------------------------------------------------------------- units
+  class Unit {
+    constructor(id, def, side) {
+      this.id = id;
+      this.def = def;
+      this.side = side; // 'party' | 'enemy'
+      this.name = def.name;
+      this.base = Object.assign({}, def.stats);
+      this.passives = new Set(def.passives || []);
+      this.skills = (def.skills || []).slice();
+      this.ghost = !!def.ghost;
+      this.buffs = []; // { stat, amount, turns, tag }
+      this.status = {}; // named timed states (bleed, afraid, asleep, ...)
+      this.flags = {}; // everything else
+      this.carrying = []; // ids of bodies this worker is carrying
+      this.carriedBy = null;
+      this.possessed = false;
+      this.dead = false;
+      this.aggro = 0;
+      this.timesTargeted = 0;
+    }
+    has(passive) {
+      return this.passives.has(passive);
+    }
+    hasBuff(tag) {
+      return this.buffs.some((b) => b.tag === tag);
+    }
+  }
+
+  // ---------------------------------------------------------------- battle
+  class Battle {
+    constructor(opts) {
+      opts = opts || {};
+      this.D = opts.data || SC.DATA;
+      this.io = Object.assign({}, nullIo, opts.io || {});
+      this.seed = opts.seed != null ? opts.seed : (Math.random() * 2 ** 32) >>> 0;
+      this.rng = makeRng(this.seed);
+
+      const D = this.D;
+      this.party = D.party.map((id) => {
+        const def = D.workers[id];
+        const u = new Unit(id, def, 'party');
+        u.hp = u.ghost ? 100 : D.health.start;
+        u.res = def.resource.max;
+        u.resMax = def.resource.max;
+        return u;
+      });
+      const sdef = D.slashers[D.enemy];
+      this.sidDef = sdef;
+      this.enemy = new Unit(D.enemy, sdef, 'enemy');
+      this.enemy.hp = this.enemy.maxHp = sdef.maxHp;
+      this.enemy.anger = sdef.anger.start;
+      this.enemy.flags.gun = this.enemy.anger >= sdef.anger.overflow;
+      this.units = this.party.concat([this.enemy]);
+
+      this.bag = Object.assign({}, D.startingBag);
+      this.credits = 0;
+      this.turn = 0;
+      this.intent = null;
+      this.intentKnown = false;
+      this.foresightTurns = 0;
+      this.failedRuns = 0;
+      this.secondLifeUsed = false;
+      this.angerCarry = 0;
+      this.outcome = null; // null | 'win' | 'lose'
+      this.log = [];
+      this.stats = { damageDealt: 0, damageTaken: 0, deaths: 0, runs: 0, itemsUsed: 0 };
+    }
+
+    // ============================================================ io helpers
+    async say(text, opts) {
+      this.log.push({ turn: this.turn, text, tone: opts && opts.tone });
+      await this.io.say(text, opts || {});
+    }
+    async fx(event) {
+      await this.io.fx(event);
+    }
+    refresh() {
+      this.io.refresh();
+    }
+
+    // ============================================================ lookups
+    unit(id) {
+      return this.units.find((u) => u.id === id) || null;
+    }
+    workers() {
+      return this.party;
+    }
+    corporeal() {
+      return this.party.filter((u) => !u.ghost && !u.dead);
+    }
+    present(u) {
+      return !!u && !u.dead && !u.status.phasing;
+    }
+    withPassive(p) {
+      return this.party.find((u) => u.has(p)) || null;
+    }
+    freakyActive() {
+      const p = this.withPassive('freakyDoctor');
+      return !!p && this.present(p) && p.res > 0;
+    }
+    moralSupportActive() {
+      const p = this.withPassive('moralSupport');
+      return !!p && this.present(p);
+    }
+    partyNames() {
+      return joinNames(this.party.map((u) => u.name));
+    }
+    isLost() {
+      return this.corporeal().length === 0;
+    }
+
+    // ============================================================ stats
+    addBuff(u, stat, amount, turns, tag) {
+      const same = u.buffs.find((b) => b.tag === tag && b.stat === stat);
+      if (same) {
+        same.amount = amount;
+        same.turns = Math.max(same.turns, turns);
+      } else {
+        u.buffs.push({ stat, amount, turns, tag });
+      }
+    }
+
+    stat(u, key) {
+      const D = this.D;
+      let mult = 1;
+      for (const b of u.buffs) {
+        if (b.stat !== key && b.stat !== 'all') continue;
+        let m = b.amount;
+        if (key === 'spd' && u.has('speedAddict')) {
+          if (m < 0) continue; // "John's SPEED can never be decreased"
+          m *= D.passives.speedAddict.boostScale; // "...25% less effective"
+        }
+        mult += m;
+      }
+      let v = u.base[key] * Math.max(0.2, mult);
+      const armor = u.def.armor;
+      if (key === 'mag' && armor && armor.magBonus) v *= 1 + armor.magBonus;
+      if (u.side === 'party') {
+        if (key === 'atk' && this.freakyActive()) v *= 1 + D.passives.freakyDoctor.atk;
+        if (key === 'def' && u.status.afraid) v *= 1 - D.balance.afraidDef;
+        // Carrying a body is weight, not a debuff, so it slows even Speed Addict.
+        if (key === 'spd' && u.carrying.length) v *= Math.pow(D.escape.carrySpeed, u.carrying.length);
+      } else if (key === 'atk') {
+        v *= 1 + u.anger * this.sidDef.anger.atkBonusPerPoint;
+      }
+      return v;
+    }
+
+    healthState(u) {
+      if (u.side === 'enemy') {
+        const pct = u.hp / u.maxHp;
+        const row = this.D.slasherHealth.find((r) => pct <= r.upTo);
+        return { id: row ? row.id : 'UNHEALTHY' };
+      }
+      if (u.ghost) return { id: 'NONE' };
+      if (u.dead || u.hp <= 0) return { id: 'DEAD' };
+      const states = this.D.health.states;
+      return states.find((s) => u.hp >= s.min && u.hp <= s.max) || states[states.length - 1];
+    }
+
+    async announce(u) {
+      if (u.ghost || u.dead) return;
+      const st = this.healthState(u);
+      if (st.says) await this.say(st.says.replace('{n}', u.name), { tone: 'state', who: u.id });
+    }
+
+    // ============================================================ combat math
+    critChance(u) {
+      const B = this.D.balance;
+      return B.critBase + this.stat(u, 'smt') * B.critPerSmarts;
+    }
+
+    hitChance(att, def, hitMult) {
+      const B = this.D.balance;
+      let hit = B.baseHit;
+      if (att.side === 'enemy') {
+        hit -= this.sidDef.armor.hitRatePenalty;
+        if (att.status.blind) hit -= att.status.blind.amount;
+      } else {
+        if (att.has('shadowborn')) hit += this.D.passives.shadowborn.hitBonus;
+        if (att.flags.glassesOff) hit -= this.D.skills.tossGlasses.hitPenalty;
+      }
+      const faster = this.stat(def, 'spd') - this.stat(att, 'spd');
+      if (faster > 0) hit -= faster * B.evasionPerSpd;
+      return clamp(hit * (hitMult || 1), 0.05, 0.99);
+    }
+
+    rollHit(att, def, hitMult) {
+      return this.rng() < this.hitChance(att, def, hitMult);
+    }
+
+    physical(att, def, power, o) {
+      o = o || {};
+      const B = this.D.balance;
+      const key = o.magic ? 'mag' : 'atk';
+      const offense = this.stat(att, key);
+      const defense = o.ignoreDef ? 0 : this.stat(def, 'def') * (1 - (o.defIgnore || 0));
+      let dmg = (offense * power * 100) / (100 + defense);
+      if (!o.flat) dmg *= this.rng.float(B.variance);
+      if (o.crit) dmg *= B.critMult;
+      return dmg;
+    }
+
+    // ============================================================ anger
+    async addAnger(n, o) {
+      o = o || {};
+      const sid = this.enemy;
+      const A = this.sidDef.anger;
+      const before = sid.anger;
+      sid.anger = clamp(before + n, 0, A.max);
+      const delta = sid.anger - before;
+      if (!delta) return;
+      await this.fx({ type: 'anger', delta });
+      if (delta > 0) {
+        const crossed = Math.floor(before / 20) < Math.floor(sid.anger / 20);
+        if (!o.quiet || crossed) await this.say('Sid is getting angrier…', { tone: 'anger' });
+      }
+      await this.checkGun();
+      this.refresh();
+    }
+
+    async checkGun() {
+      const sid = this.enemy;
+      const over = this.sidDef.anger.overflow;
+      if (!sid.flags.gun && sid.anger >= over) {
+        sid.flags.gun = true;
+        await this.fx({ type: 'sidPose' });
+        await this.say('Sid has had enough, and draws his gun!', { tone: 'danger' });
+      } else if (sid.flags.gun && sid.anger < over) {
+        sid.flags.gun = false;
+        await this.fx({ type: 'sidPose' });
+        await this.say('Sid calms down and tucks the Desert Eagle away.');
+      }
+    }
+
+    // ============================================================ damage / healing
+    async hitSid(attacker, amount, o) {
+      o = o || {};
+      const sid = this.enemy;
+      const A = this.sidDef.anger;
+      const before = sid.hp;
+      let after = before - Math.max(1, Math.round(amount));
+      let refused = false;
+      if (after < 1) {
+        after = 1; // slashers can't be killed — only weakened
+        refused = true;
+      }
+      const dealt = before - after;
+      sid.hp = after;
+      this.stats.damageDealt += dealt;
+      if (attacker) attacker.aggro += dealt;
+      await this.fx({ type: 'hitSid', amount: dealt, crit: !!o.crit, kind: o.kind || 'hit', quick: !!o.quick });
+      if (o.crit && !o.quietCrit) await this.say('It hits a weak point!', { tone: 'crit' });
+      this.refresh();
+
+      if (attacker) {
+        const chm = this.stat(attacker, 'chm');
+        this.angerCarry += (dealt / A.perDamage) * Math.max(0.1, 1 - chm / A.charmDivisor);
+        const whole = Math.floor(this.angerCarry);
+        if (whole > 0) {
+          this.angerCarry -= whole;
+          await this.addAnger(whole, { quiet: true });
+        }
+      }
+      if (refused && !sid.flags.refusedThisTurn) {
+        sid.flags.refusedThisTurn = true;
+        await this.say('Sid refuses to go down!');
+      }
+      await this.checkWeakened(attacker);
+      return dealt;
+    }
+
+    async checkWeakened(attacker) {
+      const sid = this.enemy;
+      const S = this.sidDef;
+      const pct = sid.hp / sid.maxHp;
+      if (!sid.flags.weakened && pct <= S.weakenedAt) {
+        sid.flags.weakened = true;
+        sid.flags.downed = true;
+        sid.status.stunned = { slots: S.weakenedStun, by: attacker ? attacker.name : null };
+        if (!this.enemyActed) this.intent = { kind: 'stunned' }; // whatever he planned, he can't do it now
+        await this.fx({ type: 'sidPose' });
+        await this.say('Sid is weakened! Now is your time for escape!', { tone: 'good' });
+        await this.checkPossession();
+      }
+      if (!sid.flags.barelyStanding && pct <= S.barelyStandingAt) {
+        sid.flags.barelyStanding = true;
+        sid.flags.downed = true;
+        const slots = sid.status.stunned ? sid.status.stunned.slots : 0;
+        sid.status.stunned = { slots: Math.max(1, slots), by: attacker ? attacker.name : null };
+        if (!this.enemyActed) this.intent = { kind: 'stunned' };
+        await this.fx({ type: 'sidPose' });
+        await this.say('Sid collapses to one knee!', { tone: 'good' });
+      }
+      this.refresh();
+    }
+
+    // source: 'sid' | 'gun' | 'magdump' | 'self' | 'lob' | 'poison' | 'ally'
+    async damageWorker(t, amount, o) {
+      o = o || {};
+      const D = this.D;
+      if (!t || t.dead) return 0;
+      if (t.ghost) {
+        await this.fx({ type: 'passThrough', target: t.id });
+        await this.say(`It passes right through ${t.name}!`);
+        return 0;
+      }
+      if (t.flags.barrier) {
+        await this.fx({ type: 'block', target: t.id });
+        await this.say('The barrier absorbs the blow!', { tone: 'good' });
+        return 0;
+      }
+      let dmg = amount;
+      if (!o.raw) {
+        if (t.flags.guarding) dmg *= D.balance.guard;
+        const fromSid = o.source === 'sid' || o.source === 'gun' || o.source === 'magdump';
+        if (fromSid && t.flags.braced) dmg *= 1 - D.skills.foresight.braced;
+        if (this.freakyActive()) dmg *= D.passives.freakyDoctor.damageTaken;
+      }
+      dmg = Math.max(1, Math.round(dmg));
+      const before = t.hp;
+      this.stats.damageTaken += Math.min(dmg, before);
+
+      if (dmg >= before) {
+        if (t.has('aliveHard') && before >= D.passives.aliveHard.threshold) {
+          t.hp = 1;
+          await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
+          await this.say(`${t.name} survives on the edge of life!`, { tone: 'good' });
+          this.refresh();
+          return before - 1;
+        }
+        t.hp = 0;
+        await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
+        await this.onDeath(t, o.source);
+        return before;
+      }
+      t.hp = before - dmg;
+      await this.fx({ type: 'hitWorker', target: t.id, amount: dmg });
+      this.refresh();
+      if (!o.silent) await this.announce(t);
+      return dmg;
+    }
+
+    async heal(t, amount, o) {
+      o = o || {};
+      if (!t || t.dead || t.ghost) return 0;
+      const D = this.D;
+      let n = amount;
+      if (this.freakyActive()) n *= D.passives.freakyDoctor.healing;
+      n = Math.round(n);
+      const before = t.hp;
+      t.hp = Math.min(D.health.max, t.hp + n);
+      await this.fx({ type: 'healWorker', target: t.id, amount: t.hp - before });
+      this.refresh();
+      if (!o.silent) await this.announce(t);
+      return t.hp - before;
+    }
+
+    gainCredits(n) {
+      let got = n;
+      if (this.freakyActive()) got *= this.D.passives.freakyDoctor.credits;
+      got = Math.round(got);
+      this.credits += got;
+      return got;
+    }
+
+    async onDeath(t, source) {
+      const D = this.D;
+      const FD = D.passives.freakyDoctor;
+      if (!this.secondLifeUsed && this.freakyActive()) {
+        this.secondLifeUsed = true;
+        t.hp = FD.reviveHp;
+        await this.fx({ type: 'revive', target: t.id });
+        await this.say(`Purpl Lady’s freaky machinations drag ${t.name} back to life!`, { tone: 'good' });
+        await this.announce(t);
+        return;
+      }
+      t.dead = true;
+      t.hp = 0;
+      t.buffs = [];
+      t.status = {};
+      t.flags = { deathSource: source };
+      this.stats.deaths++;
+      await this.fx({ type: 'death', target: t.id });
+      await this.say(`${t.name} is dead…`, { tone: 'death' });
+      if (t.id === 'mel' && (source === 'gun' || source === 'magdump')) {
+        await this.say('A gunshot to the cranium. Just like the report said.', { tone: 'death' });
+      }
+      for (const id of t.carrying) {
+        const body = this.unit(id);
+        body.carriedBy = null;
+        await this.say(`${t.name} drops ${body.name}’s body!`);
+      }
+      t.carrying = [];
+      this.refresh();
+      if (this.isLost()) {
+        this.outcome = 'lose';
+        return;
+      }
+      await this.checkPossession();
+    }
+
+    async checkPossession() {
+      const p = this.withPassive('possession');
+      if (!p || !this.present(p) || p.flags.possessing) return;
+      if (!this.enemy.flags.weakened) return;
+      const bodies = this.party.filter((u) => u.dead && !u.possessed);
+      if (!bodies.length) return;
+      const body = this.rng.pick(bodies);
+      body.possessed = true;
+      p.flags.possessing = body.id;
+      if (body.carriedBy) {
+        const carrier = this.unit(body.carriedBy);
+        carrier.carrying = carrier.carrying.filter((id) => id !== body.id);
+        body.carriedBy = null;
+        await this.say(`${carrier.name} no longer has to carry ${body.name}!`);
+      }
+      await this.fx({ type: 'possess', target: body.id });
+      await this.say(`${p.name} possesses ${body.name}’s body!`, { tone: 'status' });
+      await this.say(`${body.name}’s body can move on its own now!`);
+      this.refresh();
+    }
+
+    // ============================================================ escape
+    bodiesToCarry() {
+      return this.party.filter((u) => u.dead && !u.carriedBy && !u.possessed);
+    }
+
+    escapeChance() {
+      const E = this.D.escape;
+      const sid = this.enemy;
+      const parts = [];
+      const loose = this.bodiesToCarry();
+      const runners = this.corporeal();
+      if (!runners.length) return { chance: 0, blocked: true, reason: 'No one is left to run.', parts };
+      if (loose.length) {
+        const names = joinNames(loose.map((u) => u.name));
+        return {
+          chance: 0,
+          blocked: true,
+          reason: `${names} can’t be left behind! Someone has to CARRY ${loose.length > 1 ? 'them' : 'the body'}.`,
+          short: `CARRY ${loose.map((u) => u.name.toUpperCase()).join(' & ')} FIRST`,
+          parts,
+        };
+      }
+      let c = E.base;
+      parts.push(['Base', E.base]);
+      const lost = (1 - sid.hp / sid.maxHp) * E.perHealthLost;
+      c += lost;
+      parts.push(['Sid’s wounds', lost]);
+      if (sid.flags.weakened) {
+        c += E.weakened;
+        parts.push(['Sid is weakened', E.weakened]);
+      }
+      if (sid.status.stunned) {
+        c += E.stunned;
+        parts.push(['Sid can’t move', E.stunned]);
+      }
+      if (sid.status.chilled) {
+        c += E.chilled;
+        parts.push(['Sid is freezing', E.chilled]);
+      }
+      if (sid.status.confused) {
+        c += E.confused;
+        parts.push(['Sid is confused', E.confused]);
+      }
+      if (sid.status.blind) {
+        c += E.blind;
+        parts.push(['Sid can’t see', E.blind]);
+      }
+      if (sid.flags.gun) {
+        c += E.gunDrawn;
+        parts.push(['Sid has his gun out', E.gunDrawn]);
+      }
+      const avg = runners.reduce((s, u) => s + this.stat(u, 'spd'), 0) / runners.length;
+      const spd = clamp((avg - this.stat(sid, 'spd')) * E.speedPerPoint, E.speedMin, E.speedMax);
+      c += spd;
+      parts.push(['Team speed', spd]);
+      const carried = this.party.filter((u) => u.dead && u.carriedBy).length;
+      if (carried) {
+        c -= carried * E.perCarried;
+        parts.push([`Carrying ${carried > 1 ? carried + ' bodies' : 'a body'}`, -carried * E.perCarried]);
+      }
+      if (this.failedRuns) {
+        c += this.failedRuns * E.perFailedTry;
+        parts.push(['Earlier attempts', this.failedRuns * E.perFailedTry]);
+      }
+      return { chance: Math.round(clamp(c, E.min, E.max)), blocked: false, parts };
+    }
+
+    // ============================================================ turn flow
+    async start() {
+      this.refresh();
+      await this.say(`${this.partyNames()} are backed into a corner against Sid!`, { tone: 'intro' });
+    }
+
+    canCommand(u) {
+      if (!u || u.dead) return false;
+      if (u.status.asleep || u.status.phasing) return false;
+      if (u.status.balkan && u.status.balkan.phase === 'boosted') return false;
+      return true;
+    }
+
+    async beginTurn() {
+      const D = this.D;
+      const sid = this.enemy;
+      this.turn++;
+      this.enemyActed = false;
+      this.intentWord = null;
+      sid.flags.refusedThisTurn = false;
+      for (const u of this.party) {
+        u.flags.guarding = false;
+        u.flags.barrier = false;
+        u.flags.braced = false;
+      }
+      await this.fx({ type: 'turn', turn: this.turn });
+      await this.say(`Turn ${this.turn}:`, { tone: 'turn' });
+
+      if (this.turn === 1) {
+        for (const u of this.party) {
+          if (!u.has('athlete')) continue;
+          const P = D.passives.athlete;
+          this.addBuff(u, 'spd', P.spdUp, P.turns, 'athlete');
+          await this.say(`${u.name}’s inner athlete kicks in!`);
+          await this.fx({ type: 'buff', target: u.id });
+          await this.say(`${u.name}’s speed drastically increases!`, { tone: 'buff' });
+        }
+        if (this.freakyActive()) {
+          await this.say('Purpl Lady’s strange machinations hum through the air…', { tone: 'status' });
+        }
+      }
+
+      if (sid.flags.downed && !sid.status.stunned) {
+        sid.flags.downed = false;
+        await this.fx({ type: 'sidPose' });
+        await this.say('Sid gets back up… and he’s furious!', { tone: 'danger' });
+        await this.addAnger(this.sidDef.getsUpAnger, { quiet: true });
+      }
+
+      for (const u of this.party) {
+        if (this.outcome) return;
+        await this.startOfTurnFor(u);
+      }
+      if (this.outcome) return;
+
+      this.intent = this.planEnemy();
+      this.intentKnown = false;
+      const seer = this.party.find((u) => u.has('hyperceptive') && !u.dead && !u.status.asleep);
+      if (seer) {
+        await this.say(`${seer.name} ${this.turn === 1 ? 'stares' : 'looks'} at Sid…`);
+        this.intentKnown = true;
+        await this.fx({ type: 'intent' });
+        await this.say(this.intentLine(this.intent), { tone: 'warn' });
+      }
+      const purpl = this.withPassive('freakyDoctor');
+      if (this.foresightTurns > 0 && this.present(purpl)) await this.warnPower(purpl);
+
+      for (const u of this.party) await this.lunchBoxTick(u);
+      await this.checkPossession();
+      this.refresh();
+    }
+
+    async startOfTurnFor(u) {
+      const D = this.D;
+      if (u.dead) return;
+      // Balkan Boost kicks in the turn after drinking it.
+      if (u.status.balkan && u.status.balkan.phase === 'pending') {
+        const it = D.items.balkanBoost;
+        u.status.balkan = { phase: 'boosted', turns: it.boostTurns };
+        this.addBuff(u, 'all', it.boost, it.boostTurns, 'balkan');
+        await this.fx({ type: 'buff', target: u.id });
+        await this.say(`${u.name} is powered up by the Balkan boost!`, { tone: 'buff' });
+        await this.say(`All of ${u.name}’s STATS drastically increase!`, { tone: 'buff' });
+      }
+      // Waking up from a nap.
+      if (u.status.asleep && u.status.asleep.turns <= 0) {
+        const sk = D.skills.nap;
+        delete u.status.asleep;
+        await this.fx({ type: 'portrait', target: u.id });
+        await this.say(`${u.name} wakes up!`);
+        u.res = u.resMax;
+        await this.heal(u, sk.heal);
+        this.addBuff(u, 'atk', -sk.atkDown, sk.atkDownTurns, 'napAtk');
+        await this.say(`${u.name}’s attack decreases slightly.`, { tone: 'debuff' });
+      }
+      // Coming back from Phase for ITEMS.
+      if (u.status.phasing && u.status.phasing.turns <= 0) {
+        await this.returnFromPhase(u);
+      } else if (u.status.phasing) {
+        await this.say(`${u.name} is still searching the lockers…`);
+      }
+    }
+
+    async lunchBoxTick(u) {
+      if (!u.flags.lunch || u.dead) return;
+      const L = u.flags.lunch;
+      L.turns--;
+      if (L.turns > 0) {
+        await this.say(`${u.name} is looking for his lunch box…`);
+        return;
+      }
+      delete u.flags.lunch;
+      const sk = this.D.skills.lunchBox;
+      await this.fx({ type: 'item', target: u.id, item: 'lunchBox' });
+      await this.say(`${u.name} finds his lunch box!`, { tone: 'good' });
+      await this.heal(u, sk.heal);
+      const ally = this.unit(L.allyId);
+      if (ally && !ally.dead && !ally.ghost) await this.heal(ally, sk.heal);
+    }
+
+    intentLine(intent) {
+      const t = intent && intent.targetId ? this.unit(intent.targetId) : null;
+      switch (intent && intent.kind) {
+        case 'melee':
+        case 'gun':
+          return this.rng.chance(0.5) ? `Sid will hit ${t.name} next!` : `Sid will attack ${t.name} next!`;
+        case 'magdump':
+          return 'Sid will attack everyone next!';
+        case 'claims':
+          return 'Sid will target everyone next!';
+        case 'stunned':
+          return 'Sid can’t move!';
+        default:
+          return 'Sid will not be attacking anyone!';
+      }
+    }
+
+    intentPower(intent) {
+      const S = this.sidDef;
+      const sid = this.enemy;
+      if (!intent) return null;
+      if (intent.kind === 'melee' || intent.kind === 'gun') {
+        const t = this.unit(intent.targetId);
+        if (!t || t.dead) return null;
+        const list = sid.flags.gun ? S.gunAttacks : S.melee;
+        const pow = list.reduce((s, m) => s + m.power, 0) / list.length;
+        const exp = this.physical(sid, t, pow, { flat: true });
+        return this.powerWord(exp / Math.max(1, t.hp));
+      }
+      if (intent.kind === 'magdump') {
+        const targets = this.corporeal();
+        if (!targets.length) return null;
+        const weakest = targets.reduce((a, b) => (a.hp <= b.hp ? a : b));
+        const M = this.D.skills.magdump;
+        const acc = M.accuracy + (sid.flags.deagleFocus ? S.weapon.magdumpAccuracyBonus : 0);
+        const avgBullets = (M.bullets[0] + M.bullets[1]) / 2;
+        const shooters = this.party.filter((u) => !u.dead && !u.status.phasing).length || 1;
+        const exp = (avgBullets * acc * this.physical(sid, weakest, M.power, { flat: true })) / shooters;
+        return this.powerWord(exp / Math.max(1, weakest.hp));
+      }
+      if (intent.kind === 'claims') return 'UNSETTLING';
+      return null;
+    }
+
+    powerWord(ratio) {
+      if (ratio >= 1) return 'DEADLY';
+      if (ratio >= 0.5) return 'STRONG';
+      if (ratio >= 0.25) return 'MODERATE';
+      return 'WEAK';
+    }
+
+    async warnPower(purpl) {
+      const word = this.intentPower(this.intent);
+      if (!word) {
+        await this.say(`${purpl.name} senses no attack coming.`);
+        return;
+      }
+      for (const u of this.party) u.flags.braced = true;
+      this.intentWord = word;
+      await this.fx({ type: 'intent' });
+      await this.say(`${purpl.name} warns everyone of a ${word} attack!`, { tone: 'warn' });
+    }
+
+    // ------------------------------------------------------------ Sid's plan
+    sidTargets() {
+      return this.party.filter((u) => !u.dead && !u.ghost);
+    }
+
+    pickSidTarget() {
+      const ts = this.sidTargets();
+      if (!ts.length) return null;
+      return this.rng.weighted(
+        ts.map((u) => [u, 1 + u.aggro / 150 + (u.hp <= 40 ? 0.5 : 0) + (u.status.asleep ? 0.5 : 0)])
+      );
+    }
+
+    planEnemy() {
+      const sid = this.enemy;
+      const S = this.sidDef;
+      if (sid.status.stunned) return { kind: 'stunned' };
+      const target = this.pickSidTarget();
+      if (!target) return { kind: 'idle' };
+      const w = sid.flags.gun ? S.ai.armed : S.ai.calm;
+      const opts = [];
+      if (!sid.flags.gun) {
+        opts.push(['melee', w.melee]);
+        if (sid.anger >= S.ai.cookieMinAnger && !sid.hasBuff('jumboCookie')) opts.push(['cookie', w.cookie]);
+        if (this.lastEnemyKind !== 'claims') opts.push(['claims', w.claims]);
+      } else {
+        opts.push(['gun', w.gun]);
+        opts.push(['magdump', w.magdump]);
+        if (!sid.flags.deagleFocus && sid.anger < S.anger.max) opts.push(['deagle', w.deagle]);
+        if (this.lastEnemyKind !== 'claims') opts.push(['claims', w.claims]);
+      }
+      const kind = this.rng.weighted(opts);
+      const intent = { kind };
+      if (kind === 'melee' || kind === 'gun') intent.targetId = target.id;
+      return intent;
+    }
+
+    // ------------------------------------------------------------ resolution
+    priorityOf(u, cmd) {
+      if (cmd.type === 'guard' || cmd.type === 'focus') return 2;
+      if (cmd.type === 'skill' && this.D.skills[cmd.skill].priority) return this.D.skills[cmd.skill].priority;
+      return 0;
+    }
+
+    autoCommand(u) {
+      if (u.status.asleep) return { type: 'sleep' };
+      if (u.status.balkan && u.status.balkan.phase === 'boosted') return { type: 'berserk' };
+      return null;
+    }
+
+    async resolveTurn(commands) {
+      commands = commands || {};
+      const sid = this.enemy;
+      const acts = [];
+      for (const u of this.party) {
+        if (u.dead || u.status.phasing) continue;
+        const cmd = this.autoCommand(u) || commands[u.id];
+        if (!cmd) continue;
+        acts.push({ u, cmd, prio: this.priorityOf(u, cmd), spd: this.stat(u, 'spd'), tie: this.rng() });
+      }
+      const intent = this.intent || { kind: 'idle' };
+      acts.push({
+        enemy: true,
+        prio: intent.kind === 'cookie' ? this.D.skills.jumboCookie.priority : 0,
+        spd: this.stat(sid, 'spd'),
+        tie: this.rng(),
+      });
+      acts.sort((a, b) => b.prio - a.prio || b.spd - a.spd || a.tie - b.tie);
+
+      for (const a of acts) {
+        if (this.outcome) break;
+        if (a.enemy) await this.enemyAct();
+        else await this.workerAct(a.u, a.cmd);
+        this.refresh();
+      }
+      if (!this.outcome) await this.endTurn();
+    }
+
+    async runTurn() {
+      const esc = this.escapeChance();
+      if (esc.blocked) {
+        await this.say(esc.reason, { tone: 'warn' });
+        return false;
+      }
+      this.stats.runs++;
+      const runners = this.corporeal();
+      const lead = runners.reduce((a, b) => (this.stat(a, 'spd') >= this.stat(b, 'spd') ? a : b));
+      await this.say(runners.length > 1 ? 'The team makes a run for it!' : `${lead.name} makes a run for it!`, {
+        tone: 'run',
+      });
+      for (const u of runners) {
+        for (const id of u.carrying) await this.say(`${u.name} hauls ${this.unit(id).name}’s body along!`);
+      }
+      const possessed = this.party.find((u) => u.possessed);
+      if (possessed) await this.say(`${possessed.name}’s possessed body shambles after them!`);
+
+      const success = this.rng() * 100 < esc.chance;
+      await this.fx({ type: 'run', success });
+      if (success) {
+        this.outcome = 'win';
+        const got = this.gainCredits(this.D.escape.reward);
+        await this.say(`A successful escape! ${this.partyNames()} win!`, { tone: 'win' });
+        await this.say(`The group receives ${got} credits.`, { tone: 'good' });
+        this.refresh();
+        return true;
+      }
+      this.failedRuns++;
+      await this.say(this.rng.pick(['Sid cuts off the escape route!', 'Sid blocks the way!', 'The door won’t budge!']), {
+        tone: 'bad',
+      });
+      await this.enemyAct();
+      if (!this.outcome) await this.endTurn();
+      return false;
+    }
+
+    // ------------------------------------------------------------ worker actions
+    async workerAct(u, cmd) {
+      const B = this.D.balance;
+      if (u.dead) return;
+      if (!(cmd.type === 'skill' && cmd.skill === 'capSlap')) u.flags.capStreak = 0;
+      if (cmd.type === 'sleep') {
+        await this.say(`${u.name} is fast asleep… Zzz…`);
+        return;
+      }
+      if (cmd.type !== 'guard' && cmd.type !== 'focus' && cmd.type !== 'berserk') {
+        if (u.status.afraid && this.rng.chance(B.afraidSkip)) {
+          await this.fx({ type: 'status', target: u.id, text: 'AFRAID' });
+          await this.say(`${u.name} is too scared to move!`, { tone: 'debuff' });
+          return;
+        }
+        if (u.status.confused && this.rng.chance(B.confusedSkip)) {
+          await this.fx({ type: 'status', target: u.id, text: 'CONFUSED' });
+          await this.say(`${u.name} is confused and stumbles around!`, { tone: 'debuff' });
+          return;
+        }
+      }
+      switch (cmd.type) {
+        case 'attack':
+          return u.ghost ? this.hex(u) : this.basicAttack(u);
+        case 'berserk':
+          return this.berserk(u);
+        case 'guard':
+          return this.guard(u);
+        case 'focus':
+          return this.focus(u);
+        case 'carry':
+          return this.carry(u, cmd.target);
+        case 'item':
+          return this.useItem(u, cmd.item, cmd.target);
+        case 'skill':
+          return this.useSkill(u, cmd.skill, cmd.target);
+        default:
+          return undefined;
+      }
+    }
+
+    async basicAttack(u, o) {
+      o = o || {};
+      const sid = this.enemy;
+      const W = u.def.weapon;
+      const B = this.D.balance;
+      const power = o.power || B.basicPower;
+      const hits = o.hits || W.hits;
+      await this.fx({ type: 'lunge', from: u.id });
+      if (o.line) await this.say(o.line);
+      else await this.say(hits > 1 ? `${u.name} ${W.verb} Sid twice!` : `${u.name} ${W.verb} Sid!`);
+      for (let i = 0; i < hits; i++) {
+        if (this.outcome) return;
+        const mult = i === 0 ? 1 : W.followUpHitRate;
+        if (!this.rollHit(u, sid, mult)) {
+          await this.fx({ type: 'miss', target: sid.id });
+          if (hits > 1) await this.say(i === 0 ? 'The first attack missed!' : 'The second attack whiffed!');
+          else await this.say('The attack missed!');
+          continue;
+        }
+        const crit = this.rng.chance(this.critChance(u));
+        await this.hitSid(u, this.physical(u, sid, power, { crit }), { crit });
+      }
+    }
+
+    async berserk(u) {
+      if (!this.present(this.enemy)) return;
+      await this.basicAttack(u, { hits: 1, power: 0.9, line: `${u.name} delivers a roundhouse kick to Sid’s face!` });
+      if (this.outcome || u.dead) return;
+      await this.say(`${u.name} just can’t calm down!`, { tone: 'buff' });
+      await this.basicAttack(u, { hits: 1, power: 0.7, line: `${u.name} rushes at Sid!` });
+    }
+
+    async guard(u) {
+      const D = this.D;
+      u.flags.guarding = true;
+      await this.fx({ type: 'guard', target: u.id });
+      await this.say(`${u.name} guards!`);
+      if (u.has('solidJohn') && !u.flags.solidUsed) {
+        const P = D.passives.solidJohn;
+        u.flags.solidUsed = true;
+        u.flags.barrier = true;
+        await this.fx({ type: 'barrier', target: u.id });
+        await this.say(`A powerful barrier envelops ${u.name}!`, { tone: 'buff' });
+        const bonus = Math.min(P.maxAtk, u.timesTargeted * P.atkPerTarget);
+        if (bonus > 0) {
+          this.addBuff(u, 'atk', bonus, 99, 'solidJohn');
+          await this.say(`${u.name}’s attack increases!`, { tone: 'buff' });
+        }
+      }
+      u.res = Math.min(u.resMax, u.res + D.balance.guardRestore);
+    }
+
+    async focus(u) {
+      const wasActive = this.freakyActive();
+      u.res = Math.min(u.resMax, u.res + this.D.balance.guardRestore);
+      await this.fx({ type: 'buff', target: u.id });
+      await this.say(`${u.name} drifts quietly and gathers her spirit.`, { tone: 'status' });
+      if (!wasActive && this.freakyActive()) {
+        await this.say('Her strange machinations hum back to life…', { tone: 'status' });
+      }
+    }
+
+    async carry(u, bodyId) {
+      const body = this.unit(bodyId);
+      if (!body || !body.dead || body.carriedBy || body.possessed) {
+        await this.say(`${u.name} looks around… there’s no one left to pick up.`);
+        return;
+      }
+      body.carriedBy = u.id;
+      u.carrying.push(body.id);
+      await this.fx({ type: 'carry', carrier: u.id, body: body.id });
+      await this.say(`${u.name} picks up ${body.name}’s body!`);
+      await this.say(`${u.name}’s speed decreases!`, { tone: 'debuff' });
+      this.refresh();
+    }
+
+    async hex(u) {
+      const sid = this.enemy;
+      await this.fx({ type: 'cast', from: u.id, kind: 'hex' });
+      await this.say(`${u.name} ${u.def.weapon.verb} Sid with her Magic Book…`);
+      const pick = this.rng.pick(['atk', 'def', 'spd', 'confused', 'calm', 'blind']);
+      switch (pick) {
+        case 'atk':
+          this.addBuff(sid, 'atk', -0.2, 2, 'hexAtk');
+          await this.say('Sid’s attack decreases!', { tone: 'debuff' });
+          break;
+        case 'def':
+          this.addBuff(sid, 'def', -0.2, 2, 'hexDef');
+          await this.say('Sid’s defense decreases!', { tone: 'debuff' });
+          break;
+        case 'spd':
+          this.addBuff(sid, 'spd', -0.25, 2, 'hexSpd');
+          await this.say('Sid’s speed decreases!', { tone: 'debuff' });
+          break;
+        case 'confused':
+          sid.status.confused = { turns: Math.max(1, sid.status.confused ? sid.status.confused.turns : 0) };
+          await this.say('Sid is confused!', { tone: 'status' });
+          break;
+        case 'calm':
+          await this.addAnger(-10);
+          await this.say('Sid calms down a little.', { tone: 'status' });
+          break;
+        default:
+          sid.status.blind = { amount: 0.25, turns: 1 };
+          await this.say('Sid can’t see!', { tone: 'status' });
+      }
+      await this.fx({ type: 'status', target: sid.id, text: 'HEX' });
+      this.refresh();
+    }
+
+    // ------------------------------------------------------------ items
+    async useItem(u, itemId, targetId) {
+      const D = this.D;
+      const it = D.items[itemId];
+      const sid = this.enemy;
+      if (!it || !this.bag[itemId]) {
+        await this.say(`${u.name} reaches into the bag… but it’s gone!`);
+        return;
+      }
+      if (u.ghost) return;
+      let t = targetId ? this.unit(targetId) : u;
+      if (it.target === 'ally' && (!t || t.dead || t.ghost)) t = u;
+      if (!it.keep) this.bag[itemId]--;
+      this.stats.itemsUsed++;
+      const given = t !== u && it.target === 'ally';
+      await this.fx({ type: 'item', target: (t || u).id, item: itemId });
+
+      switch (itemId) {
+        case 'royalBurger':
+        case 'cookie':
+        case 'mayonnaise':
+        case 'orangeJello': {
+          const art = it.article != null ? it.article : /^[aeiou]/i.test(it.name) ? 'an ' : 'a ';
+          await this.say(given ? `${u.name} gives ${t.name} ${art}${it.name}.` : `${u.name} eats ${art}${it.name}.`);
+          await this.heal(t, it.heal);
+          if (itemId === 'cookie') {
+            this.addBuff(t, 'atk', it.atkUp, it.turns, 'cookieAtk');
+            await this.say(`${t.name}’s attack increases!`, { tone: 'buff' });
+            if (sid.has('methAddict')) {
+              await this.say('Sid smells the cookie… METH Addict!', { tone: 'danger' });
+              await this.addAnger(D.passives.methAddict.anger);
+            }
+          }
+          if (itemId === 'orangeJello') {
+            this.addBuff(t, 'def', it.defUp, it.turns, 'jelloDef');
+            await this.say(`${t.name}’s defense greatly increases!`, { tone: 'buff' });
+          }
+          if (itemId === 'mayonnaise' && this.rng.chance(it.poisonChance)) {
+            t.status.poison = { dmg: it.poisonDamage, turns: it.poisonTurns };
+            await this.fx({ type: 'status', target: t.id, text: 'URANIUM' });
+            await this.say(`Uh oh… ${t.name} has Uranium poisoning!`, { tone: 'debuff' });
+          }
+          break;
+        }
+        case 'balkanBoost': {
+          await this.say(given ? `${u.name} gives ${t.name} a Balkan Boost.` : `${u.name} consumes a Balkan Boost.`);
+          t.status.balkan = { phase: 'pending' };
+          await this.say(`${t.name} feels nothing so far…`);
+          if (t.has('uncleSink')) await this.uncleSink(t);
+          this.bag.emptyBottle = (this.bag.emptyBottle || 0) + 1;
+          break;
+        }
+        case 'emptyBottle': {
+          if (!u.has('uncleSink')) {
+            this.bag[itemId]++;
+            await this.say(`${u.name} shakes the bottle. It’s empty.`);
+            break;
+          }
+          await this.say(`${u.name} drinks from the seemingly empty bottle…`);
+          await this.uncleSink(u);
+          break;
+        }
+        case 'pocketSand': {
+          await this.say(`${u.name} throws Pocket Sand into Sid’s eyes!`);
+          sid.status.blind = { amount: it.blind, turns: it.turns };
+          await this.fx({ type: 'status', target: sid.id, text: 'BLIND' });
+          await this.say('Sid can’t see!', { tone: 'status' });
+          await this.addAnger(it.anger, { quiet: true });
+          if (u.has('batterUp')) {
+            const P = D.passives.batterUp;
+            const got = this.gainCredits(P.credits);
+            this.addBuff(u, 'atk', P.atkUp, P.turns, 'batterUp');
+            this.addBuff(u, 'spd', P.spdUp, P.turns, 'batterUp');
+            await this.fx({ type: 'credits', amount: got });
+            await this.say(`Batter up! The team receives ${got} credits!`, { tone: 'good' });
+            await this.say(`${u.name}’s attack and speed increase!`, { tone: 'buff' });
+          }
+          break;
+        }
+        case 'beerKeg': {
+          await this.say(`${u.name} arms the Beer Keg and lets it roll…`);
+          await this.fx({ type: 'explosion' });
+          await this.say('KABOOM!', { tone: 'danger' });
+          await this.hitSid(u, this.rng.range(it.damage), { kind: 'explosion' });
+          if (!this.outcome) await this.damageWorker(u, this.rng.range(it.selfDamage), { source: 'self' });
+          break;
+        }
+        case 'masterLock': {
+          await this.say(`${u.name} swings the Master Lock 607 around…`);
+          await this.say('It does nothing.');
+          break;
+        }
+        default:
+          await this.say(`${u.name} uses ${it.name}.`);
+      }
+      this.refresh();
+    }
+
+    async uncleSink(u) {
+      await this.say(`Uncle Sink fears no drink! ${u.name} feels a little better.`, { tone: 'good' });
+      await this.heal(u, this.D.passives.uncleSink.heal);
+    }
+
+    // ------------------------------------------------------------ skills
+    skillCost(u, skillId) {
+      if (skillId === 'tossGlasses' && u.flags.glassesOff) return 0;
+      return this.D.skills[skillId].cost;
+    }
+
+    skillName(u, skillId) {
+      const sk = this.D.skills[skillId];
+      if (skillId === 'tossGlasses' && u.flags.glassesOff) return sk.reequipName;
+      return sk.name;
+    }
+
+    skillZone(u) {
+      const C = this.D.balance.skillCheck;
+      let zone = C.baseZone + this.stat(u, 'smt') * C.perSmarts;
+      if (this.moralSupportActive()) zone *= this.D.passives.moralSupport.zoneScale;
+      return clamp(zone, 0.05, 0.8);
+    }
+
+    async skillCheck(u, kind) {
+      const C = this.D.balance.skillCheck;
+      const zone = this.skillZone(u);
+      const res = await this.io.skillCheck({
+        who: u.id,
+        name: u.name,
+        kind,
+        title: kind === 'fuel' ? 'FUEL SKILL CHECK' : 'BATTERY SKILL CHECK',
+        zone,
+        sweepMs: C.sweepMs,
+        timeLimitMs: C.timeLimitMs,
+        moralSupport: this.moralSupportActive(),
+        rng: this.rng,
+      });
+      return !!res;
+    }
+
+    async useSkill(u, skillId, targetId) {
+      const D = this.D;
+      const sk = D.skills[skillId];
+      const sid = this.enemy;
+      const cost = this.skillCost(u, skillId);
+      if (u.res < cost) {
+        await this.say(`${u.name} is too exhausted to do that!`);
+        return;
+      }
+      u.res -= cost;
+      this.refresh();
+
+      switch (skillId) {
+        // ---------------- MEL
+        case 'fuelCheck': {
+          await this.say(`${u.name} starts pouring fuel…`);
+          const ok = await this.skillCheck(u, 'fuel');
+          await this.say('…');
+          if (ok) {
+            const got = this.gainCredits(u.hasBuff('cookieAtk') ? sk.creditsWithCookie : sk.credits);
+            await this.fx({ type: 'credits', amount: got });
+            await this.say(`Done! The team receives ${got} credits!`, { tone: 'good' });
+            for (const w of this.corporeal()) this.addBuff(w, 'def', sk.teamDefUp, sk.turns, 'fuelDef');
+            await this.say('The team’s defense increases!', { tone: 'buff' });
+          } else {
+            await this.say(`The fuel canister falls on ${u.name}’s foot!`, { tone: 'bad' });
+            await this.damageWorker(u, this.rng.range(sk.failDamage), { source: 'self' });
+            if (!this.outcome) await this.addAnger(sk.failAnger);
+          }
+          break;
+        }
+        case 'tossGlasses': {
+          if (u.flags.glassesOff) {
+            u.flags.glassesOff = false;
+            await this.fx({ type: 'portrait', target: u.id });
+            await this.say(`${u.name} re-equips a new pair of glasses!`);
+            await this.say(`${u.name} can see again!`, { tone: 'buff' });
+            break;
+          }
+          await this.say(`${u.name} throws his glasses!`);
+          await this.fx({ type: 'throw', from: u.id, item: 'glasses' });
+          const hit = this.rollHit(u, sid);
+          u.flags.glassesOff = true;
+          await this.fx({ type: 'portrait', target: u.id });
+          if (hit) {
+            const crit = this.rng.chance(this.critChance(u));
+            await this.hitSid(u, this.physical(u, sid, sk.power, { crit }), { crit });
+            if (this.rng.chance(sk.bleedChance)) {
+              sid.status.bleed = { turns: sk.bleedTurns };
+              await this.fx({ type: 'status', target: sid.id, text: 'BLEEDING' });
+              await this.say('Sid is BLEEDING!', { tone: 'status' });
+            }
+          } else {
+            await this.fx({ type: 'miss', target: sid.id });
+            await this.say('The glasses miss Sid!');
+          }
+          sid.status.shards = { turns: sk.shardsTurns };
+          await this.say('Glass falls around Sid’s feet!', { tone: 'status' });
+          await this.say(`${u.name} can’t see as well…`, { tone: 'debuff' });
+          break;
+        }
+        case 'melsPages': {
+          await this.say(`${u.name} uses his pages!`);
+          await this.fx({ type: 'cast', from: u.id, kind: 'pages' });
+          let hits = 0;
+          let crits = 0;
+          for (let i = 0; i < sk.hits; i++) {
+            if (this.outcome) break;
+            if (!this.rollHit(u, sid)) {
+              await this.fx({ type: 'miss', target: sid.id, quick: true });
+              continue;
+            }
+            const crit = this.rng.chance(sk.critChance);
+            hits++;
+            if (crit) crits++;
+            await this.hitSid(u, this.physical(u, sid, sk.power, { crit, ignoreDef: true }), {
+              crit,
+              quietCrit: true,
+              quick: true,
+              kind: 'page',
+            });
+          }
+          await this.say(`${hits} of ${sk.hits} pages hit Sid!`);
+          if (crits) await this.say(crits > 1 ? `It hits a weak point! (x${crits})` : 'It hits a weak point!', { tone: 'crit' });
+          break;
+        }
+        case 'watermelonLob': {
+          await this.say(`${u.name} lobs a watermelon… me lone :3`);
+          await this.fx({ type: 'explosion' });
+          await this.say('KABOOM!', { tone: 'danger' });
+          await this.hitSid(u, sid.maxHp * sk.percent, { kind: 'explosion' });
+          for (const w of this.party) {
+            if (this.outcome) break;
+            if (w.dead || w.status.phasing) continue;
+            if (w.ghost) {
+              await this.say(`The blast passes right through ${w.name}.`);
+              continue;
+            }
+            await this.damageWorker(w, D.health.start * sk.percent, { source: 'lob', raw: true });
+          }
+          break;
+        }
+
+        // ---------------- JOHN
+        case 'capSlap': {
+          const streak = Math.min(u.flags.capStreak || 0, sk.maxStreak);
+          const power = sk.power * (1 + sk.streakBonus * streak);
+          await this.fx({ type: 'lunge', from: u.id });
+          await this.say(streak ? `${u.name} slaps Sid with his cap! (x${streak + 1})` : `${u.name} slaps Sid with his cap!`);
+          if (this.rollHit(u, sid)) {
+            const crit = this.rng.chance(this.critChance(u));
+            await this.hitSid(u, this.physical(u, sid, power, { crit }), { crit });
+            if (streak) await this.say('The slaps are getting stronger!', { tone: 'buff' });
+          } else {
+            await this.fx({ type: 'miss', target: sid.id });
+            await this.say('The slap missed!');
+          }
+          u.flags.capStreak = streak + 1;
+          break;
+        }
+        case 'nap': {
+          u.status.asleep = { turns: this.rng.range(sk.turns), fresh: true };
+          await this.fx({ type: 'portrait', target: u.id });
+          await this.say(`${u.name} takes a nap…`);
+          await this.say('Zzz…');
+          break;
+        }
+        case 'lunchBox': {
+          const ally = this.unit(targetId);
+          u.flags.lunch = {
+            turns: this.rng.range(sk.delay),
+            allyId: ally && !ally.dead && !ally.ghost && ally !== u ? ally.id : null,
+          };
+          await this.say(`${u.name} is looking for his Lunch Box!`);
+          break;
+        }
+        case 'batteryCheck': {
+          await this.say(`${u.name} is putting in a battery…`);
+          const ok = await this.skillCheck(u, 'battery');
+          if (ok) {
+            await this.fx({ type: 'shock' });
+            await this.say('Success! Sid is electrically shocked!', { tone: 'good' });
+            await this.hitSid(u, this.physical(u, sid, sk.power, { defIgnore: sk.defIgnore }), { kind: 'shock' });
+            this.addBuff(u, 'atk', sk.atkUp, sk.turns, 'battery');
+            await this.say(`${u.name}’s attack increases!`, { tone: 'buff' });
+          } else {
+            await this.fx({ type: 'shockSelf', target: u.id });
+            await this.say(`Missed… ${u.name} is shocked!`, { tone: 'bad' });
+            await this.damageWorker(u, this.rng.range(sk.failDamage), { source: 'self' });
+          }
+          break;
+        }
+
+        // ---------------- PURPL LADY
+        case 'seriousChills': {
+          await this.fx({ type: 'cast', from: u.id, kind: 'chill' });
+          await this.say(`${u.name} gives Sid some serious chills!`);
+          this.addBuff(sid, 'def', -sk.defDown, sk.turns, 'chills');
+          this.addBuff(sid, 'spd', -sk.spdDown, sk.turns, 'chills');
+          sid.status.chilled = { turns: sk.turns };
+          await this.fx({ type: 'status', target: sid.id, text: 'FREEZING' });
+          await this.say('Sid is FREEZING!', { tone: 'status' });
+          await this.say('Sid’s defense and speed drastically decrease!', { tone: 'debuff' });
+          break;
+        }
+        case 'shadowsHand': {
+          await this.fx({ type: 'cast', from: u.id, kind: 'shadow' });
+          await this.say(`${u.name} solidifies just enough to hit Sid!`);
+          const crit = this.rng.chance(this.critChance(u));
+          await this.hitSid(u, this.physical(u, sid, sk.power, { magic: true, crit, defIgnore: sk.defIgnore }), {
+            crit,
+            kind: 'shadow',
+          });
+          if (!this.outcome) {
+            sid.status.confused = { turns: sk.confuseTurns };
+            await this.fx({ type: 'status', target: sid.id, text: 'CONFUSED' });
+            await this.say('Sid is very confused!', { tone: 'status' });
+          }
+          break;
+        }
+        case 'foresight': {
+          this.foresightTurns = sk.turns;
+          await this.fx({ type: 'cast', from: u.id, kind: 'foresight' });
+          await this.say(`${u.name} peers into what’s coming…`);
+          if (!this.enemyActed) await this.warnPower(u);
+          break;
+        }
+        case 'phaseForItems': {
+          u.status.phasing = { turns: this.rng.range(sk.turns), fresh: true };
+          await this.fx({ type: 'phase', target: u.id });
+          await this.say(`${u.name} phases into the lockers to look for items…`);
+          break;
+        }
+        default:
+          await this.say(`${u.name} uses ${sk.name}.`);
+      }
+      this.refresh();
+    }
+
+    async returnFromPhase(u) {
+      const D = this.D;
+      const sk = D.skills.phaseForItems;
+      delete u.status.phasing;
+      await this.fx({ type: 'unphase', target: u.id });
+      await this.say(`${u.name} phases back out of the lockers!`);
+      if (this.rng.chance(sk.nothingChance)) {
+        await this.say('…but she found nothing.');
+        return;
+      }
+      const n = this.rng.range(sk.finds);
+      const found = [];
+      for (let i = 0; i < n; i++) {
+        const pool = this.rng.chance(sk.rareChance) ? D.phaseLoot.rare : D.phaseLoot.common;
+        const id = this.rng.pick(pool);
+        this.bag[id] = (this.bag[id] || 0) + 1;
+        found.push(D.items[id].name);
+      }
+      await this.fx({ type: 'loot', items: found });
+      await this.say(`The team receives: ${joinNames(found)}!`, { tone: 'good' });
+      await this.checkPossession();
+    }
+
+    // ------------------------------------------------------------ Sid's actions
+    async enemyAct() {
+      const D = this.D;
+      const S = this.sidDef;
+      const B = D.balance;
+      const sid = this.enemy;
+      this.enemyActed = true;
+      let intent = Object.assign({}, this.intent || { kind: 'idle' });
+
+      if (sid.status.stunned) {
+        const st = sid.status.stunned;
+        if (st.slots >= 2) await this.say(`Sid stares at ${st.by || 'the workers'} in confusion.`);
+        else await this.say('Sid is trying to get up!');
+        st.slots--;
+        if (st.slots <= 0) delete sid.status.stunned;
+        this.lastEnemyKind = 'stunned';
+        this.refresh();
+        return;
+      }
+
+      if (sid.status.shards) {
+        await this.say('Sid steps on the glass shards!');
+        await this.hitSid(null, this.rng.range(D.skills.tossGlasses.shardsDamage), { kind: 'shards' });
+        if (sid.status.stunned) return; // the shards knocked him down
+      }
+
+      if (sid.status.confused && this.rng.chance(B.sidConfusedFumble)) {
+        this.lastEnemyKind = 'confused';
+        if (this.rng.chance(0.5)) {
+          await this.say('Sid is confused… and smacks himself in the face!', { tone: 'good' });
+          await this.hitSid(null, this.stat(sid, 'atk') * 0.35, { kind: 'self' });
+        } else {
+          await this.say('Sid is confused and flails at nothing!');
+        }
+        return;
+      }
+
+      // His plan was made at the start of the turn; ANGER may have changed since.
+      if (sid.flags.gun) {
+        if (intent.kind === 'melee') intent.kind = 'gun';
+        if (intent.kind === 'cookie') {
+          await this.say('Sid reaches for a cookie… but he’s too angry to eat!');
+          intent = { kind: 'gun' };
+        }
+      } else if (intent.kind === 'gun' || intent.kind === 'magdump' || intent.kind === 'deagle') {
+        intent = { kind: 'melee', targetId: intent.targetId };
+      }
+      if ((intent.kind === 'melee' || intent.kind === 'gun') && !this.validTarget(intent.targetId)) {
+        const t = this.pickSidTarget();
+        intent.targetId = t && t.id;
+      }
+      if (
+        (intent.kind === 'melee' || intent.kind === 'gun') &&
+        sid.anger >= S.anger.wildAt &&
+        this.rng.chance(S.anger.wildChance)
+      ) {
+        const t = this.rng.pick(this.sidTargets());
+        if (t && t.id !== intent.targetId) {
+          intent.targetId = t.id;
+          await this.say('Sid is losing control!', { tone: 'danger' });
+        }
+      }
+
+      switch (intent.kind) {
+        case 'melee':
+        case 'gun':
+          await this.sidBasic(intent);
+          break;
+        case 'magdump':
+          await this.sidMagdump();
+          break;
+        case 'cookie':
+          await this.sidCookie();
+          break;
+        case 'claims':
+          await this.sidClaims();
+          break;
+        case 'deagle':
+          await this.sidDeagle();
+          break;
+        default:
+          await this.say('Sid watches the workers…');
+      }
+      this.lastEnemyKind = intent.kind;
+      this.refresh();
+    }
+
+    validTarget(id) {
+      const t = this.unit(id);
+      return !!t && !t.dead && !t.ghost;
+    }
+
+    async sidBasic(intent) {
+      const S = this.sidDef;
+      const sid = this.enemy;
+      const t = this.unit(intent.targetId);
+      if (!t) return;
+      const move = this.rng.pick(intent.kind === 'gun' ? S.gunAttacks : S.melee);
+      t.timesTargeted++;
+      await this.fx({ type: 'sidAttack', kind: intent.kind, target: t.id });
+      await this.say(move.text.replace('{t}', t.name));
+      if (!this.rollHit(sid, t)) {
+        await this.fx({ type: 'miss', target: t.id });
+        await this.say(`${t.name} dodges!`, { tone: 'good' });
+        return;
+      }
+      const crit = this.rng.chance(this.critChance(sid) + move.crit);
+      const dmg = this.physical(sid, t, move.power, { crit });
+      if (crit) await this.say(`It hits ${t.name} on the head!`, { tone: 'crit' });
+      await this.damageWorker(t, dmg, { source: intent.kind === 'gun' ? 'gun' : 'sid' });
+    }
+
+    async sidMagdump() {
+      const D = this.D;
+      const S = this.sidDef;
+      const M = D.skills.magdump;
+      const sid = this.enemy;
+      const n = this.rng.range(M.bullets);
+      let acc = M.accuracy + (sid.flags.deagleFocus ? S.weapon.magdumpAccuracyBonus : 0);
+      acc -= S.armor.hitRatePenalty;
+      if (sid.status.blind) acc -= sid.status.blind.amount;
+      acc = clamp(acc, 0.05, 0.95);
+      await this.fx({ type: 'sidAttack', kind: 'magdump' });
+      await this.say('Sid empties the mag on his gun!', { tone: 'danger' });
+      const hitsOn = {};
+      let passed = 0;
+      let missed = 0;
+      for (let i = 0; i < n; i++) {
+        const pool = this.party.filter((u) => !u.dead && !u.status.phasing);
+        if (!pool.length || this.outcome) break;
+        const t = this.rng.pick(pool);
+        t.timesTargeted++;
+        if (t.ghost) {
+          passed++;
+          await this.fx({ type: 'shot', target: t.id, hit: false, ghost: true });
+          continue;
+        }
+        if (!this.rng.chance(acc)) {
+          missed++;
+          await this.fx({ type: 'shot', target: t.id, hit: false });
+          continue;
+        }
+        await this.fx({ type: 'shot', target: t.id, hit: true });
+        const crit = this.rng.chance(this.critChance(sid));
+        const dmg = this.physical(sid, t, M.power, { crit });
+        hitsOn[t.id] = (hitsOn[t.id] || 0) + 1;
+        await this.damageWorker(t, dmg, { source: 'magdump', silent: true });
+      }
+      const landed = Object.values(hitsOn).reduce((s, v) => s + v, 0);
+      await this.say(`${n} ${n === 1 ? 'shot' : 'shots'} fired… ${landed} ${landed === 1 ? 'hits' : 'hit'}!`);
+      if (passed) await this.say(`${passed > 1 ? 'Bullets pass' : 'A bullet passes'} right through Purpl Lady.`);
+      for (const id of Object.keys(hitsOn)) {
+        const t = this.unit(id);
+        if (!t.dead) await this.announce(t);
+      }
+    }
+
+    async sidCookie() {
+      const sk = this.D.skills.jumboCookie;
+      const sid = this.enemy;
+      await this.fx({ type: 'sidAttack', kind: 'cookie' });
+      await this.say('Sid pulls a Cookie from his pocket and munches down!');
+      this.addBuff(sid, 'atk', sk.atkUp, sk.turns, 'jumboCookie');
+      await this.say('Sid’s attack increases!', { tone: 'danger' });
+      await this.addAnger(-sk.angerDown);
+      await this.say('Sid calms down a little.');
+      await this.fx({ type: 'sidPose' });
+    }
+
+    async sidClaims() {
+      const D = this.D;
+      const sk = D.skills.psychoticClaims;
+      const S = this.sidDef;
+      await this.fx({ type: 'sidAttack', kind: 'claims' });
+      await this.say('Sid starts rambling…');
+      await this.say(`Sid: ${this.rng.pick(S.claimsLines)}`, { tone: 'sid' });
+      for (const u of this.party) {
+        if (u.dead || u.status.phasing) continue;
+        this.addBuff(u, 'all', -sk.statDown, sk.turns, 'claims');
+        if (this.rng.chance(this.stat(u, 'brv') * sk.resistPerBravery)) {
+          await this.say(`${u.name} shrugs it off.`);
+          continue;
+        }
+        if (this.rng.chance(0.5)) {
+          u.status.afraid = { turns: sk.statusTurns };
+          await this.fx({ type: 'status', target: u.id, text: 'AFRAID' });
+          await this.say(`${u.name} is AFRAID!`, { tone: 'debuff' });
+        } else {
+          u.status.confused = { turns: sk.statusTurns };
+          await this.fx({ type: 'status', target: u.id, text: 'CONFUSED' });
+          await this.say(`${u.name} is confused!`, { tone: 'debuff' });
+        }
+      }
+      await this.say('Everyone’s stats slightly decrease!', { tone: 'debuff' });
+      await this.addAnger(sk.angerUp);
+    }
+
+    async sidDeagle() {
+      const S = this.sidDef;
+      const sid = this.enemy;
+      await this.fx({ type: 'sidAttack', kind: 'deagle' });
+      await this.say('Sid spins the Desert Eagle around his finger…');
+      await this.addAnger(this.rng.range(S.weapon.itemAnger));
+      sid.flags.deagleFocus = true;
+      await this.say('Sid’s aim sharpens!', { tone: 'danger' });
+    }
+
+    // ------------------------------------------------------------ end of turn
+    async endTurn() {
+      const D = this.D;
+      const B = D.balance;
+      const sid = this.enemy;
+
+      if (sid.status.bleed && !this.outcome) {
+        await this.say('Sid is bleeding…');
+        await this.hitSid(null, sid.maxHp * B.bleedPercent, { kind: 'bleed' });
+      }
+      for (const u of this.party) {
+        if (this.outcome) break;
+        if (u.dead || !u.status.poison) continue;
+        await this.say(`${u.name} feels sick from the Uranium…`, { tone: 'debuff' });
+        await this.damageWorker(u, u.status.poison.dmg, { source: 'poison', raw: true });
+      }
+      if (this.outcome) return;
+
+      // Timed statuses.
+      const expire = async (u, key, line) => {
+        const st = u.status[key];
+        if (!st) return;
+        if (st.fresh) {
+          st.fresh = false;
+          return;
+        }
+        st.turns--;
+        if (st.turns <= 0 && key !== 'asleep' && key !== 'phasing') {
+          delete u.status[key];
+          if (line && !u.dead) await this.say(line);
+        }
+      };
+      await expire(sid, 'bleed', 'Sid stops bleeding.');
+      await expire(sid, 'shards', 'The glass shards get kicked away.');
+      await expire(sid, 'confused', 'Sid snaps out of his confusion.');
+      await expire(sid, 'blind', 'Sid can see again.');
+      await expire(sid, 'chilled', 'Sid warms back up.');
+      for (const u of this.party) {
+        await expire(u, 'afraid', `${u.name} isn’t afraid anymore.`);
+        await expire(u, 'confused', `${u.name} snaps out of it.`);
+        await expire(u, 'poison');
+        await expire(u, 'asleep');
+        await expire(u, 'phasing');
+      }
+      for (const u of this.units) {
+        for (const b of u.buffs) b.turns--;
+        u.buffs = u.buffs.filter((b) => b.turns > 0);
+        u.aggro *= 0.5;
+      }
+      if (this.foresightTurns > 0) this.foresightTurns--;
+
+      // Balkan Boost wears off → crash (after the tick, so the crash lasts its full length).
+      for (const u of this.party) {
+        const bk = u.status.balkan;
+        if (!bk || bk.phase !== 'boosted' || u.dead) continue;
+        bk.turns--;
+        if (bk.turns > 0) continue;
+        const it = D.items.balkanBoost;
+        delete u.status.balkan;
+        u.buffs = u.buffs.filter((b) => b.tag !== 'balkan');
+        this.addBuff(u, 'all', -it.crash, it.crashTurns, 'balkanCrash');
+        await this.say('The Balkan boost wears off…');
+        await this.say(`${u.name} crashes hard! All of ${u.name}’s STATS decrease!`, { tone: 'debuff' });
+      }
+
+      // STAMINA comes back on its own; Purpl Lady's SPIRIT only drains (Freaky Doctor).
+      const purpl = this.withPassive('freakyDoctor');
+      const wasActive = this.freakyActive();
+      for (const u of this.party) {
+        if (u.dead) continue;
+        const regen = u.def.resource.regen != null ? u.def.resource.regen : B.regen;
+        u.res = Math.min(u.resMax, u.res + regen);
+      }
+      if (purpl && this.present(purpl)) purpl.res = Math.max(0, purpl.res - D.passives.freakyDoctor.drain);
+      const nowActive = this.freakyActive();
+      if (wasActive && !nowActive && purpl && this.present(purpl)) {
+        await this.say('Purpl Lady is drained… her machinations fizzle out.', { tone: 'debuff' });
+      }
+
+      await this.addAnger(this.rng.range(this.sidDef.anger.perTurn), { quiet: true });
+      this.refresh();
+    }
+
+    // ============================================================ menus (for the UI)
+    actionsFor(u) {
+      const bodies = this.bodiesToCarry();
+      const anyItem = Object.keys(this.bag).some((k) => this.bag[k] > 0);
+      return [
+        { id: 'attack', label: u.ghost ? 'HEX' : 'ATTACK', enabled: true },
+        { id: 'skills', label: 'SKILLS', enabled: true },
+        {
+          id: 'items',
+          label: 'ITEMS',
+          enabled: !u.ghost && anyItem,
+          reason: u.ghost ? 'Ghost Body: she can’t use items.' : 'The bag is empty.',
+        },
+        { id: 'guard', label: u.ghost ? 'FOCUS' : 'GUARD', enabled: true },
+        {
+          id: 'carry',
+          label: 'CARRY',
+          enabled: !u.ghost && bodies.length > 0,
+          reason: u.ghost ? 'Ghost Body: she can’t pick dead allies up.' : 'No one needs carrying.',
+        },
+      ];
+    }
+
+    skillsFor(u) {
+      return u.skills.map((id) => {
+        const sk = this.D.skills[id];
+        const cost = this.skillCost(u, id);
+        let enabled = u.res >= cost;
+        let reason = enabled ? '' : `Not enough ${u.def.resource.name}.`;
+        if (id === 'lunchBox' && u.flags.lunch) {
+          enabled = false;
+          reason = 'He is already looking for it.';
+        }
+        if (id === 'foresight' && this.foresightTurns > 1) {
+          enabled = false;
+          reason = 'Foresight is already active.';
+        }
+        const name = this.skillName(u, id);
+        const reequip = id === 'tossGlasses' && u.flags.glassesOff;
+        return {
+          id,
+          name,
+          cost,
+          resource: u.def.resource.short,
+          doc: reequip ? 'Put the spare glasses on. Mel can see again.' : sk.doc,
+          rules: reequip ? 'Free. Removes the HIT RATE penalty.' : sk.rules,
+          target: reequip ? 'none' : sk.target,
+          enabled,
+          reason,
+        };
+      });
+    }
+
+    itemsFor(u) {
+      const D = this.D;
+      return Object.keys(this.bag)
+        .filter((id) => this.bag[id] > 0)
+        .map((id) => {
+          const it = D.items[id];
+          let enabled = true;
+          let reason = '';
+          if (it.needsPassive && !u.has(it.needsPassive)) {
+            enabled = false;
+            reason = `Only someone with ${D.passives[it.needsPassive].name} can drink this.`;
+          }
+          return {
+            id,
+            name: it.name,
+            count: it.keep ? null : this.bag[id],
+            doc: it.doc || it.desc,
+            rules: it.inBattle + (it.warning ? ' ' + it.warning : ''),
+            rarity: it.rarity,
+            target: it.target === 'self' ? 'none' : it.target,
+            enabled,
+            reason,
+          };
+        });
+    }
+
+    targetsFor(kind, u) {
+      switch (kind) {
+        case 'enemy':
+          return [this.enemy];
+        case 'ally':
+          return this.party.filter((w) => !w.dead && !w.ghost);
+        case 'otherAlly':
+          return this.party.filter((w) => !w.dead && !w.ghost && w !== u);
+        case 'body':
+          return this.bodiesToCarry();
+        default:
+          return [];
+      }
+    }
+  }
+
+  SC.Battle = Battle;
+  SC.makeRng = makeRng;
+  SC.joinNames = joinNames;
+})(typeof window !== 'undefined' ? window : globalThis);

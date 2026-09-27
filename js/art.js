@@ -295,10 +295,11 @@
   }
 
   // ------------------------------------------------------------------ Sid
-  // A tall figure in a filthy blue Cookie Monster suit (see assets/source/sid_ingame.png):
-  // costume head with googly eyes, a long stained body, arms hanging to the thighs.
-  const SID_W = 210;
-  const SID_H = 252;
+  // A big man in a filthy, blood-stained blue Cookie Monster bodysuit, drawn to the
+  // proportions of assets/source/sid_reference.png: a small costume head with googly eyes,
+  // broad shoulders, a long torso, and a wide stance.
+  const SID_W = 224;
+  const SID_H = 210;
   const FUR = R(['#020409', '#060c1a', '#0b152d', '#111f42', '#192c58', '#223a6e', '#2d4984', '#3c5b9a', '#4f70ae']);
   const STAIN = R(['#0d0304', '#1f0707', '#330d0b', '#4a1712', '#5c2217']);
   const EYE = R(['#6f6f63', '#a9a99b', '#d8d8cb', '#f5f5ec']);
@@ -403,11 +404,12 @@
     px.rect(hx + 33, hy - 8, 2, 4, GUN[0]); // muzzle
   }
 
-  function drawCookie(px, cx, cy) {
-    px.ellipse(cx, cy, 8, 8, (x, y, nx, ny) => {
-      if (noise(x, y, 55) > 0.8 && nx * nx + ny * ny > 0.7) return null; // bitten edge
-      if (noise(Math.floor(x / 2), Math.floor(y / 2), 56) > 0.8) return COOKIE[0]; // chips
-      return ramp(COOKIE, 0.75 - ny * 0.3, x, y);
+  function drawCookie(px, cx, cy, r) {
+    r = r || 8;
+    px.ellipse(cx, cy, r, r, (x, y, nx, ny) => {
+      if (noise(x, y, 55) > 0.8 && nx * nx + ny * ny > 0.72) return null; // bitten, crumbly edge
+      if (vnoise(x, y, 2.2, 56) > 0.74) return COOKIE[0]; // chocolate chips
+      return ramp(COOKIE, 0.8 - ny * 0.25 - nx * 0.1 - (nx * nx + ny * ny) * 0.2, x, y);
     });
   }
 
@@ -418,99 +420,102 @@
   // pose: 'idle' | 'gun' | 'cookie' | 'down'
   function sidBody(pose, breathe) {
     const px = new Pix(SID_W, SID_H);
-    const cx = 95;
+    const cx = 101;
     const down = pose === 'down';
-    const b = breathe ? 1 : 0;
-    const top = (down ? 16 : 0) + b; // how far the upper body sinks
+    const drop = down ? 22 : 0; // the whole body sinks when he's down on one knee
+    const top = drop + (breathe ? 1 : 0); // breathing lifts only the upper body
+    const T = (y) => y + top;
 
     // Shadow on the floor.
-    px.ellipse(cx + 2, 246, 58, 6, (x, y, nx, ny) => (0.55 - (nx * nx + ny * ny) * 0.5 > bayer(x, y) ? [0, 0, 0, 150] : null));
+    px.ellipse(cx, 204, 66, 5.5, (x, y, nx, ny) => (0.6 - (nx * nx + ny * ny) * 0.55 > bayer(x, y) ? [0, 0, 0, 150] : null));
 
-    // Legs and feet (knees buckle when he is down).
-    const kneeOut = down ? 8 : 0;
-    limb(px, cx - 11, 188, cx - 14 - kneeOut, 214, 9.5, 8.5, 11);
-    limb(px, cx - 14 - kneeOut, 214, cx - 14, 238, 8.5, 8, 11);
-    limb(px, cx + 11, 188, cx + 14 + kneeOut, 214, 9.5, 8.5, 12, 0.85);
-    limb(px, cx + 14 + kneeOut, 214, cx + 16, 238, 8.5, 8, 12, 0.85);
-    mitten(px, cx - 18, 243, 12, 5.5, 0.38, 13);
-    mitten(px, cx + 20, 243, 12, 5.5, 0.3, 14);
-
-    // Sid's left arm (our right) is behind the body.
-    if (pose === 'gun') {
-      limb(px, cx + 28, 86 + top, cx + 48, 108 + top, 9.5, 8.5, 21, 0.9);
-      limb(px, cx + 48, 108 + top, cx + 72, 118 + top, 8.5, 7.5, 22, 0.95);
-      drawGun(px, cx + 74, 118 + top);
-      mitten(px, cx + 73, 119 + top, 7.5, 7, 0.5, 23);
-    } else if (pose === 'cookie') {
-      limb(px, cx + 28, 86 + top, cx + 42, 114 + top, 9.5, 8.5, 21, 0.9);
-      limb(px, cx + 42, 114 + top, cx + 20, 72 + top, 8.5, 7.5, 22, 0.95);
+    // ---- Legs: a wide, planted stance, or down on one knee.
+    const foot = (x, y, light, seed) => mitten(px, x, y, 13, 5.5, light, seed);
+    if (!down) {
+      limb(px, cx - 14, 134, cx - 25, 170, 12.5, 10, 11);
+      limb(px, cx - 25, 170, cx - 31, 198, 10, 8, 11);
+      limb(px, cx + 14, 134, cx + 27, 170, 12.5, 10, 12, 0.85);
+      limb(px, cx + 27, 170, cx + 33, 198, 10, 8, 12, 0.85);
+      foot(cx - 35, 202, 0.42, 13);
+      foot(cx + 37, 202, 0.32, 14);
     } else {
-      const hang = down ? 10 : 0;
-      limb(px, cx + 29, 86 + top, cx + 38, 130 + top, 9.5, 8.5, 21, 0.85);
-      limb(px, cx + 38, 130 + top, cx + 35, 172 + top + hang, 8.5, 7.5, 22, 0.85);
-      mitten(px, cx + 35, 176 + top + hang, 7.5, 8.5, 0.4, 23);
+      limb(px, cx - 14, 134 + drop, cx - 27, 194, 12.5, 10, 11); // knee on the floor
+      limb(px, cx - 27, 194, cx - 10, 200, 9.5, 8, 11);
+      limb(px, cx + 14, 134 + drop, cx + 32, 174, 12.5, 10, 12, 0.85); // other foot planted
+      limb(px, cx + 32, 174, cx + 34, 198, 10, 8, 12, 0.85);
+      foot(cx + 38, 202, 0.32, 14);
     }
 
-    // Torso: sloped shoulders, a slight hunch, a long robe that flares at the hem.
-    const T = (y) => y + top * (1 - (y - 70) / 130);
-    const outline = [
-      [cx - 20, T(70)],
-      [cx + 20, T(70)],
-      [cx + 31, T(82)],
-      [cx + 35, T(100)],
-      [cx + 33, T(135)],
-      [cx + 36, 170],
-      [cx + 39, 194],
-      [cx - 39, 194],
-      [cx - 37, 170],
-      [cx - 34, T(135)],
-      [cx - 36, T(100)],
-      [cx - 33, T(80)],
+    // ---- Torso: broad shoulders, a thick chest and belly, narrower hips.
+    const torso = [
+      [cx - 12, T(38)],
+      [cx + 12, T(38)],
+      [cx + 30, T(44)],
+      [cx + 38, T(53)],
+      [cx + 36, T(72)],
+      [cx + 31, T(94)],
+      [cx + 27, T(114)],
+      [cx + 29, T(130)],
+      [cx + 20, 143 + drop],
+      [cx, 147 + drop],
+      [cx - 20, 143 + drop],
+      [cx - 29, T(130)],
+      [cx - 27, T(114)],
+      [cx - 31, T(94)],
+      [cx - 36, T(72)],
+      [cx - 38, T(53)],
+      [cx - 30, T(44)],
     ];
-    px.poly(outline, (x, y, nx, ny) => {
-      // Rounded-body lighting: bright upper left, dark right side and low down.
+    px.poly(torso, (x, y, nx, ny) => {
       const round = 1 - nx * nx;
-      let l = 0.2 + 0.5 * round - nx * 0.28 - Math.max(0, ny) * 0.12;
-      if (ny < -0.75) l += 0.12; // shoulders catch the ceiling light
-      if (stained(x, y, ny < 0.3 ? 0.3 : 0.2)) return ramp(STAIN, clamp01(l * 1.1), x, y);
+      let l = 0.24 + 0.5 * round - nx * 0.26 - Math.max(0, ny) * 0.1;
+      if (ny < -0.82) l += 0.1; // shoulders catch the ceiling light
+      if (ny > -0.42 && ny < -0.3 && Math.abs(nx) < 0.6) l -= 0.12; // shadow under the chest
+      if (ny > 0.62 && Math.abs(nx) < 0.12) l -= 0.1; // crotch seam
+      if (stained(x, y, 0.3)) return ramp(STAIN, clamp01(l * 1.05), x, y);
       return ramp(FUR, fur(x, y, clamp01(l), 32), x, y);
     });
-    // Ragged, matted hem.
-    for (let x = cx - 39; x <= cx + 39; x++) {
-      const len = 1 + Math.floor(vnoise(x, 5, 3, 33) * 7);
-      for (let y = 194; y < 194 + len; y++) px.set(x, y, ramp(FUR, 0.18 + noise(x, y, 34) * 0.12, x, y));
+    blob(px, cx - 33, T(55), 11, 11, 35, { stain: 0.22 });
+    blob(px, cx + 33, T(55), 11, 11, 36, { stain: 0.22, mul: 0.85 });
+
+    // ---- Head: a small costume head on a thick furry neck.
+    const hx = cx + (down ? -8 : 1);
+    const hy = 22 + top + (down ? 10 : 0);
+    limb(px, cx, T(42), hx, hy + 8, 10.5, 10, 50);
+    blob(px, hx, hy, 18, 14.5, 51, { ly: -0.75 });
+    const open = pose === 'cookie' ? 1.2 : down ? 0.7 : 1;
+    px.ellipse(hx + 1, hy + 5, 12, 4.8 * open, (x, y, nx, ny) => (ny > 0.45 ? ramp(MOUTH, 0.7, x, y) : ramp(MOUTH, 0.05 + (ny + 1) * 0.18, x, y)));
+    px.ellipse(hx + 1, hy + 5 + 4.3 * open, 9.5, 1.6, (x, y, nx) => ramp(FUR, fur(x, y, 0.55 - nx * 0.2, 52), x, y));
+    for (let i = 0; i < 7; i++) {
+      px.set(hx - 10 + Math.floor(noise(i, 1, 57) * 22), hy + 8 + Math.floor(noise(i, 2, 57) * 4), COOKIE[1 + (i % 2)]);
     }
 
-    // Sid's right arm (our left), in front.
-    const hangL = down ? 10 : 0;
-    limb(px, cx - 29, 86 + top, cx - 39, 130 + top, 9.5, 8.5, 41, 1.08);
-    limb(px, cx - 39, 130 + top, cx - 35, 172 + top + hangL, 8.5, 7.5, 42, 1.05);
-    mitten(px, cx - 35, 176 + top + hangL, 7.5, 8.5, 0.6, 43);
-
-    // Head: the costume head sits low and forward on the shoulders.
-    const hx = cx + (down ? -7 : 2);
-    const hy = 54 + top + (down ? 6 : 0);
-    blob(px, hx, hy, 31, 24, 51, { ly: -0.75 });
-    // Mouth: wide, open, dark, with a pale lower lip.
-    const open = pose === 'cookie' ? 1.3 : down ? 0.7 : 1;
-    px.ellipse(hx + 1, hy + 8, 20, 7.5 * open, (x, y, nx, ny) => {
-      if (ny > 0.5) return ramp(MOUTH, 0.7, x, y);
-      return ramp(MOUTH, 0.05 + (ny + 1) * 0.18, x, y);
-    });
-    px.ellipse(hx + 1, hy + 8 + 6.5 * open, 16, 2.3, (x, y, nx) => ramp(FUR, fur(x, y, 0.55 - nx * 0.2, 52), x, y));
-    // Crumbs stuck in the fur around the mouth.
-    for (let i = 0; i < 9; i++) {
-      const x = hx - 17 + Math.floor(noise(i, 1, 57) * 36);
-      const y = hy + 12 + Math.floor(noise(i, 2, 57) * 6);
-      px.set(x, y, COOKIE[1 + (i % 2)]);
-    }
+    // ---- Arms.
+    const arm = (sx, sy, ex, ey, hx2, hy2, seed, mul, hand) => {
+      limb(px, sx, sy, ex, ey, 9.5, 8.5, seed, mul);
+      limb(px, ex, ey, hx2, hy2, 8.5, 7.2, seed + 1, mul);
+      if (hand) mitten(px, hx2, hy2 + 2, 7, 7.5, hand, seed + 2);
+    };
     if (pose === 'cookie') {
-      drawCookie(px, cx + 12, 66 + top);
-      mitten(px, cx + 20, 74 + top, 7.5, 7, 0.55, 23);
+      // Both hands hold a huge cookie up to his mouth, elbows out, like in the game.
+      arm(cx - 34, T(55), cx - 56, T(70), cx - 21, hy + 12, 41, 1.05, 0);
+      arm(cx + 34, T(55), cx + 58, T(70), cx + 23, hy + 12, 21, 0.9, 0);
+      drawCookie(px, hx + 1, hy + 11, 22);
+      mitten(px, cx - 21, hy + 13, 7, 7.5, 0.6, 43);
+      mitten(px, cx + 23, hy + 13, 7, 7.5, 0.45, 23);
+    } else if (pose === 'gun') {
+      arm(cx - 34, T(57), cx - 45, T(96), cx - 42, T(132), 41, 1.05, 0.58);
+      arm(cx + 34, T(55), cx + 58, T(64), cx + 81, T(70), 21, 0.95, 0);
+      drawGun(px, cx + 84, T(73));
+      mitten(px, cx + 83, T(73), 7, 7, 0.5, 23);
+    } else {
+      const sag = down ? 10 : 0;
+      arm(cx - 34, T(57), cx - 45, T(96), cx - 42, T(132) + sag, 41, 1.05, 0.58);
+      arm(cx + 34, T(57), cx + 46, T(96), cx + 43, T(132) + sag, 21, 0.85, 0.4);
     }
 
     px.outline(OUTLINE);
-    return { px, eyes: [[hx - 12, hy - 21], [hx + 12, hy - 23]], eyeR: 8.5, down };
+    return { px, eyes: [[hx - 7, hy - 12], [hx + 8, hy - 13]], eyeR: 5.4, down };
   }
 
   // Eyes are drawn every frame so the pupils can wander.
@@ -525,7 +530,7 @@
         return ramp(EYE, 0.3 + l * 0.75, x, y);
       });
       const p = (opts.pupils && opts.pupils[i]) || [0, 0];
-      const pr = opts.angry ? 2.4 : 3.4;
+      const pr = r * (opts.angry ? 0.3 : 0.42);
       if (opts.dizzy) {
         // Spiral-ish dizzy eyes.
         for (let a = 0; a < 14; a++) {
@@ -551,7 +556,7 @@
     return px;
   }
   // Where the gun's muzzle and Sid's mouth are, for effects (art pixels in the sprite).
-  const SID_POINTS = { muzzle: [206, 112], mouth: [98, 62], head: [97, 50], body: [95, 130], feet: [95, 246], w: SID_W, h: SID_H };
+  const SID_POINTS = { cx: 101, muzzle: [220, 67], mouth: [102, 27], head: [102, 20], body: [101, 92], feet: [101, 204], w: SID_W, h: SID_H };
 
   // ------------------------------------------------------------------ icons
   const K = hex('#000000');
@@ -703,6 +708,7 @@
   const MOODS = {
     neutral: R(['#050505', '#1c1c1f', '#3a3a3f', '#5c5c63']),
     sated: R(['#1a1402', '#5c4508', '#b08a14', '#f0cf3a']),
+    happy: R(['#1a1402', '#6b5208', '#c79c12', '#ffe14a']), // OMORI's HAPPY is yellow
     hurt: R(['#070506', '#1f1618', '#3a2a2c', '#5a4346']),
     critical: R(['#0c0000', '#3a0305', '#7a0910', '#b3141b']),
     afraid: R(['#01030c', '#0a1a4a', '#1a3c93', '#2f64d6']),
@@ -746,9 +752,10 @@
 
   // Where things sit on each 128x128 portrait, for the status effects.
   const ANCHORS = {
-    john: { head: [64, 44], brow: [64, 52], cheek: [82, 70], top: [64, 12] },
-    mel: { head: [76, 36], brow: [76, 44], cheek: [92, 58], top: [80, 6] },
-    purpl: { head: [62, 56], brow: [60, 52], cheek: [72, 78], top: [56, 14] },
+    mel: { head: [63, 45], brow: [63, 44], cheek: [77, 69], top: [63, 6] },
+    john: { head: [64, 45], brow: [66, 40], cheek: [79, 65], top: [63, 11] },
+    purpl: { head: [62, 56], brow: [66, 45], cheek: [74, 68], top: [60, 4] },
+    jim: { head: [64, 60], brow: [64, 52], cheek: [79, 82], top: [64, 6] },
     sid: { head: [60, 18], brow: [60, 18], cheek: [66, 30], top: [58, 4] },
   };
 

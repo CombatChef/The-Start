@@ -22,9 +22,9 @@
   const sfx = (name) => SC.Audio && SC.Audio.play(name);
   const rand = (a, b) => a + Math.random() * (b - a);
 
-  const SLOT = { mel: 'tl', john: 'tr', purpl: 'bl', sid: 'br' };
+  const SLOT = { mel: 'tl', john: 'tr', purpl: 'bl', jim: 'br' };
   const CARD_XY = { tl: [28, 8], tr: [1024, 8], bl: [28, 608], br: [1024, 608] };
-  const SID_BOX = { left: 450, top: 178, scale: 2 };
+  const SID_BOX = { left: 438, top: 252, scale: 2 }; // must match #sid-wrap in the CSS
 
   const UI = {
     battle: null,
@@ -218,6 +218,24 @@
     return c;
   }
 
+  // Sid's health and ANGER, shown above him instead of in a character slot.
+  function buildPlate() {
+    const r = $('#sid-plate');
+    $('.hp .icon', r).appendChild(iconCanvas('heart', 2));
+    $('.anger .icon', r).appendChild(iconCanvas('anger', 2));
+    const S = SC.DATA.slashers.sid;
+    addNotch($('.hp .pill', r), S.weakenedAt, 'Weakened: run!');
+    addNotch($('.anger .pill', r), S.anger.overflow / S.anger.max, 'Desert Eagle');
+    UI.plate = {
+      root: r,
+      hpFill: $('.hp .fill', r),
+      hpTxt: $('.hp .txt', r),
+      angerFill: $('.anger .fill', r),
+      angerTxt: $('.anger .txt', r),
+      tags: $('.tags', r),
+    };
+  }
+
   function addNotch(pill, pct, title) {
     const n = el('div', 'notch');
     n.style.left = `calc(${pct * 100}% - 1px)`;
@@ -273,6 +291,8 @@
       } else if (u.status.confused) {
         mood = 'confused';
         fx.push('swirl');
+      } else if (u.status.happy) {
+        mood = 'happy';
       }
     }
     if (u.possessed) {
@@ -280,20 +300,6 @@
       fade = 0.8;
     }
     return { id: u.id, variant, mood, fx: unique(fx), fade, bloodAmount: u.dead ? 7 : 4 };
-  }
-
-  function sidLook(b) {
-    const s = b.enemy;
-    const fx = [];
-    let mood = 'slasher';
-    if (s.anger >= b.sidDef.anger.overflow) mood = 'furious';
-    if (s.status.chilled) mood = 'frozen';
-    if (s.status.stunned) fx.push('stars');
-    if (s.status.confused) fx.push('swirl');
-    if (s.anger >= 50) fx.push('veins');
-    if (s.status.bleed) fx.push('blood');
-    if (s.hasBuff('jumboCookie')) fx.push('cookie');
-    return { id: 'sid', variant: s.flags.gun ? 'sid_armed' : 'sid', mood, fx, bloodAmount: 3 };
   }
 
   const ANIMATED = ['zzz', 'stars', 'sweat', 'swirl'];
@@ -338,6 +344,9 @@
     if (u.status.balkan) tags.push({ t: u.status.balkan.phase === 'pending' ? 'BALKAN...' : 'BALKAN!', c: 'good' });
     if (u.flags.glassesOff) tags.push({ t: 'NO GLASSES', c: 'bad' });
     if (u.flags.lunch) tags.push({ t: 'LUNCH BOX...', c: 'info' });
+    if (u.status.trap) tags.push({ t: 'BEAR TRAP', c: 'good' });
+    if (u.status.happy) tags.push({ t: 'HAPPY', c: 'good' });
+    if (u.flags.proxy) tags.push({ t: 'PROXY ON', c: 'info' });
     for (const id of u.carrying) tags.push({ t: 'CARRYING ' + b.unit(id).name.toUpperCase(), c: 'info' });
     if (u.ghost && u.res <= 0 && !u.status.phasing) tags.push({ t: 'DRAINED', c: 'bad' });
     if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'info' });
@@ -354,8 +363,10 @@
     if (s.status.chilled) tags.push({ t: 'FREEZING', c: 'good' });
     if (s.status.confused) tags.push({ t: 'CONFUSED', c: 'good' });
     if (s.status.blind) tags.push({ t: 'BLIND', c: 'good' });
+    if (s.status.vulnerable) tags.push({ t: 'VULNERABLE', c: 'good' });
     if (s.flags.deagleFocus) tags.push({ t: 'AIMING', c: 'bad' });
-    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 5);
+    if (b.intel) tags.push({ t: 'INTEL', c: 'info' });
+    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 4);
   }
 
   function setTags(c, tags) {
@@ -379,6 +390,7 @@
     for (const u of b.party) {
       const c = UI.cards[u.id];
       c.head.textContent = u.name.toUpperCase();
+      c.head.classList.toggle('long', u.name.length > 9);
       const hs = b.healthState(u).id;
       if (u.ghost) {
         c.heartFill.style.width = '100%';
@@ -403,18 +415,20 @@
       drawPortrait(c, workerLook(b, u));
     }
     const s = b.enemy;
-    const c = UI.cards.sid;
-    c.head.textContent = 'SID';
-    c.heartFill.style.width = (s.hp / s.maxHp) * 100 + '%';
-    c.heartTxt.textContent = b.healthState(s).id;
-    c.juiceFill.style.width = (s.anger / b.sidDef.anger.max) * 100 + '%';
-    c.juiceTxt.textContent = 'ANGER ' + Math.round(s.anger);
-    setTags(c, sidTags(b));
-    drawPortrait(c, sidLook(b));
+    const plate = UI.plate;
+    plate.hpFill.style.width = (s.hp / s.maxHp) * 100 + '%';
+    plate.hpTxt.textContent = b.healthState(s).id + (b.intel ? ` ${s.hp}/${s.maxHp}` : '');
+    plate.angerFill.style.width = (s.anger / b.sidDef.anger.max) * 100 + '%';
+    plate.angerTxt.textContent = 'ANGER ' + Math.round(s.anger);
+    setTags(plate, sidTags(b));
+    plate.root.classList.toggle('armed', !!s.flags.gun);
     sidWrap.classList.toggle('rage', s.anger >= b.sidDef.anger.overflow && !s.status.chilled);
     sidWrap.classList.toggle('chilled', !!s.status.chilled);
     $('#turn-chip').textContent = 'TURN ' + Math.max(1, b.turn);
     $('#credits-chip').textContent = 'CREDITS ' + b.credits;
+    const chopper = $('#chopper-chip');
+    chopper.style.display = b.chopper && !b.outcome ? 'block' : 'none';
+    if (b.chopper) chopper.textContent = 'CHOPPER IN ' + b.chopper.turns;
     updateEscape();
   }
 
@@ -426,7 +440,11 @@
     escapeEl.classList.toggle('ready', !e.blocked && e.chance >= 50);
     $('.fill', escapeEl).style.width = (e.blocked ? 0 : e.chance) + '%';
     $('.pct', escapeEl).textContent = e.blocked ? '--' : e.chance + '%';
-    $('.label', escapeEl).textContent = flashReason || (e.blocked ? e.short || 'NO WAY OUT' : b.enemy.flags.weakened ? 'SID IS WEAKENED — RUN!' : 'ESCAPE CHANCE');
+    let label = 'ESCAPE CHANCE';
+    if (e.blocked) label = e.short || 'NO WAY OUT';
+    else if (b.enemy.flags.weakened) label = 'SID IS WEAKENED — RUN!';
+    else if (b.chopper) label = `CHOPPER LANDS IN ${b.chopper.turns} TURN${b.chopper.turns === 1 ? '' : 'S'}`;
+    $('.label', escapeEl).textContent = flashReason || label;
     const sub = $('#command .banner.run .sub');
     if (sub) {
       sub.textContent = e.blocked ? e.short || 'BLOCKED' : e.chance + '% TO ESCAPE';
@@ -622,6 +640,18 @@
           SidView.set('gun', 2600);
           return T(160);
         }
+        if (e.kind === 'trapped') {
+          const [tx, ty] = cardCenter(e.target);
+          sidWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
+          await T(150);
+          const [fx0, fy0] = sidPoint('feet');
+          pop(fx0, fy0 - 40, 'SNAP!', 'crit', 900);
+          shake(false);
+          sfx('crit');
+          await T(200);
+          sidWrap.style.translate = '';
+          return T(120);
+        }
         const [tx, ty] = cardCenter(e.target);
         sidWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
         if (e.kind === 'gun') {
@@ -691,6 +721,11 @@
         refresh();
         sfx('buff');
         return T(360);
+      case 'chopper':
+        flash('#ffffff');
+        pop(640, 330, 'CHOPPER!', 'crit', 1400);
+        sfx('run');
+        return T(900);
       case 'run':
         if (e.success) {
           flash('#ffffff');
@@ -740,7 +775,7 @@
         refresh();
         if (e.delta >= 10) {
           sfx('growl');
-          pulse(UI.cards.sid.root, 'hit', 320);
+          pulse(UI.plate.root, 'hit', 320);
         }
         return undefined;
       case 'turn':
@@ -1022,7 +1057,7 @@
     }</span></div><div class="list"></div><div class="desc"></div>`;
     const list = $('.list', panel);
     const desc = $('.desc', panel);
-    if (kind === 'skills') list.classList.add('one');
+    if (kind === 'skills' && entries.length <= 5) list.classList.add('one');
     panel.classList.add('show');
     const opts = entries.map((x) => {
       const right = kind === 'skills' ? `${x.cost} ${x.resource}` : x.count == null ? '' : 'x' + x.count;
@@ -1037,7 +1072,7 @@
         `<div class="rules">${esc(x.rules || '')}</div>` +
         (x.enabled ? '' : `<div class="why">${esc(x.reason || '')}</div>`);
     };
-    const idx = await choose({ opts, columns: kind === 'skills' ? 1 : 2, onHighlight: show, onDenied: show });
+    const idx = await choose({ opts, columns: kind === 'skills' && entries.length <= 5 ? 1 : 2, onHighlight: show, onDenied: show });
     panel.classList.remove('show');
     return idx == null ? null : entries[idx];
   }
@@ -1058,8 +1093,8 @@
         const hint = prompt(title || 'TARGET: SID');
         hint.textContent = `Sid — ${b.healthState(b.enemy).id}, ANGER ${Math.round(b.enemy.anger)}.`;
         sidWrap.classList.add('targeted');
-        const [hx, hy] = sidPoint('head');
-        showHand(hx - 24, hy - 110, true);
+        const [bx, by] = sidPoint('body');
+        showHand(bx - 170, by - 14);
         const done = (v) => {
           Input.remove(handler);
           sidWrap.classList.remove('targeted');
@@ -1249,7 +1284,7 @@
   }
 
   function lineupHtml() {
-    return '<div class="lineup"><span data-p="mel"></span><span data-p="john"></span><span data-p="purpl"></span><span class="vs">VS</span><span data-p="sid"></span></div>';
+    return '<div class="lineup"><span data-p="mel"></span><span data-p="john"></span><span data-p="purpl"></span><span data-p="jim"></span><span class="vs">VS</span><span data-p="sid"></span></div>';
   }
   function fillLineup(o) {
     o.querySelectorAll('[data-p]').forEach((s) => {
@@ -1273,8 +1308,9 @@
     <div class="help">
       <p><b>GOAL.</b> You can't kill a slasher. Weaken Sid until his bar reads <b>WEAKENED</b>, then pick <b>RUN...</b>. The bar above the buttons shows your odds of getting away (click it for the breakdown).</p>
       <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the escape chance. Purpl Lady is a ghost: she can't carry anyone, but once Sid is weakened she <b>POSSESSES</b> a body so it walks out on its own.</p>
-      <p><b>ANGER.</b> Sid's second bar. It rises every turn and whenever he gets hurt. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
-      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive marks who Sid will hit (<b>TARGET</b>). Purpl Lady's Foresight says how hard. GUARD the target, or heal them first.</p>
+      <p><b>ANGER.</b> The orange bar on Sid's plate. It rises every turn and whenever he gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
+      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive marks who Sid will hit first (<b>TARGET</b>). Purpl Lady's Foresight, or Captain Jim's Confidential Documents, say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>
+      <p><b>THE CHOPPER.</b> Captain Jim's Helicopter Escape gets everyone out, bodies included, after 5 turns, as long as someone who can carry a body survives until it lands.</p>
       <p><b>HEALTH</b> is shown as condition, not numbers: CRITICAL, HURT, SCATHED, STABLE, OK, SATED, OVERSATED. The gold stripe is health above 100%.</p>
       <p><b>SKILL CHECKS</b> (Mel's Fuel, John's Battery): press Z / Space, or tap, while the needle is in the green.</p>
       <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · F fast text · M mute. Mouse and touch work everywhere.</p>
@@ -1408,10 +1444,8 @@
     doc.addEventListener('keydown', onKey);
 
     SC.Art.hallway().toCanvas($('#bg'));
-    for (const id of ['mel', 'john', 'purpl']) buildCard(id, false);
-    const sc = buildCard('sid', true);
-    addNotch($('.bar.heart .pill', sc.root), SC.DATA.slashers.sid.weakenedAt, 'Weakened');
-    addNotch($('.bar.juice .pill', sc.root), SC.DATA.slashers.sid.anger.overflow / SC.DATA.slashers.sid.anger.max, 'Desert Eagle');
+    for (const id of SC.DATA.party) buildCard(id, false);
+    buildPlate();
 
     $('#log').addEventListener('click', () => {
       Log.skip = true;

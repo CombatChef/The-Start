@@ -114,6 +114,8 @@
       this.intent = null;
       this.intentKnown = false;
       this.foresightTurns = 0;
+      this.intel = false; // Captain Jim's Confidential Documents
+      this.chopper = null; // Captain Jim's Helicopter Escape: { turns }
       this.failedRuns = 0;
       this.secondLifeUsed = false;
       this.angerCarry = 0;
@@ -221,9 +223,27 @@
     }
 
     // ============================================================ combat math
+    // Additive modifiers that are not stat multipliers: 'eva' (dodge), 'hit', 'crit'.
+    mod(u, key) {
+      let m = 0;
+      for (const b of u.buffs) if (b.stat === key) m += b.amount;
+      return m;
+    }
+
     critChance(u) {
       const B = this.D.balance;
-      return B.critBase + this.stat(u, 'smt') * B.critPerSmarts;
+      let c = B.critBase + this.stat(u, 'smt') * B.critPerSmarts + this.mod(u, 'crit');
+      if (u.side === 'party' && this.intel) c += this.D.skills.confidentialDocs.critUp;
+      return c;
+    }
+
+    // How much of the ANGER a worker's actions cause actually lands (Full Blood Aussie).
+    angerFactor(u) {
+      return u && u.has('fullBloodAussie') ? this.D.passives.fullBloodAussie.angerCaused : 1;
+    }
+
+    async noise(u, amount) {
+      await this.addAnger(Math.max(1, Math.round(amount * this.angerFactor(u))));
     }
 
     hitChance(att, def, hitMult) {
@@ -236,6 +256,8 @@
         if (att.has('shadowborn')) hit += this.D.passives.shadowborn.hitBonus;
         if (att.flags.glassesOff) hit -= this.D.skills.tossGlasses.hitPenalty;
       }
+      hit += this.mod(att, 'hit');
+      hit -= this.mod(def, 'eva');
       const faster = this.stat(def, 'spd') - this.stat(att, 'spd');
       if (faster > 0) hit -= faster * B.evasionPerSpd;
       return clamp(hit * (hitMult || 1), 0.05, 0.99);
@@ -311,7 +333,7 @@
 
       if (attacker) {
         const chm = this.stat(attacker, 'chm');
-        this.angerCarry += (dealt / A.perDamage) * Math.max(0.1, 1 - chm / A.charmDivisor);
+        this.angerCarry += (dealt / A.perDamage) * Math.max(0.1, 1 - chm / A.charmDivisor) * this.angerFactor(attacker);
         const whole = Math.floor(this.angerCarry);
         if (whole > 0) {
           this.angerCarry -= whole;
@@ -372,6 +394,7 @@
         const fromSid = o.source === 'sid' || o.source === 'gun' || o.source === 'magdump';
         if (fromSid && t.flags.braced) dmg *= 1 - D.skills.foresight.braced;
         if (this.freakyActive()) dmg *= D.passives.freakyDoctor.damageTaken;
+        if (t.has('fullBloodAussie')) dmg *= D.passives.fullBloodAussie.damageTaken;
       }
       dmg = Math.max(1, Math.round(dmg));
       const before = t.hp;
@@ -403,6 +426,7 @@
       const D = this.D;
       let n = amount;
       if (this.freakyActive()) n *= D.passives.freakyDoctor.healing;
+      if (o.item && t.has('fullBloodAussie')) n *= D.passives.fullBloodAussie.itemBoost;
       n = Math.round(n);
       const before = t.hp;
       t.hp = Math.min(D.health.max, t.hp + n);
@@ -610,6 +634,7 @@
       }
       const purpl = this.withPassive('freakyDoctor');
       if (this.foresightTurns > 0 && this.present(purpl)) await this.warnPower(purpl);
+      else if (this.intel) this.intentWord = this.intentPower(this.intent); // Confidential Documents
 
       for (const u of this.party) await this.lunchBoxTick(u);
       await this.checkPossession();
@@ -645,6 +670,25 @@
       } else if (u.status.phasing) {
         await this.say(`${u.name} is still searching the lockers…`);
       }
+      // Captain Jim's Proxy Locator, while it's switched on.
+      if (u.flags.proxy) {
+        const sk = D.skills.proxyLocator;
+        if (this.rng.chance(sk.findChance)) {
+          const id = this.rng.pick(D.phaseLoot.common);
+          this.bag[id] = (this.bag[id] || 0) + 1;
+          await this.fx({ type: 'loot', items: [D.items[id].name] });
+          await this.say(`The Proxy Locator pings! ${u.name} finds ${this.withArticle(D.items[id])}!`, { tone: 'good' });
+        }
+        if (this.rng.chance(sk.noiseChance)) {
+          await this.say('The Proxy Locator screeches! It’s making NOISE!', { tone: 'anger' });
+          await this.noise(u, sk.noiseAnger);
+        }
+      }
+    }
+
+    withArticle(it) {
+      const art = it.article != null ? it.article : /^[aeiou]/i.test(it.name) ? 'an ' : 'a ';
+      return art + it.name;
     }
 
     async lunchBoxTick(u) {
@@ -732,11 +776,20 @@
       return this.party.filter((u) => !u.dead && !u.ghost);
     }
 
+    // Who Sid can single out right now: Stealth Camo hides a guarding Captain Jim.
+    hidden(u) {
+      return u.has('stealthCamo') && u.flags.guarding;
+    }
+
     pickSidTarget() {
-      const ts = this.sidTargets();
+      const ts = this.sidTargets().filter((u) => !this.hidden(u));
       if (!ts.length) return null;
+      const camo = this.D.passives.stealthCamo.targetWeight;
       return this.rng.weighted(
-        ts.map((u) => [u, 1 + u.aggro / 150 + (u.hp <= 40 ? 0.5 : 0) + (u.status.asleep ? 0.5 : 0)])
+        ts.map((u) => {
+          const w = 1 + u.aggro / 150 + (u.hp <= 40 ? 0.5 : 0) + (u.status.asleep ? 0.5 : 0);
+          return [u, u.has('stealthCamo') ? w * camo : w];
+        })
       );
     }
 
@@ -798,8 +851,10 @@
 
       for (const a of acts) {
         if (this.outcome) break;
-        if (a.enemy) await this.enemyAct();
-        else await this.workerAct(a.u, a.cmd);
+        if (a.enemy) {
+          await this.enemyAct();
+          await this.enemyFollowUp();
+        } else await this.workerAct(a.u, a.cmd);
         this.refresh();
       }
       if (!this.outcome) await this.endTurn();
@@ -838,6 +893,7 @@
         tone: 'bad',
       });
       await this.enemyAct();
+      await this.enemyFollowUp();
       if (!this.outcome) await this.endTurn();
       return false;
     }
@@ -888,10 +944,11 @@
       const sid = this.enemy;
       const W = u.def.weapon;
       const B = this.D.balance;
-      const power = o.power || B.basicPower;
+      const power = o.power || W.power || B.basicPower;
       const hits = o.hits || W.hits;
       await this.fx({ type: 'lunge', from: u.id });
       if (o.line) await this.say(o.line);
+      else if (W.line && hits === W.hits) await this.say(W.line.replace('{n}', u.name));
       else await this.say(hits > 1 ? `${u.name} ${W.verb} Sid twice!` : `${u.name} ${W.verb} Sid!`);
       for (let i = 0; i < hits; i++) {
         if (this.outcome) return;
@@ -904,6 +961,11 @@
         }
         const crit = this.rng.chance(this.critChance(u));
         await this.hitSid(u, this.physical(u, sid, power, { crit }), { crit });
+      }
+      if (W.noiseChance && !this.outcome && this.rng.chance(W.noiseChance)) {
+        await this.fx({ type: 'status', target: u.id, text: 'RING RING' });
+        await this.say(`${u.name}’s ${W.name} starts blaring its ringtone!`, { tone: 'anger' });
+        await this.noise(u, W.noiseAnger);
       }
     }
 
@@ -931,6 +993,14 @@
           this.addBuff(u, 'atk', bonus, 99, 'solidJohn');
           await this.say(`${u.name}’s attack increases!`, { tone: 'buff' });
         }
+      }
+      if (u.has('grouchBehavior')) {
+        await this.say(`${u.name} squeezes into a locker. “THIS IS MY LOCKER, IT WAS MADE FOR ME!!!”`);
+        await this.heal(u, D.passives.grouchBehavior.heal);
+      }
+      if (u.has('stealthCamo') && !u.flags.camoShown) {
+        u.flags.camoShown = true;
+        await this.say(`${u.name} blends right in. Sid can’t single him out while he guards.`, { tone: 'status' });
       }
       u.res = Math.min(u.resMax, u.res + D.balance.guardRestore);
     }
@@ -1015,11 +1085,11 @@
         case 'cookie':
         case 'mayonnaise':
         case 'orangeJello': {
-          const art = it.article != null ? it.article : /^[aeiou]/i.test(it.name) ? 'an ' : 'a ';
-          await this.say(given ? `${u.name} gives ${t.name} ${art}${it.name}.` : `${u.name} eats ${art}${it.name}.`);
-          await this.heal(t, it.heal);
+          await this.say(given ? `${u.name} gives ${t.name} ${this.withArticle(it)}.` : `${u.name} eats ${this.withArticle(it)}.`);
+          await this.heal(t, it.heal, { item: true });
+          const boost = t.has('fullBloodAussie') ? this.D.passives.fullBloodAussie.itemBoost : 1;
           if (itemId === 'cookie') {
-            this.addBuff(t, 'atk', it.atkUp, it.turns, 'cookieAtk');
+            this.addBuff(t, 'atk', it.atkUp * boost, it.turns, 'cookieAtk');
             await this.say(`${t.name}’s attack increases!`, { tone: 'buff' });
             if (sid.has('methAddict')) {
               await this.say('Sid smells the cookie… METH Addict!', { tone: 'danger' });
@@ -1027,7 +1097,7 @@
             }
           }
           if (itemId === 'orangeJello') {
-            this.addBuff(t, 'def', it.defUp, it.turns, 'jelloDef');
+            this.addBuff(t, 'def', it.defUp * boost, it.turns, 'jelloDef');
             await this.say(`${t.name}’s defense greatly increases!`, { tone: 'buff' });
           }
           if (itemId === 'mayonnaise' && this.rng.chance(it.poisonChance)) {
@@ -1099,13 +1169,22 @@
     // ------------------------------------------------------------ skills
     skillCost(u, skillId) {
       if (skillId === 'tossGlasses' && u.flags.glassesOff) return 0;
+      if (skillId === 'proxyLocator' && u.flags.proxy) return 0;
       return this.D.skills[skillId].cost;
     }
 
     skillName(u, skillId) {
       const sk = this.D.skills[skillId];
       if (skillId === 'tossGlasses' && u.flags.glassesOff) return sk.reequipName;
+      if (skillId === 'proxyLocator' && u.flags.proxy) return sk.offName;
       return sk.name;
+    }
+
+    // Once-per-battle skills that have already been used.
+    skillSpent(skillId) {
+      if (skillId === 'confidentialDocs') return !!this.intel;
+      if (skillId === 'helicopterEscape') return !!this.chopper;
+      return false;
     }
 
     skillZone(u) {
@@ -1137,6 +1216,10 @@
       const sk = D.skills[skillId];
       const sid = this.enemy;
       const cost = this.skillCost(u, skillId);
+      if (this.skillSpent(skillId)) {
+        await this.say(`${sk.name} can only be used once per battle.`);
+        return;
+      }
       if (u.res < cost) {
         await this.say(`${u.name} is too exhausted to do that!`);
         return;
@@ -1325,6 +1408,77 @@
           await this.say(`${u.name} phases into the lockers to look for items…`);
           break;
         }
+
+        // ---------------- CAPTAIN JIM
+        case 'proxyLocator': {
+          if (u.flags.proxy) {
+            u.flags.proxy = false;
+            await this.say(`${u.name} switches the Proxy Locator off.`);
+            break;
+          }
+          u.flags.proxy = true;
+          await this.fx({ type: 'cast', from: u.id, kind: 'proxy' });
+          await this.say(`${u.name} switches on the Proxy Locator. It starts crackling…`);
+          break;
+        }
+        case 'matthewsAid': {
+          await this.fx({ type: 'cast', from: u.id, kind: 'aid' });
+          await this.say(`${u.name} calls in Matthew’s AID. “Man I hate that four-eyes kid.”`);
+          for (const w of this.party) if (!w.dead) this.addBuff(w, 'all', sk.allUp, sk.turns, 'aid');
+          await this.fx({ type: 'buff', target: u.id });
+          await this.say('Everyone’s stats slightly increase!', { tone: 'buff' });
+          break;
+        }
+        case 'confidentialDocs': {
+          this.intel = true;
+          await this.fx({ type: 'cast', from: u.id, kind: 'docs' });
+          await this.say(`${u.name} flips through the Confidential Documents…`);
+          await this.say(
+            `SID: ${sid.hp}/${sid.maxHp} health, ANGER ${Math.round(sid.anger)}. ATK ${Math.round(this.stat(sid, 'atk'))}, DEF ${Math.round(
+              this.stat(sid, 'def')
+            )}, SPD ${Math.round(this.stat(sid, 'spd'))}.`,
+            { tone: 'status' }
+          );
+          await this.say('The team knows where to hit now! Crit chance increases!', { tone: 'buff' });
+          if (!this.enemyActed) {
+            this.intentWord = this.intentPower(this.intent);
+            if (this.intentWord) await this.say(`Sid’s next attack will be ${this.intentWord}.`, { tone: 'warn' });
+          }
+          break;
+        }
+        case 'bearTrap': {
+          let t = this.unit(targetId);
+          if (!t || t.dead || t.ghost) t = u;
+          t.status.trap = { turns: sk.turns, by: u.id, fresh: true };
+          await this.fx({ type: 'item', target: t.id, item: 'bearTrap' });
+          await this.say(t === u ? `${u.name} sets a bear trap at his own feet.` : `${u.name} sets a bear trap at ${t.name}’s feet.`);
+          break;
+        }
+        case 'helicopterEscape': {
+          this.chopper = { turns: sk.turns };
+          await this.fx({ type: 'cast', from: u.id, kind: 'chopper' });
+          await this.say(`${u.name} radios the chopper: “The chopper is touchdown, let’s get out of here!”`);
+          for (const w of this.party) {
+            if (w.dead) continue;
+            this.addBuff(w, 'def', sk.defUp, 99, 'chopper');
+            this.addBuff(w, 'eva', sk.evaUp, 99, 'chopper');
+          }
+          await this.fx({ type: 'buff', target: u.id });
+          await this.say('Everyone’s DEFENSE and EVASION significantly increase!', { tone: 'buff' });
+          await this.say(`The chopper will land in ${sk.turns} turns. Hold on until then!`, { tone: 'good' });
+          break;
+        }
+        case 'zingerBurger': {
+          await this.fx({ type: 'item', target: u.id, item: 'zingerBurger' });
+          await this.say(`${u.name} unwraps a Zinger Burger. “Would you bounce on it for a Zinger Burger? ‘Cuz me go boing-boing!”`);
+          await this.heal(u, sk.heal);
+          u.status.happy = { turns: sk.happyTurns };
+          this.addBuff(u, 'spd', sk.happySpd, sk.happyTurns, 'happy');
+          this.addBuff(u, 'crit', sk.happyCrit, sk.happyTurns, 'happy');
+          this.addBuff(u, 'hit', sk.happyHit, sk.happyTurns, 'happy');
+          await this.say(`${u.name} is HAPPY!`, { tone: 'buff' });
+          break;
+        }
         default:
           await this.say(`${u.name} uses ${sk.name}.`);
       }
@@ -1401,20 +1555,34 @@
       } else if (intent.kind === 'gun' || intent.kind === 'magdump' || intent.kind === 'deagle') {
         intent = { kind: 'melee', targetId: intent.targetId };
       }
-      if ((intent.kind === 'melee' || intent.kind === 'gun') && !this.validTarget(intent.targetId)) {
+      const single = intent.kind === 'melee' || intent.kind === 'gun';
+      if (single && !this.validTarget(intent.targetId)) {
         const t = this.pickSidTarget();
         intent.targetId = t && t.id;
       }
-      if (
-        (intent.kind === 'melee' || intent.kind === 'gun') &&
-        sid.anger >= S.anger.wildAt &&
-        this.rng.chance(S.anger.wildChance)
-      ) {
-        const t = this.rng.pick(this.sidTargets());
+      // Stealth Camo: a guarding Captain Jim can't be singled out.
+      const planned = single ? this.unit(intent.targetId) : null;
+      if (planned && this.hidden(planned)) {
+        const t = this.pickSidTarget();
+        if (!t) {
+          await this.say(`Sid looks around for ${planned.name}, but can’t find him anywhere!`, { tone: 'good' });
+          this.lastEnemyKind = 'lost';
+          return;
+        }
+        await this.say(`Sid loses track of ${planned.name}, and turns on ${t.name} instead!`, { tone: 'warn' });
+        intent.targetId = t.id;
+      }
+      if (single && intent.targetId && sid.anger >= S.anger.wildAt && this.rng.chance(S.anger.wildChance)) {
+        const t = this.rng.pick(this.sidTargets().filter((u) => !this.hidden(u)));
         if (t && t.id !== intent.targetId) {
           intent.targetId = t.id;
           await this.say('Sid is losing control!', { tone: 'danger' });
         }
+      }
+      if (single && !intent.targetId) {
+        await this.say('Sid watches the workers…');
+        this.lastEnemyKind = 'idle';
+        return;
       }
 
       switch (intent.kind) {
@@ -1441,6 +1609,17 @@
       this.refresh();
     }
 
+    // At high ANGER Sid isn't done after one move: one more basic attack on whoever he can reach.
+    async enemyFollowUp() {
+      const sid = this.enemy;
+      if (this.outcome || sid.status.stunned || sid.anger < this.sidDef.anger.frenzyAt) return;
+      const t = this.pickSidTarget();
+      if (!t) return;
+      await this.say('Sid isn’t done yet!', { tone: 'danger' });
+      await this.sidBasic({ kind: sid.flags.gun ? 'gun' : 'melee', targetId: t.id });
+      this.refresh();
+    }
+
     validTarget(id) {
       const t = this.unit(id);
       return !!t && !t.dead && !t.ghost;
@@ -1453,6 +1632,21 @@
       if (!t) return;
       const move = this.rng.pick(intent.kind === 'gun' ? S.gunAttacks : S.melee);
       t.timesTargeted++;
+      // Captain Jim's Bear Trap snaps before the blow lands.
+      if (t.status.trap) {
+        const sk = this.D.skills.bearTrap;
+        const setter = this.unit(t.status.trap.by);
+        delete t.status.trap;
+        await this.fx({ type: 'sidAttack', kind: 'trapped', target: t.id });
+        await this.say(`Sid goes for ${t.name}… SNAP! He steps right into the bear trap!`, { tone: 'good' });
+        await this.hitSid(setter && !setter.dead ? setter : null, this.rng.range(sk.damage), { kind: 'trap' });
+        if (this.outcome) return;
+        this.addBuff(sid, 'def', -sk.vulnerable, sk.vulnerableTurns, 'vulnerable');
+        sid.status.vulnerable = { turns: sk.vulnerableTurns };
+        await this.fx({ type: 'status', target: sid.id, text: 'VULNERABLE' });
+        await this.say('Sid is VULNERABLE!', { tone: 'status' });
+        return;
+      }
       await this.fx({ type: 'sidAttack', kind: intent.kind, target: t.id });
       await this.say(move.text.replace('{t}', t.name));
       if (!this.rollHit(sid, t)) {
@@ -1598,9 +1792,12 @@
       await expire(sid, 'confused', 'Sid snaps out of his confusion.');
       await expire(sid, 'blind', 'Sid can see again.');
       await expire(sid, 'chilled', 'Sid warms back up.');
+      await expire(sid, 'vulnerable', 'Sid pulls himself together.');
       for (const u of this.party) {
         await expire(u, 'afraid', `${u.name} isn’t afraid anymore.`);
         await expire(u, 'confused', `${u.name} snaps out of it.`);
+        await expire(u, 'happy', `${u.name} is back to his usual self.`);
+        await expire(u, 'trap', `The bear trap at ${u.name}’s feet goes unused.`);
         await expire(u, 'poison');
         await expire(u, 'asleep');
         await expire(u, 'phasing');
@@ -1641,7 +1838,31 @@
       }
 
       await this.addAnger(this.rng.range(this.sidDef.anger.perTurn), { quiet: true });
+      await this.chopperTick();
       this.refresh();
+    }
+
+    // Captain Jim's Helicopter Escape: count down, then everyone gets out.
+    async chopperTick() {
+      if (!this.chopper || this.outcome) return;
+      this.chopper.turns--;
+      if (this.chopper.turns > 0) {
+        await this.say(
+          this.chopper.turns === 1 ? 'The chopper is circling overhead. It lands next turn!' : `The chopper lands in ${this.chopper.turns} turns…`,
+          { tone: 'good' }
+        );
+        return;
+      }
+      await this.fx({ type: 'chopper' });
+      await this.say('The chopper touches down!', { tone: 'win' });
+      for (const u of this.party) {
+        if (u.dead && !u.possessed) await this.say(`${u.name}’s body is loaded onto the chopper. Nobody gets left behind.`);
+      }
+      this.outcome = 'win';
+      this.escapedBy = 'chopper';
+      const got = this.gainCredits(this.D.escape.reward);
+      await this.say(`A successful escape! ${this.partyNames()} win!`, { tone: 'win' });
+      await this.say(`The group receives ${got} credits.`, { tone: 'good' });
     }
 
     // ============================================================ menus (for the UI)
@@ -1680,6 +1901,10 @@
         if (id === 'foresight' && this.foresightTurns > 1) {
           enabled = false;
           reason = 'Foresight is already active.';
+        }
+        if (this.skillSpent(id)) {
+          enabled = false;
+          reason = id === 'helicopterEscape' ? 'The chopper is already on its way.' : 'Once per battle, and it has been used.';
         }
         const name = this.skillName(u, id);
         const reequip = id === 'tossGlasses' && u.flags.glassesOff;

@@ -40,8 +40,8 @@
       { upTo: 1, id: 'UNHEALTHY' }, // Sid's doc health is "Unhealthy", so that is his normal.
     ],
 
-    // Party order = HUD corners: top-left, top-right, bottom-left. Sid takes bottom-right.
-    party: ['mel', 'john', 'purpl'],
+    // Party order = HUD corners: top-left, top-right, bottom-left, bottom-right.
+    party: ['mel', 'john', 'purpl', 'jim'],
     enemy: 'sid',
 
     // ------------------------------------------------------------------
@@ -117,6 +117,33 @@
         skills: ['seriousChills', 'shadowsHand', 'foresight', 'phaseForItems'],
         passives: ['ghostBody', 'freakyDoctor', 'moralSupport', 'possession'],
       },
+
+      jim: {
+        name: 'Captain Jim',
+        title: 'CAPTAIN JIM',
+        stats: { atk: 108, def: 66, spd: 41, mag: 0, chm: 80, smt: 75, brv: 145 },
+        health: 'Questionable',
+        spiritualPower: 'None',
+        morals: 'High',
+        resource: { name: 'STAMINA', short: 'STA', max: 100 },
+        weapon: {
+          name: 'Burner Phone',
+          doc: 'Gets loud often, but it’s a NOKIA… Expect a lot of damage from this thing.',
+          rules: 'One heavy hit. 30% of the time the phone rings mid-swing and makes NOISE (Sid ANGER +5).',
+          hits: 1,
+          power: 0.95,
+          verb: 'smacks',
+          line: '{n} smacks Sid with his Burner Phone!',
+          noiseChance: 0.3,
+          noiseAnger: 5,
+        },
+        armor: {
+          name: 'Slash Co Pilot Uniform',
+          doc: 'A sturdy and rugged looking uniform, balanced in all ways, it even comes with cool goggles and headphones… The COOLER uniform.',
+        },
+        skills: ['proxyLocator', 'matthewsAid', 'confidentialDocs', 'bearTrap', 'helicopterEscape', 'zingerBurger'],
+        passives: ['stealthCamo', 'grouchBehavior', 'fullBloodAussie'],
+      },
     },
 
     // ------------------------------------------------------------------
@@ -131,7 +158,7 @@
         health: 'Unhealthy',
         spiritualPower: 'None',
         morals: 'None',
-        maxHp: 1500,
+        maxHp: 2000,
         weakenedAt: 0.35, // "Sid is weakened! Now is your time for escape!"
         barelyStandingAt: 0.12,
         weakenedStun: 2, // actions Sid loses when he is first weakened
@@ -146,6 +173,9 @@
           atkBonusPerPoint: 0.005, // "The higher the character's ANGER is, the stronger ... they become."
           wildAt: 90, // "... and sometimes less controllable"
           wildChance: 0.2,
+          // Hyperceptive tells John "who the enemy will hit first": from this much ANGER on,
+          // Sid follows his move with an extra basic attack every turn.
+          frenzyAt: 60,
         },
         skills: ['jumboCookie', 'magdump', 'psychoticClaims'],
         passives: ['methAddict', 'overflowingAnger'],
@@ -330,6 +360,72 @@
         rareChance: 0.1,
       },
 
+      // ---------------- CAPTAIN JIM ----------------
+      proxyLocator: {
+        name: 'Proxy Locator',
+        cost: 10,
+        target: 'none',
+        toggle: true,
+        offName: 'Switch off Proxy Locator',
+        doc: 'An obsolete piece of equipment used once by SlashCo Exterminator teams. At the start of a turn, has a small chance to gain a random item, but also makes NOISE, ANGERING enemies often.',
+        rules: 'Switch it on (free to switch off). While on, at the start of every turn: 20% chance to find an item, 60% chance of NOISE (Sid ANGER +6).',
+        findChance: 0.2,
+        noiseChance: 0.6,
+        noiseAnger: 6,
+      },
+      matthewsAid: {
+        name: 'Matthew’s AID',
+        cost: 25,
+        target: 'none',
+        doc: 'Man I hate that four-eyes kid. Slightly raises all stats for every ally in battle.',
+        rules: 'Every ally: all stats +15% for 3 turns.',
+        allUp: 0.15,
+        turns: 3,
+      },
+      confidentialDocs: {
+        name: 'Confidential Documents',
+        cost: 15,
+        target: 'none',
+        oncePerBattle: true,
+        doc: 'Collect information about the current enemy being fought. Once per battle, works on all enemies.',
+        rules: 'Once per battle. Shows Sid’s exact health and ANGER and how hard every planned attack will hit, for the rest of the battle. Knowing his weak spots: team crit chance +10%.',
+        critUp: 0.1,
+      },
+      bearTrap: {
+        name: 'Bear Trap',
+        cost: 20,
+        target: 'ally',
+        doc: 'Set a bear trap at the feet of any ally, if they are targeted by a physical attack, deals large damage to the enemy, and renders them momentarily vulnerable,',
+        rules: 'Lasts 4 turns. When Sid goes for that ally with a physical attack, the trap snaps first: large damage, his attack is stopped, and he is VULNERABLE (DEF -50%) for 2 turns.',
+        damage: [130, 170],
+        vulnerable: 0.5,
+        vulnerableTurns: 2,
+        turns: 4,
+      },
+      helicopterEscape: {
+        name: 'Helicopter Escape',
+        cost: 70,
+        target: 'none',
+        oncePerBattle: true,
+        doc: 'The chopper is touchdown, let’s get out of here! Significantly increases all ally’s EVASION and DEFENSE,  and guarantees an escape from a fight in 5 turns.',
+        rules: 'Once per battle. Every ally: DEF +40% and EVASION +25% until the chopper lands. After 5 turns it touches down and everyone gets out, bodies included, as long as someone who can carry a body is still alive.',
+        defUp: 0.4,
+        evaUp: 0.25,
+        turns: 5,
+      },
+      zingerBurger: {
+        name: 'Zinger Burger',
+        cost: 20,
+        target: 'none',
+        doc: 'Would you bounce on it for a Zinger Burger? ‘Cuz me go boing-boing!  Significantly heals Captain Jim, and makes him HAPPY.',
+        rules: 'Big heal for Captain Jim, and he is HAPPY for 3 turns: SPEED +25%, crit chance +10%, HIT RATE -10%.',
+        heal: 60,
+        happyTurns: 3,
+        happySpd: 0.25,
+        happyCrit: 0.1,
+        happyHit: -0.1,
+      },
+
       // ---------------- SID ----------------
       jumboCookie: {
         name: 'Sid’s JUMBO Cookie',
@@ -431,6 +527,24 @@
       possession: {
         name: 'Possession',
         doc: 'Even I think this is too far . When the slasher is weakened, you will automatically possess a random dead ally (if any) in order to help escape without others needing to carry them.',
+      },
+      // CAPTAIN JIM
+      stealthCamo: {
+        name: 'Stealth Camo',
+        doc: 'Oh yeah. You were an airsoft kid, weren’t you? Jackpot. Enemies do not target you as often, and guarding makes you never get targeted. (Does not avoid area attacks.)',
+        targetWeight: 0.35,
+      },
+      grouchBehavior: {
+        name: 'Grouch Behavior',
+        doc: 'THIS IS MY LOCKER, IT WAS MADE FOR ME!!!  Guarding will grant passive moderate healing to you.',
+        heal: 25,
+      },
+      fullBloodAussie: {
+        name: 'Full Blood Aussie',
+        doc: 'As someone who deals with worse conditions, you’ve gotten used to these encounters. Take reduced overall damage, actions you commit anger the enemy less, items have greater effects on you.',
+        damageTaken: 0.85,
+        angerCaused: 0.5,
+        itemBoost: 1.3,
       },
       // SID
       methAddict: {

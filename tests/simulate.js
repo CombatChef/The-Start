@@ -129,6 +129,15 @@ function smartPolicy(b, rng) {
         cmds[u.id] = { type: 'skill', skill: 'lunchBox', target: (hurt[0] || b.corporeal().find((w) => w !== u) || u).id };
       } else if (can('batteryCheck') && rng() < 0.35) cmds[u.id] = { type: 'skill', skill: 'batteryCheck' };
       else cmds[u.id] = { type: 'attack' };
+    } else if (u.id === 'jim') {
+      const target = it.targetId && b.unit(it.targetId);
+      if (can('confidentialDocs') && b.turn <= 2) cmds[u.id] = { type: 'skill', skill: 'confidentialDocs' };
+      else if (target && !target.status.trap && can('bearTrap') && (it.kind === 'melee' || it.kind === 'gun')) {
+        cmds[u.id] = { type: 'skill', skill: 'bearTrap', target: target.id };
+      } else if (can('helicopterEscape') && (sid.flags.gun || b.stats.deaths > 0)) cmds[u.id] = { type: 'skill', skill: 'helicopterEscape' };
+      else if (u.hp <= 50 && can('zingerBurger')) cmds[u.id] = { type: 'skill', skill: 'zingerBurger' };
+      else if (can('matthewsAid') && rng() < 0.2) cmds[u.id] = { type: 'skill', skill: 'matthewsAid' };
+      else cmds[u.id] = { type: 'attack' };
     } else {
       if (can('seriousChills') && !sid.status.chilled) cmds[u.id] = { type: 'skill', skill: 'seriousChills', target: 'sid' };
       else if (can('shadowsHand')) cmds[u.id] = { type: 'skill', skill: 'shadowsHand', target: 'sid' };
@@ -194,6 +203,7 @@ async function play(seed, policy) {
     if (gunTurn == null && b.enemy.flags.gun) gunTurn = b.turn;
   }
   return {
+    chopper: b.escapedBy === 'chopper',
     outcome: b.outcome || 'timeout',
     turns: b.turn,
     deaths: b.stats.deaths,
@@ -217,7 +227,7 @@ function summarize(name, rs) {
   console.log(`win ${((100 * count('win')) / n).toFixed(1)}%  lose ${((100 * count('lose')) / n).toFixed(1)}%  timeout ${count('timeout')}`);
   console.log(`avg turns ${avg((r) => r.turns).toFixed(1)}  avg deaths ${avg((r) => r.deaths).toFixed(2)}  avg run tries ${avg((r) => r.runs).toFixed(2)}  avg credits ${avg((r) => r.credits).toFixed(1)}`);
   console.log(`Sid weakened in ${((100 * weak.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.weakenedTurn, weak).toFixed(1)}); gun drawn in ${((100 * gun.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.gunTurn, gun).toFixed(1)})`);
-  console.log(`avg damage taken ${avg((r) => r.taken).toFixed(0)}  avg lowest worker health ${avg((r) => r.lowest).toFixed(0)}  battles with a death ${((100 * rs.filter((r) => r.deaths > 0).length) / n).toFixed(0)}%`);
+  console.log(`avg damage taken ${avg((r) => r.taken).toFixed(0)}  avg lowest worker health ${avg((r) => r.lowest).toFixed(0)}  battles with a death ${((100 * rs.filter((r) => r.deaths > 0).length) / n).toFixed(0)}%  wins by chopper ${((100 * rs.filter((r) => r.chopper).length) / n).toFixed(0)}%`);
 }
 
 (async () => {

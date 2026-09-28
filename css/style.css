@@ -1476,6 +1476,21 @@ button:focus-visible {
   background: #fff;
   border-color: #fff;
 }
+.overlay.title .go {
+  min-width: 0;
+  margin: 0 4px;
+  padding: 0 20px;
+}
+/* The MUSIC window's chase time. */
+.help input {
+  width: 3.4em;
+  padding: 0 4px;
+  font: inherit;
+  color: #000;
+  background: #fff;
+  border: 0;
+  text-align: center;
+}
 .overlay .keys {
   margin-top: 14px;
   font-size: 12px;

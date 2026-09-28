@@ -1138,6 +1138,8 @@
         return false;
       }
       this.stats.runs++;
+      this.ranOnTurn = this.turn; // the music turns to the chase
+      this.refresh();
       const runners = this.corporeal();
       const lead = runners.reduce((a, b) => (this.stat(a, 'spd') >= this.stat(b, 'spd') ? a : b));
       await this.say(runners.length > 1 ? 'The team makes a run for it!' : `${lead.name} makes a run for it!`, {

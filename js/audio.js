@@ -1,12 +1,14 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * audio.js — every sound is synthesized here (no audio files needed): the effects, Dolphin
- * Man's wail, and two music beds that crossfade: AMBIENCE (a low hallway drone with things
- * clanking far away) and CHASE (a pounding pulse for when the slasher is weakened or the team
- * is about to lose). M toggles mute.
+ * audio.js — the sound. Effects and Dolphin Man's wail are synthesized, and so are the two
+ * music beds that crossfade: AMBIENCE (a low hallway drone with things clanking far away) and
+ * CHASE (a pounding pulse for desperate moments: the slasher weakened, the team running for
+ * it, or about to lose). M toggles mute.
  *
- * Optional: audio files at assets/audio/ambience.mp3, chase.mp3 and wail.mp3 (or .ogg) play
- * instead of the synthesized ones, when they are there.
+ * Your own music plays instead, exactly as it is, from audio files:
+ *  - picked in the game (MUSIC on the title screen). They stay in this browser.
+ *  - or put in assets/audio/: slashco.mp3 (one file: the chase starts at 2:22, like the
+ *    SlashCo ambience video), or ambience.mp3 + chase.mp3. Also wail.mp3. (.ogg works too.)
  */
 (function (root) {
   'use strict';
@@ -29,7 +31,7 @@
       master = ctx.createGain();
       master.gain.value = 0.16;
       master.connect(ctx.destination);
-      probeFiles();
+      probeFolder();
       applyMusic();
     }
     if (ctx.state === 'suspended') ctx.resume();
@@ -230,7 +232,7 @@
       hiss({ dur: 0.35, vol: 0.2, filter: 400 });
     },
     wail: () => {
-      if (FILES.wail) return playFile(FILES.wail, 0.9);
+      if (TRACKS.wail) return playOnce(TRACKS.wail.src, 0.9);
       return wail();
     },
     // Dolphin Man curling up: a thin, falling squeak.
@@ -246,9 +248,9 @@
 
   // ------------------------------------------------------------------ music
   const LEVEL = { ambience: 0.5, chase: 1 };
-  const FILE_VOLUME = 0.35; // for audio files dropped into assets/audio
+  const FILE_VOLUME = 0.4; // your own music
   const FADE = 1.6; // seconds
-  const levelOf = (name) => (muted ? 0 : FILES[name] ? FILE_VOLUME : LEVEL[name]);
+  const levelOf = (name) => (muted ? 0 : TRACKS[name] ? FILE_VOLUME : LEVEL[name]);
 
   // Things far down the hallway, now and then: metal clanking, a heavy thud, a door creaking.
   const FAR = {
@@ -440,50 +442,130 @@
     };
   }
 
-  function fileBed(a) {
-    let timer = null;
-    a.loop = true;
+  // ------------------------------------------------------------------ your own music
+  // A track is { src, from, to }: the part of an audio file it loops over (seconds; `to` null
+  // means to the end). Played as it is: only the volume fades in and out.
+  const TRACKS = { ambience: null, chase: null, wail: null };
+  const CHASE_AT = 142; // 2:22, where the chase starts in the SlashCo ambience video
+  let source = { kind: 'built-in', label: '', chaseAt: CHASE_AT };
+
+  function trackBed(tr) {
+    const a = new root.Audio();
+    const from = tr.from || 0;
+    let fading = null;
+    a.preload = 'auto';
+    a.loop = !from && tr.to == null;
     a.volume = 0;
-    const p = a.play();
-    if (p && p.catch) p.catch(() => {});
+    a.src = tr.src;
+    const start = () => {
+      try {
+        if (from) a.currentTime = from;
+      } catch (e) {
+        /* not seekable until the metadata is in */
+      }
+      const p = a.play();
+      if (p && p.catch) p.catch(() => {});
+    };
+    a.addEventListener('loadedmetadata', () => from && (a.currentTime = from), { once: true });
+    a.addEventListener('ended', start);
+    // Keep to its part of the file: back to the start of it at the end of it.
+    const watch = tr.to != null ? setInterval(() => a.currentTime >= tr.to - 0.05 && (a.currentTime = from), 40) : null;
+    start();
     return {
       fade(level, secs) {
-        clearInterval(timer);
-        const from = a.volume;
+        clearInterval(fading);
+        const v0 = a.volume;
         const t0 = performance.now();
-        timer = setInterval(() => {
+        fading = setInterval(() => {
           const k = Math.min(1, (performance.now() - t0) / (secs * 1000));
-          a.volume = from + (level - from) * k;
-          if (k >= 1) clearInterval(timer);
+          a.volume = v0 + (level - v0) * k;
+          if (k >= 1) clearInterval(fading);
         }, 50);
       },
       stop() {
-        clearInterval(timer);
+        clearInterval(watch);
+        clearInterval(fading);
         a.pause();
       },
     };
   }
 
-  // Optional audio files, looked for once the sound is unlocked.
-  const FILES = {};
-  function probeFiles() {
-    if (!root.Audio || (root.location && !/^(https?|file):$/.test(root.location.protocol))) return;
-    for (const name of ['ambience', 'chase', 'wail']) {
+  function playOnce(src, volume) {
+    const a = new root.Audio(src);
+    a.volume = volume;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});
+  }
+
+  // How long a file is (seconds), or 0 if it can't be read.
+  function duration(src) {
+    return new Promise((resolve) => {
+      const a = new root.Audio();
+      a.preload = 'metadata';
+      a.addEventListener('loadedmetadata', () => resolve(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
+      a.addEventListener('error', () => resolve(0), { once: true });
+      a.src = src;
+    });
+  }
+
+  // files: [{ name, src }]. One music file: the ambience is everything before `chaseAt` and
+  // the chase everything after (if the file is long enough). Two: the ambience and the chase
+  // (the one with "chase" in its name, or the second). A file with "wail" in its name is
+  // Dolphin Man's wail.
+  async function setTracks(files, chaseAt, kind) {
+    const at = chaseAt > 0 ? chaseAt : CHASE_AT;
+    const wailFile = files.find((f) => /wail/i.test(f.name));
+    const music = files.filter((f) => f !== wailFile);
+    let chaseFile = music.length > 1 ? music.find((f) => /chase/i.test(f.name)) || music[1] : null;
+    const ambFile = music.find((f) => f !== chaseFile) || null;
+    TRACKS.ambience = null;
+    TRACKS.chase = null;
+    let parts = [];
+    if (ambFile && chaseFile) {
+      TRACKS.ambience = { src: ambFile.src };
+      TRACKS.chase = { src: chaseFile.src };
+      parts = [`${ambFile.name} (ambience)`, `${chaseFile.name} (chase)`];
+    } else if (ambFile) {
+      const long = (await duration(ambFile.src)) > at + 5;
+      TRACKS.ambience = long ? { src: ambFile.src, to: at } : { src: ambFile.src };
+      if (long) TRACKS.chase = { src: ambFile.src, from: at };
+      const t = `${Math.floor(at / 60)}:${String(Math.round(at % 60)).padStart(2, '0')}`;
+      parts = [long ? `${ambFile.name} (ambience to ${t}, chase from ${t})` : `${ambFile.name} (ambience)`];
+    }
+    TRACKS.wail = wailFile ? { src: wailFile.src } : null;
+    if (wailFile) parts.push(`${wailFile.name} (wail)`);
+    source = { kind: parts.length ? kind : 'built-in', label: parts.join(', '), chaseAt: at };
+    restartMusic();
+    return source;
+  }
+
+  function clearTracks() {
+    TRACKS.ambience = TRACKS.chase = TRACKS.wail = null;
+    source = { kind: 'built-in', label: '', chaseAt: source.chaseAt };
+    restartMusic();
+  }
+
+  // assets/audio/, looked through once the sound is unlocked (unless you picked your own).
+  function probeFolder() {
+    if (!root.Audio || !root.location || !/^(https?|file):$/.test(root.location.protocol)) return;
+    const names = ['slashco', 'ambience', 'chase', 'wail'];
+    const found = {};
+    let left = names.length;
+    const done = () => {
+      if (--left > 0 || source.kind === 'yours') return;
+      const files = (found.ambience ? ['ambience', 'chase', 'wail'] : ['slashco', 'wail']).filter((n) => found[n]).map((n) => found[n]);
+      if (files.length) setTracks(files, CHASE_AT, 'folder');
+    };
+    for (const name of names) {
       const attempt = (exts) => {
-        if (!exts.length) return;
+        if (!exts.length) return done();
         const a = new root.Audio();
-        a.preload = 'auto';
+        a.preload = 'metadata';
         a.addEventListener(
-          'canplaythrough',
+          'loadedmetadata',
           () => {
-            if (FILES[name]) return;
-            FILES[name] = a;
-            if (beds[name]) {
-              // Swap the synthesized bed for the file.
-              beds[name].stop();
-              beds[name] = fileBed(a);
-              if (playing === name) beds[name].fade(levelOf(name), FADE);
-            }
+            found[name] = { name: `${name}.${exts[0]}`, src: a.src };
+            done();
           },
           { once: true }
         );
@@ -494,11 +576,58 @@
     }
   }
 
-  function playFile(a, volume) {
-    const c = a.cloneNode();
-    c.volume = volume;
-    const p = c.play();
-    if (p && p.catch) p.catch(() => {});
+  // Files picked in the game are kept in this browser (IndexedDB), never uploaded anywhere.
+  const Saved = {
+    open() {
+      return new Promise((resolve, reject) => {
+        const r = root.indexedDB.open('sc-music', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('music');
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+    },
+    async run(mode, fn) {
+      const db = await Saved.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('music', mode);
+        const req = fn(tx.objectStore('music'));
+        tx.oncomplete = () => resolve(req && req.result);
+        tx.onerror = () => reject(tx.error);
+      });
+    },
+    get: () => Saved.run('readonly', (s) => s.get('tracks')),
+    put: (v) => Saved.run('readwrite', (s) => s.put(v, 'tracks')),
+    clear: () => Saved.run('readwrite', (s) => s.delete('tracks')),
+  };
+  const urls = [];
+  const asFiles = (list) =>
+    list.map((f) => {
+      const src = URL.createObjectURL(f.blob);
+      urls.push(src);
+      return { name: f.name, src };
+    });
+
+  async function useFiles(fileList, chaseAt) {
+    const list = Array.from(fileList || []).map((f) => ({ name: f.name, blob: f }));
+    if (!list.length) return source;
+    while (urls.length) URL.revokeObjectURL(urls.pop());
+    const s = await setTracks(asFiles(list), chaseAt, 'yours');
+    try {
+      await Saved.put({ files: list, chaseAt: s.chaseAt });
+    } catch (e) {
+      /* no storage here: it still plays until the page is closed */
+    }
+    return s;
+  }
+
+  async function loadSaved() {
+    try {
+      if (!root.indexedDB) return;
+      const v = await Saved.get();
+      if (v && v.files && v.files.length) await setTracks(asFiles(v.files), v.chaseAt, 'yours');
+    } catch (e) {
+      /* nothing saved, or no storage here */
+    }
   }
 
   const beds = {};
@@ -524,8 +653,19 @@
     }
     if (!playing) return;
     clearTimeout(stopTimers[playing]);
-    if (!beds[playing]) beds[playing] = FILES[playing] ? fileBed(FILES[playing]) : synthBed(playing);
+    if (!beds[playing]) beds[playing] = TRACKS[playing] ? trackBed(TRACKS[playing]) : synthBed(playing);
     beds[playing].fade(levelOf(playing), FADE);
+  }
+
+  // New tracks: stop what's playing and start again with them.
+  function restartMusic() {
+    for (const k of Object.keys(beds)) {
+      clearTimeout(stopTimers[k]);
+      beds[k].stop();
+      delete beds[k];
+    }
+    playing = null;
+    applyMusic();
   }
 
   SC.Audio = {
@@ -552,6 +692,16 @@
     get track() {
       return playing;
     },
+    // Your own music (see the top of this file). useFiles takes the files from a file picker.
+    useFiles,
+    useBuiltIn() {
+      clearTracks();
+      return Saved.clear().catch(() => {});
+    },
+    get source() {
+      return source;
+    },
+    ready: loadSaved(),
     unlock() {
       ensure();
     },

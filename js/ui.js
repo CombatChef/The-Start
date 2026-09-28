@@ -199,6 +199,7 @@
   };
   function onKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target && e.target.tagName === 'INPUT' && e.key !== 'Enter' && e.key !== 'Escape') return; // typing in a box
     const k = KEYS[e.key] || KEYS[e.key && e.key.toLowerCase()];
     if (!k) return;
     e.preventDefault();
@@ -564,13 +565,18 @@
     if (SC.Audio) SC.Audio.music(musicFor(b));
   }
 
-  // The chase music once the slasher is weakened ("Now is your time for escape!") or when the
-  // team is about to lose (one worker left standing, or everyone left is CRITICAL).
+  // The chase music in desperate times: once the slasher is weakened ("Now is your time for
+  // escape!"), when the team makes a run for it (that turn and the next), or when it's about to
+  // lose (one worker left standing, everyone left CRITICAL, or two left and both HURT or worse).
   function musicFor(b) {
     if (b.outcome) return null;
     const alive = b.corporeal();
-    const dire = alive.length <= 1 || alive.every((u) => b.healthState(u).id === 'CRITICAL');
-    return b.enemy.flags.weakened || dire ? 'chase' : 'ambience';
+    const dire =
+      alive.length <= 1 ||
+      alive.every((u) => b.healthState(u).id === 'CRITICAL') ||
+      (alive.length <= 2 && alive.every((u) => ['HURT', 'CRITICAL'].includes(b.healthState(u).id)));
+    const running = b.ranOnTurn != null && b.turn - b.ranOnTurn <= 1;
+    return b.enemy.flags.weakened || running || dire ? 'chase' : 'ambience';
   }
 
   // ------------------------------------------------------------------ escape odds
@@ -1863,7 +1869,7 @@
       <div class="versus"><span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span><span class="who"><b>[${esc(S.title)}]</b><span>${esc(
         S.class
       )} · <span style="color: var(--danger-${DANGER[S.danger] || 1})">${esc(S.danger)}</span></span></span></div>
-      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-help">HOW TO PLAY</button>
+      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-music">MUSIC</button><button class="go" id="t-help">HOW TO PLAY</button>
       <div class="keys">Z / ENTER: CONFIRM · ARROWS: MOVE · F: FAST TEXT · M: MUTE</div>
     </div>`;
   }
@@ -1876,8 +1882,8 @@
       const o = overlay('screen', 'title', titleHtml());
       o.querySelectorAll('[data-p]').forEach((s) => s.replaceWith(portraitCanvas(s.dataset.p, !!s.dataset.foe)));
       const ask = {
-        opts: ['#t-start', '#t-foe', '#t-swap', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
-        columns: 4,
+        opts: ['#t-start', '#t-foe', '#t-swap', '#t-music', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
+        columns: 5,
         back: false,
         initial: at,
         noCursor: true,
@@ -1924,8 +1930,64 @@
         continue;
       }
       closeOverlay('screen');
-      await showHelp();
+      if (at === 3) await showMusic();
+      else await showHelp();
     }
+  }
+
+  // MUSIC: SlashCo VR's own tracks, from files on this device, played exactly as they are.
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+  function musicNow() {
+    const s = SC.Audio.source;
+    if (s.kind === 'yours') return 'YOUR FILES: ' + s.label;
+    if (s.kind === 'folder') return 'FROM assets/audio: ' + s.label;
+    return 'BUILT-IN (made in the browser)';
+  }
+  function musicHtml() {
+    const at = clock(SC.Audio.source.chaseAt);
+    return `<div class="box">${winBar('SLASHERBOY', 'MUSIC')}
+      <div class="help music">
+        <p><b>NOW PLAYING:</b> <span id="m-now">${esc(musicNow())}</span></p>
+        <p>Play SlashCo VR's own music, exactly as it is: pick audio files on this device. They stay in this browser and aren't uploaded anywhere.</p>
+        <p><b>ONE FILE</b>, like the SlashCo ambience video: everything before <input id="m-at" value="${at}" size="5" maxlength="6" spellcheck="false"> is the ambience, and everything after it is the chase.</p>
+        <p><b>TWO FILES</b>: the ambience and the chase (the one with "chase" in its name is the chase). A file with "wail" in its name replaces Dolphin Man's wail.</p>
+        <p>The chase plays in desperate moments: once the slasher is weakened, when the team makes a run for it, and when the team is about to lose.</p>
+      </div>
+      <input type="file" id="m-file" accept="audio/*,video/*" multiple hidden>
+      <button class="go" id="m-pick">PICK FILES</button><button class="go" id="m-built">BUILT-IN</button><button class="go" id="m-done">DONE</button>
+    </div>`;
+  }
+  async function showMusic() {
+    const o = overlay('help', '', musicHtml());
+    const input = $('#m-file', o);
+    const now = $('#m-now', o);
+    const chaseAt = () => {
+      const v = $('#m-at', o).value.trim();
+      const m = /^(\d+):(\d{1,2})$/.exec(v);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : Number(v) > 0 ? Number(v) : 0;
+    };
+    input.addEventListener('change', async () => {
+      if (!input.files.length) return;
+      now.textContent = 'LOADING…';
+      await SC.Audio.useFiles(input.files, chaseAt());
+      now.textContent = musicNow();
+      input.value = '';
+    });
+    for (;;) {
+      const i = await waitChoice(o, ['#m-pick', '#m-built', '#m-done'], 0);
+      if (i === 0) {
+        SC.Audio.unlock();
+        input.click();
+        continue;
+      }
+      if (i === 1) {
+        await SC.Audio.useBuiltIn();
+        now.textContent = musicNow();
+        continue;
+      }
+      break;
+    }
+    closeOverlay('help');
   }
 
   async function showEnd(b) {

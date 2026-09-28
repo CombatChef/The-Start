@@ -22,6 +22,7 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 | Battery check | Space, Z, Enter | Tap |
 | Swap the squad | SWAP ▸ on the title screen | Click a portrait on the title screen |
 | Change slasher | SLASHER ▸ on the title screen | |
+| Your own music | MUSIC on the title screen | |
 | Battle log | L | LOG button |
 | Fast text | F | FAST button |
 | Sound | M | SOUND button |
@@ -60,8 +61,8 @@ game remembers the squad you picked.
 
 Purpl Lady is a ghost: slashers' attacks pass through her, she can't carry bodies or use items, and once the
 slasher is weakened she POSSESSES a body so it walks out on its own. Her Freaky Doctor passive protects the team
-and brings the first worker to die back once. That makes her the strongest swap, especially against Trollge (see
-the numbers below).
+a little (-5% damage taken, +15% healing, +5% ATK) and brings the first worker to die back once. That makes her the
+strongest swap, especially against Trollge (see the numbers below), though she's been toned down a little.
 
 ### Purpl Lady's moods
 
@@ -70,9 +71,9 @@ the numbers below).
 Every turn she feels **HAPPY**, **ANGRY** or **SAD** (*Mood Swings*). Her face on her profile shows it (a smile,
 gritted teeth under furrowed brows, or a frown and a tear), and her Hex (her ATTACK) changes with it:
 
-- **HAPPY**: the slasher calms down (ANGER -10) and every worker heals a little.
-- **ANGRY**: real MAGIC damage, and the slasher's DEF drops 25% for 2 turns.
-- **SAD**: the slasher is weighed down: ATK and SPD drop 25% for 2 turns.
+- **HAPPY**: the slasher calms down (ANGER -8) and every worker heals a little.
+- **ANGRY**: real MAGIC damage, and the slasher's DEF drops 20% for 2 turns.
+- **SAD**: the slasher is weighed down: ATK and SPD drop 20% for 2 turns.
 
 ## Generator checks
 
@@ -144,21 +145,34 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
 - **Fetal Position.** Now and then he curls up on the floor: he can't attack and his DEF shoots up, but every noise
   angers him twice as much, and every hit is a noise. Use the time to heal, guard, buff or run.
 
-## Sound
+## Music and sound
 
-Everything is synthesized in the browser; there are no audio files.
+The music switches between an **ambience** and a **chase**. The chase comes in at desperate moments: once the
+slasher is weakened, when the team makes a run for it (that turn and the next), and when the team is about to
+lose (one worker left standing, everyone left CRITICAL, or two left and both HURT or worse).
+
+**SlashCo VR's own music.** The game doesn't ship the game's soundtrack (it's the composers' work; zimzbooth's
+*SlashCo VR Compositions Vol. 1* and Kamija's *SlashCo VR OST V.1* are on Bandcamp). Bring your own copy and the
+game plays it exactly as it is:
+
+- On the title screen, press **MUSIC** and pick the audio files from your device. They stay in your browser (it
+  remembers them) and aren't uploaded anywhere. This works on the shared page too.
+- **One file**, like the SlashCo ambience video: everything before 2:22 is the ambience and loops; everything
+  from 2:22 on is the chase. The time can be changed in the MUSIC window.
+- **Two files**: the ambience and the chase (the one with "chase" in its name is the chase).
+- A file with "wail" in its name replaces Dolphin Man's wail.
+- Or, when you play from this folder, put them in `assets/audio/`: `slashco.mp3` (one file, split at 2:22), or
+  `ambience.mp3` and `chase.mp3`, and `wail.mp3` (`.ogg` works too).
+
+**Built-in sound**, used when you haven't picked any files. It's all synthesized in the browser:
 
 - **Ambience**: a low hallway drone with the strip lights buzzing, and things clanking, thudding and creaking far
   away.
-- **Chase**: a heartbeat and a pounding bass line. It fades in once the slasher is weakened, or when the team is
-  about to lose (one worker left standing, or everyone left is CRITICAL).
+- **Chase**: a heartbeat and a pounding bass line.
 - **Dolphin Man's Loud Wail** is modelled on his sound in SlashCo VR gameplay footage: a shrill band of noise
   around 3.2 kHz that buzzes about 50 times a second and swells again and again, over a hoarse, wobbling scream.
 
-The YouTube tracks themselves aren't included: they're SlashCo VR's copyrighted audio, and the game can't stream
-them. If you have audio files you're allowed to use, name them `ambience.mp3`, `chase.mp3` and `wail.mp3` (or
-`.ogg`), put them in `assets/audio/`, and the game plays them instead of the synthesized ones when you open
-`index.html` from this folder. **M** mutes everything.
+**M** mutes everything.
 
 ## Tuning and editing
 
@@ -175,14 +189,14 @@ states and prints win rates:
 | | careful play | casual play | button mashing |
 | --- | --- | --- | --- |
 | Trollge | 85% | 37% | 35% |
-| Trollge, Purpl Lady in for Mel | 99% | 68% | 39% |
-| Trollge, Purpl Lady in for John | 100% | 69% | 53% |
-| Trollge, Purpl Lady in for Mysti | 87% | 35% | 42% |
-| Trollge, Purpl Lady in for Captain Jim | 97% | 47% | 25% |
+| Trollge, Purpl Lady in for Mel | 97% | 62% | 36% |
+| Trollge, Purpl Lady in for John | 99% | 60% | 50% |
+| Trollge, Purpl Lady in for Mysti | 81% | 35% | 39% |
+| Trollge, Purpl Lady in for Captain Jim | 95% | 36% | 25% |
 | Sid | 98% | 71% | 39% |
-| Sid, with Purpl Lady in | 99–100% | 70–96% | 32–59% |
+| Sid, with Purpl Lady in | 98–100% | 67–94% | 31–57% |
 | Dolphin Man | 99% | 65% | 49% |
-| Dolphin Man, with Purpl Lady in | 99–100% | 55–94% | 47–77% |
+| Dolphin Man, with Purpl Lady in | 99–100% | 52–92% | 40–73% |
 
 Against Trollge with the default squad, someone dies in most casual battles. Careful play against Dolphin Man
 means not hitting him while he's curled up.
@@ -242,8 +256,8 @@ means not hitting him while he's curled up.
   - Mel and John come from the SlashCo VR lobby-NPC screenshot.
   - Mysti is from her in-game render (red beret, white mask).
   - Captain Jim is from his in-game render.
-  - Purpl Lady is from her new reference, cropped to her face (glasses, violet streaks). Her HAPPY, ANGRY and SAD
-    faces are the same portrait with the mouth and brows redrawn.
+  - Purpl Lady is from her new reference, cropped to her head and shoulders (glasses, violet streaks). Her HAPPY,
+    ANGRY and SAD faces are the same portrait with the mouth and brows redrawn.
   - Trollge's title-screen card is its head, Dolphin Man's is his wailing head, and Sid's red card is the art
     from the doc.
 
@@ -277,7 +291,7 @@ js/checks.js          the generator checks' rules (no DOM)
 js/ui.js              HUD, menus, targeting, animations, generator checks, title screen and squad
 js/art.js, pixel.js   hallway, Sid, Trollge and Dolphin Man's moving sprites, portrait cards
 js/images.js          portraits and sprites (generated)
-js/audio.js           synthesized sound effects, the wail, ambience and chase music
+js/audio.js           sound effects, the wail, the ambience and chase music (built-in or your own files)
 js/main.js            title → battle → end loop
 tests/simulate.js     headless balance and crash test
 tools/make_images.py  builds the portraits and sprites

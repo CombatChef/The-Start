@@ -197,7 +197,8 @@ def purpl():
     # ANGRY or SAD, and her face changes with it: the edits below redraw her mouth and brows on
     # the source, then everything is posterized with exactly the same shading as the original.
     bgr = load('purpl.webp')
-    crop, pcts, focus = (190, 70, 510, 390), (28, 54, 80), (0.5, 0.52, 0.34, 0.44)
+    # Her whole head, the hand at her glasses and her shoulders, not just the face.
+    crop, pcts, focus = (150, 24, 550, 424), (28, 54, 80), (0.49, 0.58, 0.42, 0.5)
     palette = GRAY + VIOLETS
     save(poster(bgr, crop, pcts, focus, clahe=1.4, accent=purples()), palette, 'purpl')
     cuts = poster.last_cuts

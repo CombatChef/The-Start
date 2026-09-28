@@ -819,7 +819,7 @@
     mel: { head: [63, 43], brow: [63, 42], cheek: [78, 69], top: [63, 3] },
     john: { head: [64, 44], brow: [66, 38], cheek: [79, 64], top: [63, 9] },
     mysti: { head: [64, 70], brow: [64, 58], cheek: [80, 84], top: [60, 6] },
-    purpl: { head: [72, 72], brow: [76, 60], cheek: [88, 92], top: [64, 6] },
+    purpl: { head: [70, 72], brow: [74, 63], cheek: [83, 88], top: [64, 4] },
     jim: { head: [64, 60], brow: [64, 52], cheek: [79, 82], top: [64, 6] },
     sid: { head: [60, 18], brow: [60, 18], cheek: [66, 30], top: [58, 4] },
     trollge: { head: [62, 60], brow: [58, 40], cheek: [84, 70], top: [60, 10] },

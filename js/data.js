@@ -116,9 +116,9 @@
           verb: 'hexes',
           // Her Hex depends on how she feels this turn (Mood Swings).
           moods: {
-            happy: { angerDown: 10, heal: 6, rules: 'HAPPY: {e} calms down (ANGER -10) and every worker heals a little.' },
-            angry: { power: 1.0, defDown: 0.25, turns: 2, rules: 'ANGRY: real MAGIC damage, and {e}’s DEF drops 25% for 2 turns.' },
-            sad: { atkDown: 0.25, spdDown: 0.25, turns: 2, rules: 'SAD: {e} is weighed down: ATK and SPD drop 25% for 2 turns.' },
+            happy: { angerDown: 8, heal: 4, rules: 'HAPPY: {e} calms down (ANGER -8) and every worker heals a little.' },
+            angry: { power: 1.0, defDown: 0.2, turns: 2, rules: 'ANGRY: real MAGIC damage, and {e}’s DEF drops 20% for 2 turns.' },
+            sad: { atkDown: 0.2, spdDown: 0.2, turns: 2, rules: 'SAD: {e} is weighed down: ATK and SPD drop 20% for 2 turns.' },
           },
         },
         armor: {
@@ -832,13 +832,13 @@
         name: 'Freaky Doctor',
         doc: 'Your strange machinations benefit the team, but hurt your own wellbeing. While active in team, grants minor damage resistance, extra healing, extra credit gain, increased attack, and a single use second-life mechanic.',
         rules:
-          'While she is here and has SPIRIT: workers take -10% damage, heal +25%, earn +50% credits, ATK +10%, and the first worker to die comes back once. Costs her 3 SPIRIT a turn, and her SPIRIT only comes back when she FOCUSES.',
-        damageTaken: 0.9,
-        healing: 1.25,
+          'While she is here and has SPIRIT: workers take -5% damage, heal +15%, earn +50% credits, ATK +5%, and the first worker to die comes back once (at 20 health). Costs her 4 SPIRIT a turn, and her SPIRIT only comes back when she FOCUSES.',
+        damageTaken: 0.95,
+        healing: 1.15,
         credits: 1.5,
-        atk: 0.1,
-        reviveHp: 30,
-        drain: 3,
+        atk: 0.05,
+        reviveHp: 20,
+        drain: 4,
       },
       moralSupport: {
         name: 'Moral Support',

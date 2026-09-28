@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>SlashCo VR Battle</title>
-    <meta name="description" content="A turn-based, OMORI-style battle based on SlashCo VR: Mel, John, Mysti and Captain Jim against Trollge (or Sid)." />
+    <meta name="description" content="A turn-based battle based on SlashCo VR: Mel, John, Mysti and Captain Jim against Trollge (or Sid), run from a SlashCo monitor room." />
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
@@ -16,37 +16,62 @@
         <div id="enemy-wrap">
           <canvas id="enemy" class="px" width="224" height="210"></canvas>
         </div>
+
+        <!-- The hallway is a security-camera feed on a SlashCo monitor; everything else is the console. -->
+        <div id="monitor">
+          <div class="scan"></div>
+          <span class="cam-id" id="cam-id">CAM 04 · WEST HALL</span>
+          <span class="rec">REC</span>
+          <span class="clock" id="cam-clock">00:00:00</span>
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        </div>
+
+        <div id="radio">
+          <div class="rhead">
+            <span class="brand">SLASHCO</span>
+            <span class="lbl">FIELD RADIO</span>
+            <span class="led"></span>
+            <span class="readout" id="turn-chip">TURN 1</span>
+            <span class="readout gold" id="credits-chip">0 CR</span>
+            <span class="readout heli" id="chopper-chip" style="display: none">HELI ETA 5</span>
+            <span class="gap"></span>
+            <button class="key" id="log-btn" title="Radio log (L)">LOG</button>
+            <button class="key" id="fast-btn" title="Fast text (F)">FAST</button>
+            <button class="key" id="mute-btn" title="Sound (M)">SOUND</button>
+          </div>
+          <div class="grille"></div>
+          <div id="log">
+            <div id="log-lines"></div>
+            <div class="more"></div>
+          </div>
+        </div>
+
         <div id="enemy-plate">
+          <div class="phead"><span class="sys">SLASHERBOY</span><span>THREAT FILE</span></div>
           <div class="name"></div>
-          <div class="meter hp"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
-          <div class="meter anger"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
+          <div class="facts"><span class="cls"></span><span class="dlvl"><i></i><i></i><i></i><b></b></span></div>
+          <div class="meter hp"><span class="lbl">COND.</span><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
+          <div class="meter anger"><span class="lbl">ANGER</span><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
           <div class="tags"></div>
         </div>
 
-        <div id="log">
-          <div id="log-lines"></div>
-          <div class="more"></div>
-        </div>
-        <div class="chip" id="turn-chip">TURN 1</div>
-        <div class="chip" id="credits-chip">CREDITS 0</div>
-        <div class="chip" id="chopper-chip" style="display: none">CHOPPER IN 5</div>
-        <button class="chip btn" id="log-btn" title="Battle log (L)">LOG</button>
-        <button class="chip btn" id="fast-btn" title="Fast text (F)">FAST</button>
-        <button class="chip btn" id="mute-btn" title="Sound (M)">SOUND</button>
-
-        <div id="escape" title="Click for the breakdown">
-          <div class="track"><div class="fill"></div><div class="label">ESCAPE CHANCE</div></div>
-          <div class="pct">--</div>
+        <div id="console">
+          <div class="chead"><span>FIELD ORDERS</span><span class="screws"></span></div>
+          <div id="escape" title="Click for the breakdown">
+            <div class="top"><span class="icon"></span><span class="lbl">EXTRACTION</span><span class="pct">--</span></div>
+            <div class="track"><div class="fill"></div></div>
+            <div class="label">ESCAPE CHANCE</div>
+          </div>
+          <div id="command"></div>
         </div>
         <div id="escape-tip"></div>
 
-        <div id="command"></div>
         <div id="panel"></div>
         <div id="skillcheck"></div>
 
         <div id="fx"></div>
         <div id="flash"></div>
-        <div class="hand" id="hand" style="display: none"></div>
+        <div class="cursor" id="cursor" style="display: none"></div>
 
         <div class="overlay" id="screen"></div>
         <div class="overlay" id="help"></div>

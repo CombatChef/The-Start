@@ -53,6 +53,8 @@
       mel: {
         name: 'Mel',
         title: 'MEL SLASHCO',
+        role: 'FIELD WORKER', // on the SlashCo ID badge
+        badge: 'SC-0217',
         stats: { atk: 87, def: 68, spd: 57, mag: 12, chm: 73, smt: 100, brv: 80 },
         health: 'Good',
         spiritualPower: 'Barely',
@@ -76,6 +78,8 @@
       john: {
         name: 'John',
         title: 'JOHN SLASHCO',
+        role: 'FIELD WORKER',
+        badge: 'SC-0218',
         stats: { atk: 98, def: 34, spd: 56, mag: 0, chm: 78, smt: 50, brv: 90 },
         health: 'OK',
         spiritualPower: 'None',
@@ -99,6 +103,8 @@
       purpl: {
         name: 'Purpl Lady',
         title: 'PURPL LADY',
+        role: 'GHOST',
+        badge: 'SC-0000',
         stats: { atk: 66, def: 85, spd: 109, mag: 92, chm: 210, smt: 100, brv: 10 },
         health: 'None', // She is a ghost: no health bar, physical hits pass through her.
         spiritualPower: 'Strong',
@@ -123,6 +129,8 @@
       jim: {
         name: 'Captain Jim',
         title: 'CAPTAIN JIM',
+        role: 'HELI PILOT',
+        badge: 'SC-0001',
         stats: { atk: 108, def: 66, spd: 41, mag: 0, chm: 80, smt: 75, brv: 145 },
         health: 'Questionable',
         spiritualPower: 'None',
@@ -150,6 +158,8 @@
       mysti: {
         name: 'Mysti',
         title: 'BRAVO MYSTI', // doc: Bravo Team “Mysti”
+        role: 'BRAVO TEAM',
+        badge: 'BRV-06',
         pronouns: { he: 'she', his: 'her', him: 'her' },
         stats: { atk: 190, def: 93, spd: 34, mag: 0, chm: 120, smt: 150, brv: 200 },
         health: 'Scarred',
@@ -188,6 +198,8 @@
         name: 'Trollge',
         title: 'TROLLGE',
         tags: ['[Umbra]', '[DEVASTATING]'],
+        class: 'UMBRA',
+        danger: 'DEVASTATING', // SlashCo's danger levels: MODERATE, CONSIDERABLE, DEVASTATING
         pronouns: { he: 'it', his: 'its', him: 'it' }, // doc: "a permanent grin on its face"
         stats: { atk: 110, def: 41, spd: 12, mag: 64, chm: 0, smt: 57, brv: 120 },
         health: 'Good',
@@ -258,6 +270,8 @@
         name: 'Sid',
         title: 'SID',
         tags: ['[Demon]', '[CONSIDERABLE]'],
+        class: 'DEMON',
+        danger: 'CONSIDERABLE',
         stats: { atk: 78, def: 59, spd: 34, mag: 0, chm: 8, smt: 30, brv: 100 },
         health: 'Unhealthy',
         spiritualPower: 'None',

@@ -1,7 +1,7 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, icons,
- * the FIGHT!/RUN... banners, and the portrait cards (backdrop + portrait + status effects).
+ * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, the HUD
+ * icons, and the portrait cards (backdrop + portrait + status effects).
  *
  * Coordinates are in art pixels; the page shows them at 2x (the hallway is 640x480
  * art pixels on a 1280x960 stage).
@@ -630,40 +630,58 @@
     w: W,
     r: hex('#e8202a'),
     R: hex('#9c0c14'),
-    p: hex('#ff8a8a'),
-    t: hex('#1fb5a6'),
-    T: hex('#0b6f66'),
-    c: hex('#9ff5ea'),
-    y: hex('#ffd23f'),
-    Y: hex('#c98a00'),
-    g: hex('#9a9a9a'),
+    y: hex('#f2c12e'),
+    Y: hex('#b38400'),
+    g: hex('#9aa3ab'),
+    G: hex('#5b636b'),
+    s: hex('#dfe5ea'),
     b: hex('#6fb6ff'),
     B: hex('#2a64c8'),
   };
   const ICONS = {
-    heart: [
-      '.kkk...kkk.',
-      'kpprk.krrrk',
-      'kprrrkrrrRk',
-      'krrrrrrrrRk',
-      'krrrrrrrrRk',
-      '.krrrrrrRk.',
-      '..krrrrRk..',
-      '...krrRk...',
-      '....kRk....',
-      '.....k.....',
+    // The menu cursor: a SlashCo knife instead of a pointing hand.
+    knife: [
+      '.......kkkkkkkkkkk....',
+      'kkkkkk.kssssssssssskk.',
+      'kRrrRkkkgssssssssssssk',
+      'kRRRRkkkggggggggggggk.',
+      'kkkkkk.kkkkkkkkkkkk...',
     ],
-    drop: [
-      '....k....',
-      '...kck...',
-      '...ktk...',
-      '..kcttk..',
-      '.kcttttk.',
-      'kcttttttk',
-      'kctttttTk',
-      'kttttttTk',
-      '.kttttTk.',
-      '..kkkkk..',
+    heli: [
+      'kkkkkkkkkkkkkkkkk..',
+      '.......kkk.........',
+      '...kkkkkkkkk.......',
+      '..kbbyyyyyyykkkkkkk',
+      '.kbbbyyyyyyyyyyyyyk',
+      '.kyyyyyyyyykkkkkkk.',
+      '..kkkkkkkkkk.......',
+      '...k.....k.........',
+      '.kkkkkkkkkkkk......',
+    ],
+    gascan: [
+      '......kkk..',
+      '.....krrk..',
+      '.kkkkkrrkk.',
+      'krrrrrrrrrk',
+      'krRRRRRRRrk',
+      'krRkRRRkRrk',
+      'krRRkRkRRrk',
+      'krRRRkRRRrk',
+      'krRRkRkRRrk',
+      'krRkRRRkRrk',
+      'krrrrrrrrrk',
+      '.kkkkkkkkk.',
+    ],
+    battery: [
+      '..kkk....kkk..',
+      '..kGk....kGk..',
+      'kkkkkkkkkkkkkk',
+      'kgggggggggyggk',
+      'kgRgggggggyyyk',
+      'kRRRggggggyggk',
+      'kgRgggggggggGk',
+      'kGGGGGGGGGGGGk',
+      'kkkkkkkkkkkkkk',
     ],
     anger: [
       '.rr.....rr.',
@@ -676,94 +694,12 @@
       'rRr.....rRr',
       '.rr.....rr.',
     ],
-    hand: [
-      '..........kk....',
-      '.........kwwk...',
-      'kkkkkkkkkkwwk...',
-      'kwwwwwwwwwwwkkkk',
-      'kkkkkkkkwwwwwwwk',
-      '......kwwwwwwwwk',
-      '......kkkkwwwwwk',
-      '......kwwwwwwwk.',
-      '.......kkkkkkk..',
-    ],
     star: ['..y..', '.yYy.', 'yyyyy', '.yYy.', 'y...y'],
-    body: [
-      '..kkk..',
-      '.kgggk.',
-      '.kgggk.',
-      'kkgggkk',
-      'kgggggk',
-      'kgkgkgk',
-      '.kk.kk.',
-    ],
-    skull: [
-      '.kkkkkk.',
-      'kwwwwwwk',
-      'kwkwwkwk',
-      'kwkwwkwk',
-      'kwwkkwwk',
-      '.kwwwwk.',
-      '.kwkwkk.',
-      '..kkkk..',
-    ],
-    bolt: ['..kk', '.kk.', 'kkkk', '.kk.', 'kk..'],
   };
   function icon(name) {
     const rows = ICONS[name];
     const px = new Pix(rows[0].length, rows.length);
     px.stamp(rows, 0, 0, ICON_KEYS);
-    return px;
-  }
-
-  // ------------------------------------------------------------------ banners
-  // OMORI-style FIGHT! / RUN... strips (the text itself is page text on top).
-  function banner(kind) {
-    const w = 360;
-    const h = 36;
-    const px = new Pix(w, h);
-    if (kind === 'fight') {
-      const bg = R(['#5a0b52', '#8b1270', '#b8177a', '#dc1d6e', '#ef3f63']);
-      px.fill((x, y) => {
-        const t = 0.8 - (x / w) * 0.55 + (y < 6 ? 0.08 : 0) + (noise(x, y, 90) - 0.5) * 0.45;
-        return ramp(bg, t, x, y);
-      });
-      // Green spikes, then an orange starburst behind the word.
-      const burst = (r1, r2, n, rot, paint) => {
-        const pts = [];
-        for (let i = 0; i < n * 2; i++) {
-          const a = (i / (n * 2)) * Math.PI * 2 + rot;
-          const r = i % 2 ? r2 : r1;
-          pts.push([w / 2 + Math.cos(a) * r * 2.9, h / 2 + Math.sin(a) * r * 0.62]);
-        }
-        px.poly(pts, paint);
-      };
-      const green = R(['#1c6b1a', '#3fae2c', '#8ae04a']);
-      const fire = R(['#b3200d', '#e0501a', '#f5901f', '#ffd23a']);
-      burst(34, 18, 9, 0.35, (x, y) => ramp(green, 0.3 + noise(x, y, 91) * 0.7, x, y));
-      burst(26, 17, 12, 0, (x, y, nx, ny) => ramp(fire, 0.9 - Math.sqrt(nx * nx + ny * ny) * 0.6 + (noise(x, y, 92) - 0.5) * 0.5, x, y));
-    } else {
-      const bg = R(['#0b1470', '#1428b0', '#1f3fd6', '#3a60ea', '#5d86f5']);
-      px.fill((x, y) => ramp(bg, 0.55 + (noise(x, y, 93) - 0.5) * 0.5 - (y > h - 6 ? 0.1 : 0), x, y));
-      // Loopy white strings on both sides, like OMORI's RUN button.
-      const line = (x0, x1, phase) => {
-        let prev = null;
-        for (let x = x0; x <= x1; x++) {
-          const y = Math.round(h / 2 + Math.sin(x * 0.09 + phase) * 3 + Math.sin(x * 0.31) * 0.8);
-          if (prev != null) px.line(x - 1, prev, x, y, W);
-          prev = y;
-        }
-      };
-      line(26, 128, 0);
-      line(232, 330, 1.3);
-      for (let a = 0; a < 20; a++) {
-        const t = (a / 20) * Math.PI * 2;
-        px.set(Math.round(60 + Math.cos(t) * 4), Math.round(h / 2 - 1 + Math.sin(t) * 3), W);
-      }
-      // A little leaf at the far right.
-      px.ellipse(338, h / 2, 6, 4, (x, y, nx, ny) => (Math.abs(nx * nx + ny * ny - 0.8) < 0.3 ? W : null));
-      px.line(333, h / 2 + 3, 343, h / 2 - 3, W);
-    }
     return px;
   }
 
@@ -1004,7 +940,6 @@
   SC.Art.trollge = trollge;
   SC.Art.trollgePoints = trollgePoints;
   SC.Art.icon = icon;
-  SC.Art.banner = banner;
   SC.Art.card = card;
   SC.Art.loadPortraits = loadPortraits;
   SC.Art.MOODS = MOODS;

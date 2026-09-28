@@ -1,8 +1,8 @@
 Fonts bundled for offline play. All are licensed under the SIL Open Font License 1.1.
 
 - vt323.woff2 — VT323 (c) 2011 The VT323 Project Authors
-- silkscreen*.woff2 — Silkscreen (c) 2001 The Silkscreen Project Authors
-- pixelify-sans*.woff2 — Pixelify Sans (c) 2021 The Pixelify Sans Project Authors
+- barlow-condensed-*.woff2 — Barlow Condensed (c) 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+- saira-stencil-one.woff2 — Saira Stencil One (c) 2019 The Saira Stencil Project Authors (https://github.com/Omnibus-Type/Saira)
 
 Full license text:
 

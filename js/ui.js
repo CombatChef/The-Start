@@ -1,7 +1,9 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * ui.js — the OMORI-style HUD: corner cards, battle log, escape bar, FIGHT!/RUN...,
- * action menus, targeting, the skill-check mini-game, and every animation.
+ * ui.js — the HUD, set up like a SlashCo monitor room: the hallway camera feed, the field
+ * radio (battle log), SLASHERBOY's threat file on the slasher, the employee ID badges, the
+ * field console (orders and extraction odds), targeting, the generator skill checks, and
+ * every animation.
  * It implements the `io` the battle engine talks to (say / fx / skillCheck / refresh).
  */
 (function (root) {
@@ -21,17 +23,36 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const sfx = (name) => SC.Audio && SC.Audio.play(name);
   const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // Party order = HUD corners.
-  const SLOTS = ['tl', 'tr', 'bl', 'br'];
-  const slotOf = (id) => SLOTS[SC.DATA.party.indexOf(id)];
-  const CARD_XY = { tl: [28, 8], tr: [1024, 8], bl: [28, 608], br: [1024, 608] };
+  // Party order = badge order along the bottom of the console. Must match .badge in the CSS.
+  const BADGE_XY = [
+    [16, 714],
+    [330, 714],
+    [644, 714],
+    [958, 714],
+  ];
+  const slotOf = (id) => SC.DATA.party.indexOf(id);
   // Where each slasher's sprite sits on the stage (it is drawn at 2x).
   const ENEMY_BOX = {
     sid: { left: 438, top: 252 },
-    trollge: { left: 390, top: 262 },
+    trollge: { left: 390, top: 256 },
   };
   const SCALE = 2;
+  // SlashCo's danger levels, colour-coded 1 (yellow) to 3 (red).
+  const DANGER = { MODERATE: 1, CONSIDERABLE: 2, DEVASTATING: 3 };
+  // Colour of each health state's chip on a badge.
+  const STATE_COLOR = {
+    CRITICAL: '#c91c25',
+    HURT: '#d9621a',
+    SCATHED: '#b98a00',
+    STABLE: '#3f9b52',
+    OK: '#2f9e5d',
+    SATED: '#a8830b',
+    OVERSATED: '#c79500',
+    DEAD: '#16181b',
+    NONE: '#6b5a8f',
+  };
 
   const UI = {
     battle: null,
@@ -51,15 +72,16 @@
   let command;
   let panel;
   let escapeEl;
-  let hand;
+  let cursor;
+  let clockStart = 0;
 
   const enemyId = () => (UI.battle ? UI.battle.enemy.id : UI.enemy);
   const enemyDef = () => SC.DATA.slashers[enemyId()];
   const enemyPoints = () => (enemyId() === 'trollge' ? SC.Art.trollgePoints() : SC.Art.SID_POINTS);
 
   function cardCenter(id) {
-    const [x, y] = CARD_XY[slotOf(id)];
-    return [x + 114, y + 152];
+    const [x, y] = BADGE_XY[slotOf(id)];
+    return [x + 152, y + 104];
   }
   function enemyPoint(name) {
     const pts = enemyPoints();
@@ -115,6 +137,8 @@
     s: 'down',
     a: 'left',
     d: 'right',
+    q: 'q', // the fuel check's own keys, as in SlashCo VR
+    e: 'e',
     z: 'ok',
     Enter: 'ok',
     ' ': 'ok',
@@ -141,7 +165,7 @@
     if (h && h.key) h.key(k, e);
   }
 
-  // ------------------------------------------------------------------ battle log
+  // ------------------------------------------------------------------ field radio (battle log)
   // Every worker's and slasher's name gets its own colour in the log.
   const NAMES = {};
   for (const [id, d] of Object.entries(SC.DATA.workers).concat(Object.entries(SC.DATA.slashers))) NAMES[d.name] = id;
@@ -174,12 +198,15 @@
         await wait(120);
         return;
       }
+      const radio = $('#radio');
+      radio.classList.add('rx'); // the receive light flickers while a line comes in
       const chars = Array.from(text);
       for (let i = 2; i < chars.length + 2 && !this.skip; i += 2) {
         line.textContent = chars.slice(0, i).join('');
         if (i % 4 === 0) sfx('blip');
         await wait(16);
       }
+      radio.classList.remove('rx');
       line.innerHTML = html;
       this.skip = false;
       const box = $('#log');
@@ -191,7 +218,7 @@
     },
   };
 
-  // ------------------------------------------------------------------ cards
+  // ------------------------------------------------------------------ employee ID badges
   function iconCanvas(name, scale) {
     const px = SC.Art.icon(name);
     const c = px.toCanvas();
@@ -201,30 +228,37 @@
     return c;
   }
 
-  function buildCard(id, enemy) {
-    const r = el('div', 'card' + (enemy ? ' enemy' : ''));
+  function buildCard(id) {
+    const d = SC.DATA.workers[id];
+    const r = el('div', 'badge' + (d.ghost ? ' spirit' : ''));
     r.dataset.slot = slotOf(id);
     r.id = 'card-' + id;
     r.innerHTML = `
-      <div class="frame"></div>
-      <div class="head"></div>
-      <div class="portrait"><canvas class="px" width="128" height="128"></canvas><div class="tags"></div></div>
-      <div class="bar heart"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="over"></div><div class="txt"></div></div></div>
-      <div class="bar juice"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
-      <div class="intent"></div>`;
-    $('.bar.heart .icon', r).appendChild(iconCanvas('heart', 3));
-    $('.bar.juice .icon', r).appendChild(iconCanvas(enemy ? 'anger' : 'drop', 3));
-    stage.insertBefore(r, $('#fx')); // above the scene, below effects and menus
+      <div class="strip"><span class="brand">SLASHCO</span><span class="emp">${esc(d.badge || '')}</span></div>
+      <div class="clip"></div>
+      <div class="photo"><canvas class="px" width="128" height="128"></canvas></div>
+      <div class="ident">
+        <div class="name"></div>
+        <div class="role">${esc(d.role || '')}</div>
+        <div class="row"><span>HEALTH</span><span class="state"></span></div>
+        <div class="vital"><div class="fill"></div><div class="over"></div></div>
+        <div class="row"><span>${esc(d.resource.name)}</span></div>
+        <div class="batt"><div class="cell"><div class="fill"></div></div><span class="txt"></span></div>
+      </div>
+      <div class="tags"></div>
+      <div class="intent"></div>
+      <div class="stamp">DECEASED</div>`;
+    stage.insertBefore(r, $('#fx')); // above the console, below effects and menus
     const c = {
       root: r,
-      head: $('.head', r),
-      canvas: $('.portrait canvas', r),
+      name: $('.name', r),
+      canvas: $('.photo canvas', r),
       tags: $('.tags', r),
-      heartFill: $('.bar.heart .fill', r),
-      heartOver: $('.bar.heart .over', r),
-      heartTxt: $('.bar.heart .txt', r),
-      juiceFill: $('.bar.juice .fill', r),
-      juiceTxt: $('.bar.juice .txt', r),
+      state: $('.state', r),
+      vitalFill: $('.vital .fill', r),
+      vitalOver: $('.vital .over', r),
+      cellFill: $('.cell .fill', r),
+      resTxt: $('.batt .txt', r),
       intent: $('.intent', r),
       key: '',
     };
@@ -240,14 +274,15 @@
     return c;
   }
 
-  // The slasher's health and ANGER, shown above it instead of in a character slot.
+  // SLASHERBOY's file on the slasher: its health and ANGER, class and danger level.
   function buildPlate() {
     const r = $('#enemy-plate');
-    $('.hp .icon', r).appendChild(iconCanvas('heart', 2));
-    $('.anger .icon', r).appendChild(iconCanvas('anger', 2));
     UI.plate = {
       root: r,
       name: $('.name', r),
+      cls: $('.facts .cls', r),
+      danger: $('.facts .dlvl', r),
+      dangerTxt: $('.facts .dlvl b', r),
       hpPill: $('.hp .pill', r),
       angerPill: $('.anger .pill', r),
       hpFill: $('.hp .fill', r),
@@ -258,7 +293,7 @@
     };
   }
 
-  // Put the chosen slasher on stage: sprite box, plate name, and the plate's notches.
+  // Put the chosen slasher on the feed and in SLASHERBOY's file.
   function placeEnemy() {
     const id = enemyId();
     const S = enemyDef();
@@ -275,6 +310,9 @@
     });
     const P = UI.plate;
     P.name.textContent = S.title;
+    P.cls.textContent = S.class;
+    P.danger.dataset.level = DANGER[S.danger] || 1;
+    P.dangerTxt.textContent = S.danger;
     P.root.querySelectorAll('.notch').forEach((n) => n.remove());
     addNotch(P.hpPill, S.weakenedAt, 'Weakened: run!');
     addNotch(P.angerPill, S.anger.overflow / S.anger.max, S.lines.overflowShort);
@@ -400,7 +438,7 @@
     if (u.ghost && u.res <= 0 && !u.status.phasing) tags.push({ t: 'DRAINED', c: 'bad' });
     if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'info' });
     if (b.uniformBonus(u)) tags.push({ t: 'NEUTRAL', c: 'info' }); // BRAVO Team Uniform is on
-    return tags.concat(buffTags(b, u)).slice(0, 5);
+    return tags.concat(buffTags(b, u)).slice(0, 6);
   }
 
   function enemyTags(b) {
@@ -416,7 +454,7 @@
     if (s.status.vulnerable) tags.push({ t: 'VULNERABLE', c: 'good' });
     if (s.flags.deagleFocus) tags.push({ t: 'AIMING', c: 'bad' });
     if (b.known()) tags.push({ t: 'INTEL', c: 'info' });
-    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 4);
+    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 5);
   }
 
   function setTags(c, tags) {
@@ -441,21 +479,21 @@
     if (!b) return;
     for (const u of b.party) {
       const c = UI.cards[u.id];
-      c.head.textContent = u.name.toUpperCase();
-      c.head.classList.toggle('long', u.name.length > 9);
+      c.name.textContent = u.name.toUpperCase();
+      c.name.classList.toggle('long', u.name.length > 9);
       const hs = b.healthState(u).id;
+      c.state.textContent = hs;
+      c.state.style.background = STATE_COLOR[hs] || STATE_COLOR.OK;
       if (u.ghost) {
-        c.heartFill.style.width = '100%';
-        c.heartFill.style.backgroundColor = '#9a7fd1';
-        c.heartOver.style.width = '0';
-        c.heartTxt.textContent = 'NONE';
+        c.vitalFill.style.width = '100%';
+        c.vitalOver.style.width = '0';
       } else {
-        c.heartFill.style.width = Math.max(0, Math.min(100, u.hp)) + '%';
-        c.heartOver.style.width = Math.max(0, Math.min(100, ((u.hp - 100) / 50) * 100)) + '%';
-        c.heartTxt.textContent = hs;
+        c.vitalFill.style.width = clamp(u.hp, 0, 100) + '%';
+        c.vitalOver.style.width = clamp(((u.hp - 100) / 50) * 100, 0, 100) + '%';
       }
-      c.juiceFill.style.width = (u.res / u.resMax) * 100 + '%';
-      c.juiceTxt.textContent = `${Math.round(u.res)}/${u.resMax}`;
+      c.vitalFill.style.setProperty('--vc', STATE_COLOR[hs] || STATE_COLOR.OK);
+      c.cellFill.style.width = (u.res / u.resMax) * 100 + '%';
+      c.resTxt.textContent = `${Math.round(u.res)}/${u.resMax}`;
       c.root.classList.toggle('dead', u.dead);
       c.root.classList.toggle('critical', hs === 'CRITICAL');
       c.root.classList.toggle('away', !!u.status.phasing);
@@ -469,22 +507,23 @@
     const s = b.enemy;
     const plate = UI.plate;
     plate.hpFill.style.width = (s.hp / s.maxHp) * 100 + '%';
-    plate.hpTxt.textContent = b.healthState(s).id + (b.known() ? ` ${s.hp}/${s.maxHp}` : '');
+    plate.hpTxt.textContent = b.healthState(s).id + (b.known() ? ` ${s.hp}` : '');
     plate.angerFill.style.width = (s.anger / b.enemyDef.anger.max) * 100 + '%';
-    plate.angerTxt.textContent = 'ANGER ' + Math.round(s.anger);
+    plate.angerTxt.textContent = String(Math.round(s.anger));
     setTags(plate, enemyTags(b));
     plate.root.classList.toggle('armed', !!s.flags.overflow);
     enemyWrap.classList.toggle('rage', !!s.flags.overflow && !s.status.chilled && !s.status.stunned);
     enemyWrap.classList.toggle('chilled', !!s.status.chilled);
     enemyWrap.classList.toggle('down', !!s.status.stunned);
     $('#turn-chip').textContent = 'TURN ' + Math.max(1, b.turn);
-    $('#credits-chip').textContent = 'CREDITS ' + b.credits;
+    $('#credits-chip').textContent = b.credits + ' CR';
     const chopper = $('#chopper-chip');
-    chopper.style.display = b.chopper && !b.outcome ? 'block' : 'none';
-    if (b.chopper) chopper.textContent = 'CHOPPER IN ' + b.chopper.turns;
+    chopper.style.display = b.chopper && !b.outcome ? '' : 'none';
+    if (b.chopper) chopper.textContent = 'HELI ETA ' + b.chopper.turns;
     updateEscape();
   }
 
+  // ------------------------------------------------------------------ extraction gauge
   function updateEscape(flashReason) {
     const b = UI.battle;
     if (!b) return;
@@ -493,14 +532,14 @@
     escapeEl.classList.toggle('ready', !e.blocked && e.chance >= 50);
     $('.fill', escapeEl).style.width = (e.blocked ? 0 : e.chance) + '%';
     $('.pct', escapeEl).textContent = e.blocked ? '--' : e.chance + '%';
-    let label = 'ESCAPE CHANCE';
+    let label = 'ODDS IF THE TEAM RUNS NOW';
     if (e.blocked) label = e.short || 'NO WAY OUT';
     else if (b.enemy.flags.weakened) label = `${b.enemyDef.title} IS WEAKENED — RUN!`;
-    else if (b.chopper) label = `CHOPPER LANDS IN ${b.chopper.turns} TURN${b.chopper.turns === 1 ? '' : 'S'}`;
+    else if (b.chopper) label = `HELI LANDS IN ${b.chopper.turns} TURN${b.chopper.turns === 1 ? '' : 'S'}`;
     $('.label', escapeEl).textContent = flashReason || label;
-    const sub = $('#command .banner.run .sub');
+    const sub = $('#command .order.escape .sub');
     if (sub) {
-      sub.textContent = e.blocked ? e.short || 'BLOCKED' : e.chance + '% TO ESCAPE';
+      sub.textContent = e.blocked ? e.short || 'BLOCKED' : e.chance + '% TO GET OUT';
       sub.parentNode.classList.toggle('disabled', e.blocked);
     }
     const tip = $('#escape-tip');
@@ -514,7 +553,7 @@
       return;
     }
     tip.innerHTML =
-      '<div class="row"><span>How the escape chance adds up:</span><span></span></div>' +
+      '<div class="row"><span>How the extraction odds add up:</span><span></span></div>' +
       e.parts
         .map(([k, v]) => {
           const r = Math.round(v);
@@ -638,20 +677,20 @@
     if (id === enemyId()) return enemyPoint('body');
     return cardCenter(id);
   }
-  // Three claw marks raked across a worker's card.
+  // Three claw marks raked across a worker's badge.
   function slash(id, big) {
     const [x, y] = cardCenter(id);
     const s = el('div', 'slash' + (big ? ' big' : ''), '<i></i><i></i><i></i>');
     s.style.left = x + 'px';
-    s.style.top = y - 30 + 'px';
+    s.style.top = y - 10 + 'px';
     fxLayer.appendChild(s);
     setTimeout(() => s.remove(), 520);
   }
-  // Lean the slasher toward a card for a moment.
+  // Lean the slasher toward a badge for a moment.
   async function lunge(id, ms, reach) {
     const [tx, ty] = cardCenter(id);
     const k = reach || 1;
-    enemyWrap.style.translate = `${(tx - 640) * 0.14 * k}px ${(ty - 430) * 0.08 * k}px`;
+    enemyWrap.style.translate = `${(tx - 500) * 0.12 * k}px ${(ty - 430) * 0.06 * k}px`;
     await T(ms);
     enemyWrap.style.translate = '';
   }
@@ -779,26 +818,20 @@
           return T(160);
         }
         if (e.kind === 'trapped') {
-          const [tx, ty] = cardCenter(e.target);
-          enemyWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
-          await T(150);
+          const hitting = lunge(e.target, 150);
+          await hitting;
           const [fx0, fy0] = enemyPoint('feet');
           pop(fx0, fy0 - 40, 'SNAP!', 'crit', 900);
           shake(false);
           sfx('crit');
-          await T(200);
-          enemyWrap.style.translate = '';
-          return T(120);
+          return T(320);
         }
-        const [tx, ty] = cardCenter(e.target);
-        enemyWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
         if (e.kind === 'gun') {
           const [mx, my] = enemyPoint('muzzle');
           muzzle(mx, my);
           sfx('gun');
         } else sfx('growl');
-        await T(170);
-        enemyWrap.style.translate = '';
+        await lunge(e.target, 170);
         return T(90);
       }
       case 'shot': {
@@ -839,7 +872,7 @@
       }
       case 'credits': {
         refresh();
-        pop(470, 215, `+${e.amount} CREDITS`, 'status', 1000);
+        pop(560, 100, `+${e.amount} CREDITS`, 'status', 1000);
         sfx('coin');
         return T(260);
       }
@@ -861,7 +894,7 @@
         return T(360);
       case 'chopper':
         flash('#ffffff');
-        pop(640, 330, 'CHOPPER!', 'crit', 1400);
+        pop(496, 420, 'HELI ON THE PAD!', 'crit', 1400);
         sfx('run');
         return T(900);
       case 'run':
@@ -930,91 +963,186 @@
     }
   }
 
-  // ------------------------------------------------------------------ skill check
+  // ------------------------------------------------------------------ generator skill checks
+  // The two checks SlashCo VR puts on a generator: FUEL (keep the needle out of the red while
+  // you pour) and BATTERY (connect when the clamps line up with the terminals).
   function skillCheck(o) {
     return new Promise((resolve) => {
       const box = $('#skillcheck');
-      const verb = o.kind === 'fuel' ? `${o.name} is pouring fuel into the generator.` : `${o.name} is slotting a battery into the generator.`;
+      const fuel = o.kind === 'fuel';
+      const support = o.moralSupport ? ' Purpl Lady’s Moral Support makes it easier.' : '';
       box.innerHTML = `
+        <div class="gen"><span>GENERATOR · ${fuel ? 'FUEL' : 'BATTERY'}</span></div>
         <div class="t">${esc(o.title)}</div>
-        <div class="s">${esc(verb)} Press Z / SPACE or tap when the needle is in the green!${o.moralSupport ? '<br>Purpl Lady’s Moral Support makes it easier.' : ''}</div>
-        <div class="track"><div class="zone"></div><div class="needle"></div></div>
+        <div class="s">${
+          fuel
+            ? `${esc(o.name)} is pouring fuel. Hold <b>Q / ←</b> or <b>E / →</b> (or press a side) to keep the needle out of the red.`
+            : `${esc(o.name)} is connecting the battery. Press <b>Z / SPACE</b> or tap when the clamps line up with the terminals.`
+        }${support}</div>
+        ${
+          fuel
+            ? '<div class="dial"><div class="needle"></div></div>'
+            : '<div class="rail"><div class="terminals"></div><div class="clamp"></div></div>'
+        }
         <div class="timer"></div>
-        <div class="res">GET READY…</div>`;
-      const zone = $('.zone', box);
-      const needle = $('.needle', box);
+        <div class="res">GET READY…</div>
+        ${fuel ? '<div class="nudge l">◀</div><div class="nudge r">▶</div>' : ''}`;
       const timer = $('.timer', box);
       const res = $('.res', box);
-      const start = 0.14 + Math.random() * Math.max(0, 0.86 - o.zone - 0.14);
-      zone.style.left = start * 100 + '%';
-      zone.style.width = o.zone * 100 + '%';
-      needle.style.left = '0%';
       box.classList.add('show');
-      const lead = UI.fast ? 250 : 550;
+      const lead = UI.fast ? 250 : 650;
       const t0 = performance.now() + lead;
       let done = false;
+      let handler = null;
+
+      function finish(ok, msg) {
+        if (done) return;
+        done = true;
+        Input.remove(handler);
+        box.removeEventListener('pointerdown', onPointer);
+        doc.removeEventListener('keydown', onHold, true);
+        doc.removeEventListener('keyup', onHold, true);
+        root.removeEventListener('pointerup', release);
+        res.textContent = ok ? 'SUCCESS!' : msg;
+        res.className = 'res ' + (ok ? 'ok' : 'no');
+        sfx(ok ? 'success' : 'fail');
+        setTimeout(
+          () => {
+            box.classList.remove('show');
+            resolve(ok);
+          },
+          UI.fast ? 350 : 750
+        );
+      }
+
+      // ---- FUEL: the needle drifts one way, then another; hold a side to push it back
+      // before it touches the red.
+      const safe = clamp(0.38 + o.zone * 1.2, 0.45, 0.85);
+      const red = (1 - safe) / 2;
+      let p = 0.5;
+      let force = (Math.random() < 0.5 ? -1 : 1) * rand(0.85, 1);
+      let goal = force;
+      let nextGoal = 0;
+      let last = null;
+      const keysDown = { l: false, r: false };
+      let pointerSide = 0;
+      const held = () => (keysDown.r || pointerSide > 0 ? 1 : 0) - (keysDown.l || pointerSide < 0 ? 1 : 0);
+      const SIDE = { ArrowLeft: 'l', a: 'l', q: 'l', ArrowRight: 'r', d: 'r', e: 'r' };
+      function onHold(ev) {
+        const side = SIDE[ev.key] || SIDE[ev.key && ev.key.toLowerCase()];
+        if (!side) return;
+        keysDown[side] = ev.type === 'keydown';
+        showHeld();
+      }
+      function release() {
+        pointerSide = 0;
+        showHeld();
+      }
+      function showHeld() {
+        const h = held();
+        const l = $('.nudge.l', box);
+        const r = $('.nudge.r', box);
+        if (l) l.classList.toggle('on', h < 0);
+        if (r) r.classList.toggle('on', h > 0);
+      }
+      // ---- BATTERY: the clamps sweep back and forth over the rail.
+      const start = 0.12 + Math.random() * Math.max(0, 0.88 - o.zone - 0.12);
       const at = (t) => {
         const ph = (Math.max(0, t) / o.sweepMs) % 2;
         return ph < 1 ? ph : 2 - ph;
       };
+      function press() {
+        if (done || fuel) return;
+        const t = performance.now() - t0;
+        if (t < 0) return; // not started yet
+        const x = at(t);
+        finish(x >= start && x <= start + o.zone, 'ZAP!');
+      }
+
+      if (fuel) {
+        const deg = red * 180;
+        $('.dial', box).style.background =
+          `conic-gradient(from -90deg at 50% 100%, #c91c25 0deg ${deg}deg, #2f9e5d ${deg}deg ${180 - deg}deg, #c91c25 ${
+            180 - deg
+          }deg 180deg, transparent 180deg)`;
+      } else {
+        const term = $('.terminals', box);
+        term.style.left = start * 100 + '%';
+        term.style.width = o.zone * 100 + '%';
+      }
+
       function frame(now) {
         if (done) return;
         const t = now - t0;
-        if (t >= 0 && res.textContent) res.textContent = '';
-        needle.style.left = at(t) * 100 + '%';
-        timer.style.transform = `scaleX(${Math.max(0, Math.min(1, 1 - t / o.timeLimitMs))})`;
-        if (t >= o.timeLimitMs) return finish(false, 'TOO SLOW…');
+        if (t >= 0 && res.textContent === 'GET READY…') res.textContent = '';
+        timer.style.transform = `scaleX(${clamp(1 - t / o.timeLimitMs, 0, 1)})`;
+        if (fuel) {
+          const dt = last == null ? 0 : Math.min(0.05, (now - last) / 1000);
+          last = now;
+          if (t >= 0) {
+            if (!nextGoal) nextGoal = now + 1600 + Math.random() * 800;
+            if (now > nextGoal) {
+              goal = (Math.random() < 0.5 ? -1 : 1) * rand(0.85, 1);
+              nextGoal = now + 1600 + Math.random() * 800;
+            }
+            force += (goal - force) * Math.min(1, dt * 5);
+            const drift = 0.22 * (1 + (t / o.timeLimitMs) * 0.3); // it gets a little harder to hold
+            p = clamp(p + (force * drift + held() * 0.45) * dt, 0, 1);
+          }
+          $('.needle', box).style.transform = `rotate(${(p - 0.5) * 180}deg)`;
+          if (p < red || p > 1 - red) return finish(false, 'SPILLED!');
+          if (t >= o.timeLimitMs) return finish(true);
+        } else {
+          $('.clamp', box).style.left = at(t) * 100 + '%';
+          if (t >= o.timeLimitMs) return finish(false, 'TOO SLOW…');
+        }
         root.requestAnimationFrame(frame);
         return undefined;
       }
-      function press() {
-        if (done) return;
-        const t = performance.now() - t0;
-        if (t < 0) return; // not started yet
-        const p = at(t);
-        finish(p >= start && p <= start + o.zone);
-      }
-      function finish(ok, msg) {
-        done = true;
-        Input.remove(handler);
-        stage.removeEventListener('pointerdown', onPointer, true);
-        res.textContent = ok ? 'SUCCESS!' : msg || 'MISSED!';
-        res.className = 'res ' + (ok ? 'ok' : 'no');
-        sfx(ok ? 'success' : 'fail');
-        setTimeout(() => {
-          box.classList.remove('show');
-          resolve(ok);
-        }, UI.fast ? 350 : 700);
-      }
-      const onPointer = (ev) => {
+      function onPointer(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        press();
-      };
-      const handler = Input.push({ key: (k) => k === 'ok' && press() });
-      stage.addEventListener('pointerdown', onPointer, true);
+        if (!fuel) return press();
+        const r = box.getBoundingClientRect();
+        pointerSide = ev.clientX < r.left + r.width / 2 ? -1 : 1;
+        return showHeld();
+      }
+      handler = Input.push({
+        key(k) {
+          if (k === 'ok') press();
+        },
+      });
+      box.addEventListener('pointerdown', onPointer);
+      if (fuel) {
+        doc.addEventListener('keydown', onHold, true);
+        doc.addEventListener('keyup', onHold, true);
+        root.addEventListener('pointerup', release);
+      }
       root.requestAnimationFrame(frame);
     });
   }
 
   // ------------------------------------------------------------------ menus
-  let handSrc = null;
-  function showHand(x, y, down) {
-    if (!handSrc) {
-      handSrc = iconCanvas('hand', 3);
-      hand.appendChild(handSrc);
+  let cursorSrc = null;
+  function showCursor(x, y, down) {
+    if (!cursorSrc) {
+      cursorSrc = iconCanvas('knife', 2);
+      cursor.appendChild(cursorSrc);
     }
-    hand.style.display = 'block';
-    hand.classList.toggle('down', !!down);
-    hand.style.left = x + 'px';
-    hand.style.top = y + 'px';
+    cursor.style.display = 'block';
+    cursor.classList.toggle('down', !!down);
+    cursor.style.left = x + 'px';
+    cursor.style.top = y + 'px';
   }
-  function hideHand() {
-    hand.style.display = 'none';
+  function hideCursor() {
+    cursor.style.display = 'none';
   }
-  function handAt(elem) {
+  // Point the knife at an option: inside its left padding if it has room, otherwise
+  // just outside its left edge.
+  function cursorAt(elem) {
     const r = stageRect(elem);
-    showHand(r.x - 4, r.y + r.h / 2 - 13);
+    const pad = parseFloat(root.getComputedStyle(elem).paddingLeft) || 0;
+    showCursor(pad >= 40 ? r.x + pad - 46 : r.x - 52, r.y + r.h / 2 - 5);
   }
 
   // Keyboard + mouse selection over a list of option elements. Resolves the chosen
@@ -1028,7 +1156,8 @@
         if (n === i && !quiet && o.lit) return;
         i = n;
         opts.forEach((op, k) => op.el.classList.toggle('sel', k === i));
-        handAt(opts[i].el);
+        if (o.noCursor) hideCursor();
+        else cursorAt(opts[i].el);
         if (o.onHighlight) o.onHighlight(opts[i], i);
         o.lit = true;
       };
@@ -1047,7 +1176,7 @@
           op.el.onclick = null;
           op.el.onmouseenter = null;
         });
-        hideHand();
+        hideCursor();
         resolve(v);
       };
       const move = (d) => {
@@ -1063,8 +1192,6 @@
           else if (k === 'down') move(cols);
           else if (k === 'left' && cols > 1 && i % cols > 0) move(-1);
           else if (k === 'right' && cols > 1 && i % cols < cols - 1) move(1);
-          else if (k === 'left' && cols === 1 && o.leftRight) move(-1);
-          else if (k === 'right' && cols === 1 && o.leftRight) move(1);
           else if (k === 'ok') pick();
           else if (k === 'back' && o.back !== false) {
             sfx('cancel');
@@ -1086,30 +1213,21 @@
     });
   }
 
-  let bannerCache = null;
-  function bannerCanvas(kind) {
-    bannerCache = bannerCache || { fight: SC.Art.banner('fight'), run: SC.Art.banner('run') };
-    const c = bannerCache[kind].toCanvas();
-    c.className = 'px';
-    return c;
-  }
-
+  // The two big buttons on the field console.
   function drawRoot(idle) {
     const b = UI.battle;
     command.innerHTML = '';
-    const fight = el('button', 'banner fight' + (idle ? ' off' : ''));
-    fight.appendChild(bannerCanvas('fight'));
-    fight.appendChild(el('div', 'word', 'FIGHT!'));
-    const run = el('button', 'banner run' + (idle ? ' off' : ''));
-    run.appendChild(bannerCanvas('run'));
-    run.appendChild(el('div', 'word', 'RUN...'));
-    if (b) {
-      const e = b.escapeChance();
-      run.appendChild(el('div', 'sub', e.blocked ? esc(e.short || 'BLOCKED') : e.chance + '% TO ESCAPE'));
-      if (e.blocked) run.classList.add('disabled');
-    }
+    const fight = el('button', 'order fight' + (idle ? ' off' : ''));
+    fight.innerHTML = `<span class="ico"></span><span class="word">FIGHT</span><span class="sub">${
+      b ? 'ENGAGE ' + esc(b.enemyDef.title) : 'ENGAGE THE SLASHER'
+    }</span>`;
+    $('.ico', fight).appendChild(iconCanvas('knife', 2));
+    const run = el('button', 'order escape' + (idle ? ' off' : ''));
+    run.innerHTML = '<span class="ico"></span><span class="word">ESCAPE</span><span class="sub"></span>';
+    $('.ico', run).appendChild(iconCanvas('heli', 2));
     command.appendChild(fight);
     command.appendChild(run);
+    updateEscape();
     return { fight, run };
   }
 
@@ -1123,6 +1241,7 @@
           { el: run, enabled: true },
         ],
         back: false,
+        noCursor: true,
         onHighlight: (op, k) => {
           fight.classList.toggle('off', k !== 0);
           run.classList.toggle('off', k !== 1);
@@ -1158,7 +1277,9 @@
   async function actionMenu(b, u, first) {
     command.innerHTML = '';
     const menu = el('div', 'menu');
-    menu.innerHTML = `<div class="who"><span>${esc(u.name.toUpperCase())}</span><span class="res">${u.def.resource.name} ${Math.round(u.res)}/${u.resMax}</span></div><div class="grid"></div><div class="hint"></div>`;
+    menu.innerHTML = `<div class="who"><span>${esc(u.name.toUpperCase())}</span><span class="res">${esc(u.def.resource.short)} ${Math.round(u.res)}/${
+      u.resMax
+    }</span></div><div class="grid"></div><div class="hint"></div>`;
     command.appendChild(menu);
     const grid = $('.grid', menu);
     const hint = $('.hint', menu);
@@ -1170,7 +1291,7 @@
     });
     const idx = await choose({
       opts,
-      columns: 3,
+      columns: 2,
       initial: UI.lastAction[u.id] || 0,
       onHighlight: (op) => {
         hint.textContent = op.enabled ? ACTION_HINTS[op.act.id](b, u) : op.act.reason || '';
@@ -1197,7 +1318,7 @@
       }
     }
     panel.innerHTML = `<div class="title"><span>${esc(kind === 'skills' ? u.name.toUpperCase() + ' — SKILLS' : 'TEAM BAG')}</span><span>${
-      kind === 'skills' ? esc(u.def.resource.name + ' ' + Math.round(u.res) + '/' + u.resMax) : 'CREDITS ' + b.credits
+      kind === 'skills' ? esc(u.def.resource.name + ' ' + Math.round(u.res) + '/' + u.resMax) : b.credits + ' CREDITS'
     }</span></div><div class="list"></div><div class="desc"></div>`;
     const list = $('.list', panel);
     const desc = $('.desc', panel);
@@ -1225,9 +1346,9 @@
   function prompt(text) {
     command.innerHTML = '';
     const menu = el('div', 'menu');
-    menu.innerHTML = `<div class="who"><span>${esc(text)}</span><span class="res">Z: OK · X: BACK</span></div><div class="hint"></div>`;
+    menu.innerHTML = `<div class="who"><span>${esc(text)}</span></div><div class="hint"><span class="d"></span><span class="k">Z / TAP: OK · X: BACK</span></div>`;
     command.appendChild(menu);
-    return $('.hint', menu);
+    return $('.hint .d', menu);
   }
 
   function pickTarget(b, kind, u, title) {
@@ -1240,12 +1361,12 @@
         hint.textContent = `${e.name} — ${b.healthState(e).id}, ANGER ${Math.round(e.anger)}.`;
         enemyWrap.classList.add('targeted');
         const [bx, by] = enemyPoint('body');
-        showHand(bx - 170, by - 14);
+        showCursor(bx - 170, by - 5);
         const done = (v) => {
           Input.remove(handler);
           enemyWrap.classList.remove('targeted');
           enemyWrap.onclick = null;
-          hideHand();
+          hideCursor();
           resolve(v);
         };
         const handler = Input.push({
@@ -1276,14 +1397,14 @@
         i = (n + cands.length) % cands.length;
         cands.forEach((c, k) => UI.cards[c.id].root.classList.toggle('pick', k === i));
         const c = cands[i];
-        const [x, y] = CARD_XY[slotOf(c.id)];
-        showHand(x - 46, y + 150);
+        const [x, y] = BADGE_XY[slotOf(c.id)];
+        showCursor(x + 130, y - 44, true);
         hint.textContent = c.dead ? `${c.name}’s body.` : `${c.name} — ${b.healthState(c).id}.`;
       };
       const done = (v) => {
         Input.remove(handler);
         cands.forEach((c) => UI.cards[c.id].root.classList.remove('pick'));
-        hideHand();
+        hideCursor();
         resolve(v);
       };
       const handler = Input.push({
@@ -1336,7 +1457,7 @@
         if (sk.target === 'enemy' || sk.target === 'ally' || sk.target === 'otherAlly') {
           // John's Lunch Box still works with no one left to share it with.
           if (!b.targetsFor(sk.target, u).length) return { type: 'skill', skill: sk.id };
-          const t = await pickTarget(b, sk.target, u, sk.name.toUpperCase());
+          const t = await pickTarget(b, sk.target, u, (sk.short || sk.name).toUpperCase());
           if (!t) continue;
           return { type: 'skill', skill: sk.id, target: t };
         }
@@ -1416,7 +1537,7 @@
     }
   }
 
-  // ------------------------------------------------------------------ overlays
+  // ------------------------------------------------------------------ SlashCo paperwork (overlays)
   function overlay(id, cls, html) {
     const o = $('#' + id);
     o.className = 'overlay show ' + (cls || '');
@@ -1428,10 +1549,21 @@
     o.className = 'overlay';
     o.innerHTML = '';
   }
+  function docHead(kind, ref) {
+    return `<div class="doc-head"><span class="brand">SLASHCO</span><span class="kind">${esc(kind)}</span><span class="ref">${esc(ref)}</span></div>`;
+  }
+  function dangerHtml(S) {
+    return `<span class="dlvl" data-level="${DANGER[S.danger] || 1}"><i></i><i></i><i></i><b>${esc(S.danger)}</b></span>`;
+  }
 
   function lineupHtml() {
-    const party = SC.DATA.party.map((id) => `<span data-p="${id}"></span>`).join('');
-    return `<div class="lineup">${party}<span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span></div>`;
+    const party = SC.DATA.party
+      .map((id) => `<figure><span data-p="${id}"></span><figcaption>${esc(SC.DATA.workers[id].name.toUpperCase())}</figcaption></figure>`)
+      .join('');
+    const S = enemyDef();
+    return `<div class="lineup">${party}<span class="vs">VS</span><figure class="foe"><span data-p="${enemyId()}" data-foe="1"></span><figcaption>${esc(
+      S.title
+    )}</figcaption></figure></div>`;
   }
   function fillLineup(o) {
     o.querySelectorAll('[data-p]').forEach((s) => {
@@ -1450,26 +1582,26 @@
     return new Promise((resolve) => {
       const btns = buttons.map((sel) => $(sel, o));
       const opts = btns.map((b) => ({ el: b, enabled: true }));
-      choose({ opts, columns: opts.length, back: false, initial, scroll }).then((i) => resolve(i));
+      choose({ opts, columns: opts.length, back: false, initial, scroll, noCursor: true }).then((i) => resolve(i));
     });
   }
 
-  // How-to-play text: the rules every fight shares, plus the chosen slasher's own.
+  // The field manual: the rules every fight shares, plus the chosen slasher's own.
   const HELP_FOE = {
     trollge: `
       <p><b>TROLLGE ONLY SEES WHAT MOVES.</b> When it stares at someone (<b>STARED AT</b>), anything but GUARD counts as moving: they become <b>SEEN</b> and it gets angrier. It can only <b>Scratch</b>, which hits very hard, someone who is SEEN. Its claws mostly miss whoever hasn't moved yet this turn, or is guarding, and every claw hit can leave you AFRAID.</p>
-      <p><b>ANGER.</b> The orange bar on its plate. At <b>80</b>, <b>Slow Walker, Fast Runner</b>: its speed jumps from 12 to 77, it moves first <i>and</i> comes back around after everyone, it marks someone SEEN every turn, and it's much harder to outrun. Get out before that, or hold on.</p>
-      <p><b>READ ITS NEXT MOVE.</b> John's Hyperceptive marks who it goes for: <b>STARE</b>, <b>SCRATCH</b> or <b>TARGET</b>. Captain Jim's Confidential Documents say how hard. GUARD, heal first, or set a Bear Trap. Mysti's Tactical Stab is extremely effective against Trollge.</p>`,
+      <p><b>ANGER</b> is on SLASHERBOY's file, top right. At <b>80</b>, <b>Slow Walker, Fast Runner</b>: its speed jumps from 12 to 77, it moves first <i>and</i> comes back around after everyone, it marks someone SEEN every turn, and it's much harder to outrun. Get out before that, or hold on.</p>
+      <p><b>READ ITS NEXT MOVE.</b> John's Hyperceptive flags the badge it goes for: <b>STARE</b>, <b>SCRATCH</b> or <b>TARGET</b>. Captain Jim's Confidential Documents say how hard. GUARD, heal first, or set a Bear Trap. Mysti's Tactical Stab is extremely effective against Trollge.</p>`,
     sid: `
-      <p><b>ANGER.</b> The orange bar on Sid's plate. It rises every turn and whenever he gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
-      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive marks who Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
+      <p><b>ANGER</b> is on SLASHERBOY's file, top right. It rises every turn and whenever Sid gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
+      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive flags the badge Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
   };
   function helpHtml() {
     const has = (id) => SC.DATA.party.includes(id);
     return `
     <div class="help">
-      <p><b>GOAL.</b> You can't kill a slasher. Weaken it until its bar reads <b>WEAKENED</b>, then pick <b>RUN...</b>. The bar above the buttons shows your odds of getting away (click it for the breakdown).</p>
-      <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the escape chance.${
+      <p><b>ASSIGNMENT.</b> You can't kill a slasher. Weaken it until SLASHERBOY reads <b>WEAKENED</b>, then hit <b>ESCAPE</b> on the field console. The <b>EXTRACTION</b> gauge above it shows your odds of getting out (click it for the breakdown).</p>
+      <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the odds.${
         has('purpl')
           ? " Purpl Lady is a ghost: she can't carry anyone, but once the slasher is weakened she <b>POSSESSES</b> a body so it walks out on its own."
           : ''
@@ -1480,16 +1612,20 @@
           ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Her <b>DEATHWARD</b> (in the bag) keeps the whole team from dying for 3 turns. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
           : ''
       }
-      <p><b>THE CHOPPER.</b> Captain Jim's Helicopter Escape gets everyone out, bodies included, after 5 turns, as long as someone who can carry a body survives until it lands.</p>
-      <p><b>HEALTH</b> is shown as condition, not numbers: CRITICAL, HURT, SCATHED, STABLE, OK, SATED, OVERSATED. The gold stripe is health above 100%.</p>
-      <p><b>SKILL CHECKS</b> (Mel's Fuel, John's Battery): press Z / Space, or tap, while the needle is in the green.</p>
-      <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · F fast text · M mute. Mouse and touch work everywhere.</p>
+      <p><b>THE HELI.</b> Captain Jim's Helicopter Escape lands after 5 turns and gets everyone out, bodies included, as long as someone who can carry a body is still alive.</p>
+      <p><b>BADGES.</b> HEALTH is a condition, not a number: CRITICAL, HURT, SCATHED, STABLE, OK, SATED, OVERSATED (the gold stripe is health over 100%). The battery is STAMINA, which pays for skills.</p>
+      <p><b>GENERATOR CHECKS.</b> Mel's <b>Fuel</b> check: the needle drifts, so hold Q / ← or E / → (or press and hold a side of the panel) to keep it out of the red until the timer runs out. John's <b>Battery</b> check: press Z / Space, or tap, when the clamps line up with the terminals, or the generator shocks him.</p>
+      <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · L radio log · F fast text · M mute. Mouse and touch work everywhere.</p>
     </div>`;
   }
 
   function showHelp() {
     return new Promise((resolve) => {
-      const o = overlay('help', '', `<div class="box"><h2>HOW TO PLAY</h2>${helpHtml()}<button class="go" id="help-ok">GOT IT</button></div>`);
+      const o = overlay(
+        'help',
+        '',
+        `<div class="box">${docHead('FIELD MANUAL', 'REV. 3')}${helpHtml()}<button class="go primary" id="help-ok">GOT IT</button></div>`
+      );
       waitChoice(o, ['#help-ok'], 0, $('.help', o)).then(() => {
         closeOverlay('help');
         resolve();
@@ -1506,12 +1642,13 @@
         'screen',
         'title',
         `<div class="box">
-          <h1>SLASHCO <span class="red">VR</span></h1>
-          <h2>TURN-BASED BATTLE</h2>
+          ${docHead('ASSIGNMENT BRIEFING', 'SLASHCO VR · TURN-BASED BATTLE')}
+          <h1>WEAKEN IT. THEN RUN.</h1>
+          <h2>PERSONNEL ASSIGNED</h2>
           ${lineupHtml()}
-          <p class="foe-tags">${esc(S.title + ' ' + S.tags.join(' '))}</p>
-          <p>Weaken ${esc(S.name)}, then run for it. Nobody gets left behind.</p>
-          <button class="go" id="t-start">START</button><button class="go alt foe" id="t-foe">VS ${esc(S.title)} ▸</button><button class="go alt" id="t-help">HOW TO PLAY</button>
+          <div class="file-line"><span>SLASHER: ${esc(S.title)}</span><span>CLASS: ${esc(S.class)}</span>${dangerHtml(S)}</div>
+          <p>Weaken ${esc(S.name)}, then get out. Nobody gets left behind.</p>
+          <button class="go primary" id="t-start">DEPLOY</button><button class="go foe" id="t-foe">SLASHER ▸</button><button class="go" id="t-help">FIELD MANUAL</button>
           <div class="keys">Z / Enter: confirm · X / Esc: back · Arrows: move · F: fast text · M: mute</div>
         </div>`
       );
@@ -1548,18 +1685,19 @@
       'screen',
       win ? 'win' : 'lose',
       `<div class="box">
-        <h1>${win ? 'YOU ESCAPED!' : 'NO ONE MADE IT OUT…'}</h1>
+        ${docHead('EXTRACTION REPORT', 'TURN ' + b.turn)}
+        <h1>${win ? 'EXTRACTION SUCCESSFUL' : 'ASSIGNMENT FAILED'}</h1>
         <h2>${win ? `A SUCCESSFUL ESCAPE! ${esc(b.partyNames().toUpperCase())} WIN!` : `${esc(b.enemyDef.title)} GOT EVERYONE WHO COULD CARRY A BODY.`}</h2>
         <div class="stats">
           <span>Turns</span><span>${b.turn}</span>
           <span>Credits earned</span><span>${b.credits}</span>
-          ${win ? `<span>EXP earned</span><span>${b.exp}${b.secrets ? ' (Hidden Documents: +50%)' : ''}</span>` : ''}
+          ${win ? `<span>EXP earned${b.secrets ? ' (Hidden Documents: +50%)' : ''}</span><span>${b.exp}</span>` : ''}
           <span>Damage dealt to ${esc(b.en)}</span><span>${b.stats.damageDealt}</span>
-          <span>Workers lost</span><span>${lost.length ? esc(lost.join(', ')) : 'None'}</span>
+          <span>Personnel lost</span><span>${lost.length ? esc(lost.join(', ')) : 'None'}</span>
           <span>Escape attempts</span><span>${b.stats.runs}</span>
           <span>${esc(b.en)}'s ANGER at the end</span><span>${Math.round(b.enemy.anger)}</span>
         </div>
-        <button class="go" id="e-again">${win ? 'PLAY AGAIN' : 'TRY AGAIN'}</button><button class="go alt" id="e-log">BATTLE LOG</button>
+        <button class="go primary" id="e-again">REDEPLOY</button><button class="go" id="e-log">RADIO LOG</button>
       </div>`
     );
     for (;;) {
@@ -1575,9 +1713,9 @@
       const o = overlay(
         'history',
         '',
-        `<div class="box"><h2>BATTLE LOG</h2><div class="scroll">${Log.history
+        `<div class="box">${docHead('RADIO LOG', 'FIELD RADIO · CH 04')}<div class="scroll">${Log.history
           .map((l) => `<div class="line ${esc(l.tone)}">${colorize(l.text)}</div>`)
-          .join('')}</div><button class="go" id="h-close">CLOSE</button></div>`
+          .join('')}</div><button class="go primary" id="h-close">CLOSE</button></div>`
       );
       const sc = $('.scroll', o);
       sc.scrollTop = sc.scrollHeight;
@@ -1613,6 +1751,15 @@
     }
   }
 
+  // The camera's clock: the middle of the night, counting up.
+  function tickClock(now) {
+    const s = 3 * 3600 + 13 * 60 + Math.floor((now - clockStart) / 1000);
+    const two = (n) => String(n).padStart(2, '0');
+    const text = `${two(Math.floor(s / 3600) % 24)}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`;
+    const c = $('#cam-clock');
+    if (c.textContent !== text) c.textContent = text;
+  }
+
   // ------------------------------------------------------------------ build
   function build() {
     stage = $('#stage');
@@ -1623,7 +1770,7 @@
     command = $('#command');
     panel = $('#panel');
     escapeEl = $('#escape');
-    hand = $('#hand');
+    cursor = $('#cursor');
     UI.lastAction = {};
 
     fit();
@@ -1631,8 +1778,9 @@
     doc.addEventListener('keydown', onKey);
 
     SC.Art.hallway().toCanvas($('#bg'));
-    for (const id of SC.DATA.party) buildCard(id, false);
+    for (const id of SC.DATA.party) buildCard(id);
     buildPlate();
+    $('#escape .icon').appendChild(iconCanvas('heli', 2));
     try {
       const saved = root.localStorage.getItem('sc-enemy');
       if (SC.DATA.enemies.includes(saved)) UI.enemy = saved;
@@ -1646,7 +1794,7 @@
     });
     $('#log-btn').addEventListener('click', (ev) => {
       ev.stopPropagation();
-      if (!Input.top() || !Input.top().modal) showHistory();
+      if (!doc.querySelector('.overlay.show')) showHistory();
     });
     $('#fast-btn').addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -1674,13 +1822,15 @@
     drawRoot(true);
 
     // Animation loop: the slasher (Sid's wandering eyes, Trollge's head), animated
-    // portraits, flickering lights.
+    // portraits, the camera clock, flickering lights.
     let last = 0;
+    clockStart = performance.now();
     const loop = (now) => {
       if (now - last > 110) {
         last = now;
         UI.frame++;
         view().draw(now);
+        tickClock(now);
         if (UI.battle && UI.frame % 2 === 0) refresh();
         if (Math.random() < 0.012) {
           $('#flicker').classList.add('on');
@@ -1697,6 +1847,7 @@
     Log.history = [];
     $('#log-lines').innerHTML = '';
     UI.lastAction = {};
+    clockStart = performance.now();
     placeEnemy();
     refresh();
   }

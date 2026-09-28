@@ -29,7 +29,9 @@
     try {
       if (root.document.fonts && root.document.fonts.load) {
         await Promise.all(
-          ['34px VT323', '20px Silkscreen', 'bold 20px Silkscreen', 'bold 40px "Pixelify Sans"'].map((f) => root.document.fonts.load(f).catch(() => null))
+          ['30px VT323', '600 20px "Barlow Condensed"', '700 20px "Barlow Condensed"', '800 20px "Barlow Condensed"', '30px "Saira Stencil One"'].map((f) =>
+            root.document.fonts.load(f).catch(() => null)
+          )
         );
       }
     } catch (e) {

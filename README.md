@@ -1,7 +1,7 @@
 # SlashCo VR: Turn-Based Battle
 
-An OMORI-style, turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki).
-**Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner in a locker hallway against
+A turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki), run from a SlashCo
+monitor room. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner in a locker hallway against
 **Trollge** [DEVASTATING]. **Sid** [CONSIDERABLE] is still there as the easier fight: switch slashers on the title
 screen. Every stat, skill, passive, weapon and item comes from the *Slasher Statistics* doc.
 
@@ -16,26 +16,48 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 | Move | Arrows or WASD | Hover |
 | Confirm | Z, Enter, Space | Click / tap |
 | Back / undo | X, Esc, Backspace | "BACK" / "UNDO" |
-| Skip text | Z or X while text types | Click the log |
-| Battle log | L | LOG button |
+| Skip text | Z or X while text types | Click the radio |
+| Fuel check | Hold Q / E or ← / → | Hold a side of the panel |
+| Battery check | Z, Space | Tap |
+| Radio log | L | LOG button |
 | Fast text | F | FAST button |
-| Mute | M | SOUND button |
-| How to play | H | Title screen |
+| Sound | M | SOUND button |
+| Field manual | H | Title screen |
+
+## The monitor room
+
+The HUD is a SlashCo monitor room, built from SlashCo VR's own pieces. In the game's lobby, the monitor room holds
+the SLASHERBOY computer.
+
+- **Camera feed.** The hallway is CAM 04 on a security monitor, with scanlines, a REC light and a running clock.
+  The slasher is on the feed.
+- **Field radio** (top). The battle log comes in over the radio. Its readouts show the turn, your CREDITS and the
+  heli's ETA.
+- **SLASHERBOY threat file** (top right). The slasher's name, class (Trollge is UMBRA, Sid is DEMON) and danger
+  level in the wiki's colours: MODERATE yellow, CONSIDERABLE orange, DEVASTATING red. Below that are its
+  condition, ANGER and status tags.
+- **ID badges** (bottom). Each worker is a SlashCo ID badge: photo, role, HEALTH and STAMINA (a battery). Status
+  effects are label tape along the bottom. While John is awake, his *Hyperceptive* puts a flag on the badge of
+  whoever the slasher goes for next. A dead worker's badge is stamped DECEASED.
+- **Field orders** (right). Two big buttons: **FIGHT** and **ESCAPE**. The **EXTRACTION** gauge above them shows
+  your odds of getting out; click it to see how they add up. The menu cursor is a knife.
+- **Paperwork.** The title screen is an assignment briefing, H opens the field manual, and the battle ends with
+  an extraction report.
 
 ## How the battle works
 
-- **You can't kill a slasher.** Weaken it until its bar reads **WEAKENED** ("Trollge is weakened! Now is your
-  time for escape!"). It then can't move for a turn or two. Pick **RUN...** to try to escape. The bar above the
-  buttons shows your odds; click it to see how they add up.
+- **You can't kill a slasher.** Weaken it until its condition reads **WEAKENED** ("Trollge is weakened! Now is
+  your time for escape!"). It then can't move for a turn or two. Pick **ESCAPE** to try to get out.
 - **Nobody gets left behind.** A dead worker has to be **CARRIED** by a living one before the team can run.
   Carrying slows the carrier and lowers the escape chance.
-- **The slasher isn't one of your cards.** Its health and ANGER sit on the plate above it.
 - **Health is a condition, not a number**, as in the doc: CRITICAL, HURT, SCATHED, STABLE, OK, SATED,
   OVERSATED (percent ranges from the doc; the gold stripe is health above 100%).
-- **The chopper.** Captain Jim's *Helicopter Escape* lands after 5 turns and gets everyone out, bodies
-  included, as long as someone who can carry a body is still alive.
-- **Skill checks.** Mel's *Fuel Skill Check* and John's *Battery Skill Check* are timing mini-games: press when
-  the needle is in the green.
+- **The heli.** Captain Jim's *Helicopter Escape* lands after 5 turns and gets everyone out, bodies included, as
+  long as someone who can carry a body is still alive.
+- **Generator checks**, as in SlashCo VR:
+  - Mel's *Fuel Skill Check*: the needle drifts while he pours. Hold Q / ← or E / → to keep it out of the red
+    until the can is empty.
+  - John's *Battery Skill Check*: press when the clamps line up with the terminals, or the generator shocks him.
 - The battle log follows the doc's *Battle Dialogue* example ("John looks at Trollge… Trollge will scratch
   Captain Jim next!", "Mel survives on the edge of life!", "John picks up Mel's body! John's speed decreases!").
 
@@ -49,8 +71,8 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
   less brave before the fight even starts.
 - **Slow Walker, Fast Runner.** At 80 ANGER its speed jumps from 12 to 77: it moves first, comes back around for a
   second attack after everyone, marks someone SEEN every turn, and it's much harder to outrun. Escape before
-  that happens, or hold on until the chopper.
-- John's *Hyperceptive* shows what's coming on the target's card: **STARE**, **SCRATCH** or **TARGET**.
+  that happens, or hold on until the heli.
+- John's *Hyperceptive* flags what's coming on the target's badge: **STARE**, **SCRATCH** or **TARGET**.
 - Mysti's *Tactical Stab* is "extremely effective against Trollge".
 
 ### Sid [CONSIDERABLE]
@@ -58,7 +80,7 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 - **ANGER** rises every turn and whenever he's hurt, and he hits harder the angrier he gets. From 60 he follows
   his move with a second attack every turn. At 80 he draws his Desert Eagle and can no longer eat cookies to
   calm down. If anyone on your team eats a Cookie, his ANGER jumps by 35 (METH Addict).
-- GUARD whoever John marks as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
+- GUARD whoever John flags as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
 
 ![Escaping](docs/screenshot-escape.png)
 
@@ -88,7 +110,7 @@ Against Trollge, someone dies in most casual battles.
   - *Exterminate*: slashers can't be killed, so the 8% "instant elimination" drops it straight to BARELY
     STANDING. Otherwise it's a heavy hit. Either way, she takes +50% damage this turn and next.
   - *Hidden Documents* works 85% of the time. It shows the slasher's exact numbers and one secret, and a win pays
-    +20 CREDITS and +50% EXP (the end screen shows EXP).
+    +20 CREDITS and +50% EXP (the extraction report shows EXP).
   - *Deity Swindler*: she applies the **DEATHWARD** (one in the bag). For 3 turns nobody on the team can die.
   - *First Responder* heals a teammate to 50 (SCATHED) the first time they reach CRITICAL.
   - *Balkan Warrior* skips the Balkan Boost crash. *Need For Revenge* only matters against The Watcher.
@@ -96,14 +118,14 @@ Against Trollge, someone dies in most casual battles.
   - *Static Stare* lasts until the end of the next turn, and SEEN lasts 3 turns.
   - Its speed at 80 ANGER is from the doc ("Spd: 12 -> 77"). Acting a second time each turn is my reading of
     "massively increases SPEED": with one attack a turn it couldn't threaten four workers, especially with the
-    chopper's 5-turn guaranteed escape.
+    heli's 5-turn guaranteed escape.
   - Trollge's HP isn't in the doc; it has 4000 ("Health: Good"). Wounds anger it less than Sid, so its ANGER
     mostly comes from time and from workers caught moving under its stare.
 - **Captain Jim.** His *Burner Phone* hits once but hard, and sometimes rings (NOISE). *Proxy Locator* is an
   on/off switch. *Bear Trap* stops the attack it catches. *Confidential Documents* shows the slasher's exact
   numbers and adds +10% team crit. *Full Blood Aussie* halves the ANGER his actions cause and makes items 30%
   stronger on him.
-- **Mel, John, Mysti and Captain Jim's teal bar is STAMINA.** It pays for skills and refills a little each turn
+- **Mel, John, Mysti and Captain Jim's battery is STAMINA.** It pays for skills and refills a little each turn
   and when guarding.
 - **Numbers the doc describes in words** ("slightly", "drastically", "a short number of turns") are turned
   into values in `data.js` and tuned with the simulator.
@@ -123,15 +145,17 @@ Against Trollge, someone dies in most casual battles.
 
   Nobody is cut out of their picture: each worker keeps the background they were captured against, softened and
   darkened so the face reads first, and posterized into the black / grey / white style of the doc's art (red
-  stays red: Jim's goggles, Mysti's beret). In the game the edges dissolve into an OMORI-style mood backdrop, the
-  whole card takes on the mood's colour (yellow HAPPY, blue AFRAID, red CRITICAL…), and effects go on top: sweat,
-  blood, cracks, Zzz. Mel's no-glasses face (after *Toss Glasses*) and John's sleeping face (*Nap*) are edited
-  versions.
+  stays red: Jim's goggles, Mysti's beret). On the ID badge, the photo's edges dissolve into a mood backdrop, the
+  whole photo takes on the mood's colour (yellow HAPPY, blue AFRAID, red CRITICAL…), and effects go on top:
+  sweat, blood, cracks, Zzz. Mel's no-glasses face (after *Toss Glasses*) and John's sleeping face (*Nap*) are
+  edited versions.
 - **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head
   wobbles on its skinny body". It freezes when it stares, its eyes glow red once it's a Fast Runner, and it folds
   up when weakened.
 - **The hallway and Sid** are drawn in code (`js/art.js`) as dithered pixel art at 2x. Sid is drawn to the
   proportions of the in-game screenshot in `assets/source/sid_reference.png`.
+- **Type:** Saira Stencil One for the stencilled headings, Barlow Condensed for labels, VT323 for the radio and
+  readouts. All three are bundled, so the game still works offline.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless
   pillow`, then `python3 tools/make_images.py`.
 
@@ -139,11 +163,11 @@ Against Trollge, someone dies in most casual battles.
 
 ```
 index.html            the page
-css/style.css         the HUD (laid out on the 1280x960 OMORI template)
+css/style.css         the monitor-room HUD (a 1280x960 stage, scaled to fit)
 js/data.js            all stats, skills, items and tuning  ← edit this
 js/battle.js          the turn engine (no DOM; also runs in Node)
-js/ui.js              HUD, menus, targeting, animations, skill checks
-js/art.js, pixel.js   hallway, Sid, Trollge's moving head, icons, banners, portrait cards
+js/ui.js              HUD, menus, targeting, animations, generator checks
+js/art.js, pixel.js   hallway, Sid, Trollge's moving head, icons, portrait cards
 js/images.js          portraits and sprites (generated)
 js/audio.js           synthesized sound effects
 js/main.js            title → battle → end loop

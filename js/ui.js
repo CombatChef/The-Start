@@ -359,7 +359,6 @@
     let fx = [];
     let fade;
     if (u.id === 'mel' && u.flags.glassesOff) variant = 'mel_noglasses';
-    if (u.mood) variant = `${u.id}_${u.mood}`; // Purpl Lady's face: HAPPY, ANGRY or SAD
     if (u.ghost) {
       mood = 'ghost';
       if (u.status.phasing) fade = 0.28;
@@ -1774,7 +1773,7 @@
       ${HELP_FOE[enemyId()] || ''}
       ${
         has('purpl')
-          ? "<p><b>PURPL LADY'S MOODS.</b> Every turn she feels <b>HAPPY</b>, <b>ANGRY</b> or <b>SAD</b>, and her face shows it. Her <b>HEX</b> changes with it: HAPPY calms the slasher down and heals everyone a little, ANGRY does real magic damage and lowers its DEF, SAD lowers its ATK and SPD.</p>"
+          ? "<p><b>PURPL LADY'S MOODS.</b> Every turn she feels <b>HAPPY</b>, <b>ANGRY</b> or <b>SAD</b> (it's on her profile). Her <b>HEX</b> changes with it: HAPPY calms the slasher down and heals everyone a little, ANGRY does real magic damage and lowers its DEF, SAD lowers its ATK and SPD.</p>"
           : ''
       }
       ${

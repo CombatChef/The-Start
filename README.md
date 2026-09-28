@@ -66,10 +66,8 @@ strongest swap, especially against Trollge (see the numbers below), though she's
 
 ### Purpl Lady's moods
 
-![Purpl Lady happy, angry and sad](docs/purpl-moods.png)
-
-Every turn she feels **HAPPY**, **ANGRY** or **SAD** (*Mood Swings*). Her face on her profile shows it (a smile,
-gritted teeth under furrowed brows, or a frown and a tear), and her Hex (her ATTACK) changes with it:
+Every turn she feels **HAPPY**, **ANGRY** or **SAD** (*Mood Swings*). Her profile shows it as a tag, and her Hex
+(her ATTACK) changes with it:
 
 - **HAPPY**: the slasher calms down (ANGER -8) and every worker heals a little.
 - **ANGRY**: real MAGIC damage, and the slasher's DEF drops 20% for 2 turns.
@@ -256,8 +254,7 @@ means not hitting him while he's curled up.
   - Mel and John come from the SlashCo VR lobby-NPC screenshot.
   - Mysti is from her in-game render (red beret, white mask).
   - Captain Jim is from his in-game render.
-  - Purpl Lady is from her new reference, cropped to her head and shoulders (glasses, violet streaks). Her HAPPY,
-    ANGRY and SAD faces are the same portrait with the mouth and brows redrawn.
+  - Purpl Lady is from her new reference, cropped to her head and shoulders (glasses, violet streaks).
   - Trollge's title-screen card is its head, Dolphin Man's is his wailing head, and Sid's red card is the art
     from the doc.
 

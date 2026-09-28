@@ -15,7 +15,6 @@ effects on top, so only a few source edits live here:
 
     mel_noglasses   - Mel after Toss Glasses (glasses painted out)
     john_asleep     - John during Nap (eyes closed)
-    purpl_happy / purpl_sad / purpl_angry - Purpl Lady's three moods (mouth and brows redrawn)
     sid / sid_armed - Sid's card from the doc, with and without the Desert Eagle
     trollge         - Trollge's head, for the title screen
 
@@ -193,63 +192,11 @@ def purples(min_s=120, min_v=110):
 
 def purpl():
     # Purpl Lady: black hair with violet streaks, glasses, one violet eye. She sits on the bench
-    # by default and can swap in for anyone on the title screen. Every turn she feels HAPPY,
-    # ANGRY or SAD, and her face changes with it: the edits below redraw her mouth and brows on
-    # the source, then everything is posterized with exactly the same shading as the original.
+    # by default and can swap in for anyone on the title screen.
     bgr = load('purpl.webp')
     # Her whole head, the hand at her glasses and her shoulders, not just the face.
     crop, pcts, focus = (150, 24, 550, 424), (28, 54, 80), (0.49, 0.58, 0.42, 0.5)
-    palette = GRAY + VIOLETS
-    save(poster(bgr, crop, pcts, focus, clahe=1.4, accent=purples()), palette, 'purpl')
-    cuts = poster.last_cuts
-
-    ink = (58, 34, 44)  # the art's dark violet-grey line work (BGR)
-
-    def clean(img, boxes):
-        m = np.zeros(img.shape[:2], np.uint8)
-        for x0, y0, x1, y1 in boxes:
-            cv2.rectangle(m, (x0, y0), (x1, y1), 255, -1)
-        return cv2.inpaint(img, m, 6, cv2.INPAINT_TELEA)
-
-    def line(img, pts, t):
-        cv2.polylines(img, [np.array(pts, np.int32)], False, ink, t, cv2.LINE_AA)
-
-    def arc(img, x0, x1, y, depth, t):
-        """From (x0, y) to (x1, y), bowing down by `depth` pixels in the middle (up if negative)."""
-        xs = np.linspace(x0, x1, 24)
-        ys = y + depth * (1 - ((xs - (x0 + x1) / 2) / ((x1 - x0) / 2)) ** 2)
-        line(img, list(zip(xs.astype(int), ys.astype(int))), t)
-
-    mouth, sweat = (314, 312, 370, 334), (386, 312, 404, 332)
-
-    # HAPPY: a big open smile, and a relaxed brow over the eye.
-    img = clean(bgr.copy(), [mouth, sweat])
-    smile = np.array([(318, 318), (366, 318), (360, 330), (342, 338), (324, 330)], np.int32)
-    cv2.fillPoly(img, [smile], (70, 40, 60))
-    cv2.polylines(img, [smile], True, ink, 4, cv2.LINE_AA)
-    cv2.ellipse(img, (342, 332), (9, 4), 0, 0, 360, (150, 120, 210), -1)
-    arc(img, 396, 452, 214, -6, 7)
-    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_happy')
-
-    # SAD: a frown, the brow lifted at the inner end, and a tear.
-    img = clean(bgr.copy(), [mouth])
-    arc(img, 322, 362, 330, -9, 6)
-    line(img, [(398, 204), (425, 209), (452, 218)], 7)
-    cv2.ellipse(img, (438, 270), (5, 8), 0, 0, 360, (255, 245, 235), -1)
-    cv2.ellipse(img, (438, 270), (5, 8), 0, 0, 360, ink, 2, cv2.LINE_AA)
-    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_sad')
-
-    # ANGRY: gritted teeth, and both brows furrowed down toward the nose.
-    img = clean(bgr.copy(), [mouth, sweat])
-    x0, y0, x1, y1 = 318, 318, 366, 331
-    cv2.rectangle(img, (x0, y0), (x1, y1), (250, 250, 252), -1)
-    cv2.rectangle(img, (x0, y0), (x1, y1), ink, 4)
-    for x in (330, 342, 354):
-        cv2.line(img, (x, y0), (x, y1), ink, 2)
-    cv2.line(img, (x0, (y0 + y1) // 2), (x1, (y0 + y1) // 2), ink, 2)
-    line(img, [(396, 224), (424, 214), (454, 206)], 8)
-    line(img, [(284, 222), (310, 228), (334, 236)], 8)
-    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_angry')
+    save(poster(bgr, crop, pcts, focus, clahe=1.4, accent=purples()), GRAY + VIOLETS, 'purpl')
 
 
 def sid():

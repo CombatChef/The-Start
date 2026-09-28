@@ -767,8 +767,8 @@
       this.refresh();
     }
 
-    // Mood Swings: every turn Purpl Lady feels HAPPY, ANGRY or SAD (her face shows it, and her
-    // Hex changes with it).
+    // Mood Swings: every turn Purpl Lady feels HAPPY, ANGRY or SAD (a tag on her profile shows
+    // it, and her Hex changes with it).
     async moodSwing(u) {
       if (!u.has('moodSwings') || u.dead || u.status.phasing) return;
       u.mood = this.rng.pick(this.D.passives.moodSwings.moods);

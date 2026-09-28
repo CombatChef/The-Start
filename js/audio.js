@@ -1,14 +1,15 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * audio.js — the sound. Effects and Dolphin Man's wail are synthesized, and so are the two
- * music beds that crossfade: AMBIENCE (a low hallway drone with things clanking far away) and
- * CHASE (a pounding pulse for desperate moments: the slasher weakened, the team running for
- * it, or about to lose). M toggles mute.
+ * audio.js — the sound. M toggles mute.
  *
- * Your own music plays instead, exactly as it is, from audio files:
- *  - picked in the game (MUSIC on the title screen). They stay in this browser.
- *  - or put in assets/audio/: slashco.mp3 (one file: the chase starts at 2:22, like the
- *    SlashCo ambience video), or ambience.mp3 + chase.mp3. Also wail.mp3. (.ogg works too.)
+ * MUSIC is SlashCo VR's soundtrack (assets/audio/, chosen in data.js `music`): each slasher's
+ * battle theme (AMBIENCE) and desperate theme (CHASE: the slasher weakened, the team running
+ * for it, or about to lose), which crossfade; a sting for the slasher's danger level as a fight
+ * starts; and a track for escaping or dying at the end. Files picked in the game (MUSIC on the
+ * title screen) replace the battle themes, and stay in this browser. If a file can't play,
+ * a synthesized version stands in.
+ *
+ * EFFECTS and Dolphin Man's wail are synthesized.
  */
 (function (root) {
   'use strict';
@@ -31,7 +32,6 @@
       master = ctx.createGain();
       master.gain.value = 0.16;
       master.connect(ctx.destination);
-      probeFolder();
       applyMusic();
     }
     if (ctx.state === 'suspended') ctx.resume();
@@ -250,7 +250,9 @@
   const LEVEL = { ambience: 0.5, chase: 1 };
   const FILE_VOLUME = 0.4; // your own music
   const FADE = 1.6; // seconds
-  const levelOf = (name) => (muted ? 0 : TRACKS[name] ? FILE_VOLUME : LEVEL[name]);
+  // How loud a bed plays: a file at its own volume (data.js evens the soundtrack out), or the
+  // synthesized one.
+  const levelOf = (tr, name) => (muted ? 0 : tr ? (tr.volume != null ? tr.volume : FILE_VOLUME) : LEVEL[name]);
 
   // Things far down the hallway, now and then: metal clanking, a heavy thud, a door creaking.
   const FAR = {
@@ -442,19 +444,52 @@
     };
   }
 
-  // ------------------------------------------------------------------ your own music
-  // A track is { src, from, to }: the part of an audio file it loops over (seconds; `to` null
-  // means to the end). Played as it is: only the volume fades in and out.
-  const TRACKS = { ambience: null, chase: null, wail: null };
+  // ------------------------------------------------------------------ files
+  // A track is { src, from, to, volume }: the part of an audio file a bed loops over (seconds;
+  // `to` null means to the end). Played as it is: only the volume fades in and out.
+  const MUSIC = SC.DATA && SC.DATA.music;
+  const TRACKS = { ambience: null, chase: null, wail: null }; // files picked in the game
   const CHASE_AT = 142; // 2:22, where the chase starts in the SlashCo ambience video
-  let source = { kind: 'built-in', label: '', chaseAt: CHASE_AT };
+  let source = { kind: MUSIC ? 'soundtrack' : 'built-in', label: '', chaseAt: CHASE_AT };
+  let theme = 'default'; // whose themes play: a slasher's id, or 'default'
+  const failed = new Set(); // soundtrack files that wouldn't play
+
+  function fileInfo(file) {
+    return (MUSIC && MUSIC.files[file]) || {};
+  }
+
+  // What the bed `name` ('ambience' | 'chase') plays right now, or null for the synthesized one.
+  function trackFor(name) {
+    if (TRACKS[name]) return TRACKS[name];
+    if (!MUSIC) return null;
+    const th = MUSIC.themes[theme] || MUSIC.themes.default;
+    const file = th && th[name];
+    if (!file || failed.has(file)) return null;
+    return { src: MUSIC.dir + file, file, volume: fileInfo(file).volume };
+  }
+  const keyOf = (name, tr) => (tr ? `${tr.src}#${tr.from || 0}-${tr.to == null ? '' : tr.to}` : 'synth:' + name);
+
+  // Keep the current slasher's files loading ahead of time, so a theme starts on cue.
+  const preloaded = {};
+  function preload(file) {
+    if (!file || preloaded[file] || !root.Audio) return;
+    const a = new root.Audio();
+    a.preload = 'auto';
+    a.src = MUSIC.dir + file;
+    preloaded[file] = a;
+  }
 
   // Played through an <audio> element (light on memory), or decoded with Web Audio when the page
   // won't play it that way (see bufferBed).
   function trackBed(tr) {
     let level = 0;
     let inner = mediaBed(tr, () => {
-      if (!tr.blob || !ctx) return;
+      if (!tr.blob) {
+        // A soundtrack file that won't play: the synthesized music stands in.
+        if (tr.file) failed.add(tr.file);
+        return restartMusic();
+      }
+      if (!ctx) return;
       inner.stop();
       inner = bufferBed(tr);
       inner.fade(level, 0.3);
@@ -470,10 +505,23 @@
     };
   }
 
-  function mediaBed(tr, failed) {
+  // Fade an <audio> element's volume (it has no gain to ramp).
+  function fadeVolume(a, level, secs, done) {
+    clearInterval(a.fading);
+    const v0 = a.volume;
+    const t0 = performance.now();
+    a.fading = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / (secs * 1000));
+      a.volume = v0 + (level - v0) * k;
+      if (k < 1) return;
+      clearInterval(a.fading);
+      if (done) done();
+    }, 50);
+  }
+
+  function mediaBed(tr, failedToPlay) {
     const a = new root.Audio();
     const from = tr.from || 0;
-    let fading = null;
     a.preload = 'auto';
     a.loop = !from && tr.to == null;
     a.volume = 0;
@@ -489,24 +537,17 @@
     };
     a.addEventListener('loadedmetadata', () => from && (a.currentTime = from), { once: true });
     a.addEventListener('ended', start);
-    a.addEventListener('error', failed, { once: true });
+    a.addEventListener('error', failedToPlay, { once: true });
     // Keep to its part of the file: back to the start of it at the end of it.
     const watch = tr.to != null ? setInterval(() => a.currentTime >= tr.to - 0.05 && (a.currentTime = from), 40) : null;
     start();
     return {
       fade(level, secs) {
-        clearInterval(fading);
-        const v0 = a.volume;
-        const t0 = performance.now();
-        fading = setInterval(() => {
-          const k = Math.min(1, (performance.now() - t0) / (secs * 1000));
-          a.volume = v0 + (level - v0) * k;
-          if (k >= 1) clearInterval(fading);
-        }, 50);
+        fadeVolume(a, level, secs);
       },
       stop() {
         clearInterval(watch);
-        clearInterval(fading);
+        clearInterval(a.fading);
         a.pause();
       },
     };
@@ -559,7 +600,7 @@
     };
   }
 
-  // A one-off sound from a file (the wail), with the built-in one if the file won't play.
+  // A one-off sound from a picked file (the wail), with the built-in one if it won't play.
   function playOnce(tr, volume, fallback) {
     const a = new root.Audio(tr.src);
     a.volume = volume;
@@ -582,25 +623,52 @@
     if (p && p.catch) p.catch(() => {});
   }
 
-  // How long a file is (seconds), or 0 if it can't be read.
-  function duration(file) {
-    return new Promise((resolve) => {
-      const a = new root.Audio();
-      a.preload = 'metadata';
-      a.addEventListener('loadedmetadata', () => resolve(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
-      a.addEventListener(
-        'error',
-        () =>
-          file.blob
-            ? decode(file.blob).then(
-                (b) => resolve(b.duration),
-                () => resolve(0)
-              )
-            : resolve(0),
-        { once: true }
-      );
-      a.src = file.src;
-    });
+  // ------------------------------------------------------------------ stings and endings
+  // The danger-level sting as a fight starts (the music waits until it's over), and the escape
+  // or death track at the end. One at a time.
+  let shot = null;
+  let hold = 0; // until when (performance.now()) the music waits for a sting
+  let holdTimer = null;
+
+  function stopShot(secs) {
+    if (!shot) return;
+    const a = shot.a;
+    shot = null;
+    fadeVolume(a, 0, secs, () => a.pause());
+  }
+
+  function playShot(file, waitForIt, fallback) {
+    stopShot(0.3);
+    clearTimeout(holdTimer);
+    hold = 0;
+    if (!MUSIC || !file || failed.has(file)) return fallback && fallback();
+    const info = fileInfo(file);
+    const a = new root.Audio(MUSIC.dir + file);
+    a.volume = muted ? 0 : info.volume != null ? info.volume : 1;
+    const me = { a, file };
+    a.addEventListener(
+      'error',
+      () => {
+        failed.add(file);
+        if (shot === me) {
+          shot = null;
+          hold = 0;
+          applyMusic();
+        }
+        if (fallback) fallback();
+      },
+      { once: true }
+    );
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});
+    shot = me;
+    if (!waitForIt) return;
+    const ms = (info.end || 8) * 1000; // where the sound actually ends; the rest is silence
+    hold = performance.now() + ms;
+    holdTimer = setTimeout(() => {
+      hold = 0;
+      applyMusic();
+    }, ms);
   }
 
   // files: [{ name, src }]. One music file: the ambience is everything before `chaseAt` and
@@ -629,46 +697,36 @@
     }
     TRACKS.wail = wailFile ? { src: wailFile.src, blob: wailFile.blob } : null;
     if (wailFile) parts.push(`${wailFile.name} (wail)`);
-    source = { kind: parts.length ? kind : 'built-in', label: parts.join(', '), chaseAt: at };
+    source = { kind: parts.length ? kind : MUSIC ? 'soundtrack' : 'built-in', label: parts.join(', '), chaseAt: at };
     restartMusic();
     return source;
   }
 
-  function clearTracks() {
-    TRACKS.ambience = TRACKS.chase = TRACKS.wail = null;
-    source = { kind: 'built-in', label: '', chaseAt: source.chaseAt };
-    restartMusic();
+  // How long a file is (seconds), or 0 if it can't be read.
+  function duration(file) {
+    return new Promise((resolve) => {
+      const a = new root.Audio();
+      a.preload = 'metadata';
+      a.addEventListener('loadedmetadata', () => resolve(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
+      a.addEventListener(
+        'error',
+        () =>
+          file.blob
+            ? decode(file.blob).then(
+                (b) => resolve(b.duration),
+                () => resolve(0)
+              )
+            : resolve(0),
+        { once: true }
+      );
+      a.src = file.src;
+    });
   }
 
-  // assets/audio/, looked through once the sound is unlocked (unless you picked your own).
-  function probeFolder() {
-    if (!root.Audio || !root.location || !/^(https?|file):$/.test(root.location.protocol)) return;
-    const names = ['slashco', 'ambience', 'chase', 'wail'];
-    const found = {};
-    let left = names.length;
-    const done = () => {
-      if (--left > 0 || source.kind === 'yours') return;
-      const files = (found.ambience ? ['ambience', 'chase', 'wail'] : ['slashco', 'wail']).filter((n) => found[n]).map((n) => found[n]);
-      if (files.length) setTracks(files, CHASE_AT, 'folder');
-    };
-    for (const name of names) {
-      const attempt = (exts) => {
-        if (!exts.length) return done();
-        const a = new root.Audio();
-        a.preload = 'metadata';
-        a.addEventListener(
-          'loadedmetadata',
-          () => {
-            found[name] = { name: `${name}.${exts[0]}`, src: a.src };
-            done();
-          },
-          { once: true }
-        );
-        a.addEventListener('error', () => attempt(exts.slice(1)), { once: true });
-        a.src = `assets/audio/${name}.${exts[0]}`;
-      };
-      attempt(['mp3', 'ogg']);
-    }
+  function clearTracks() {
+    TRACKS.ambience = TRACKS.chase = TRACKS.wail = null;
+    source = { kind: MUSIC ? 'soundtrack' : 'built-in', label: '', chaseAt: source.chaseAt };
+    restartMusic();
   }
 
   // Files picked in the game are kept in this browser (IndexedDB), never uploaded anywhere.
@@ -725,31 +783,38 @@
     }
   }
 
-  const beds = {};
+  // ------------------------------------------------------------------ the music beds
+  const beds = {}; // by track key
   const stopTimers = {};
   let wanted = null; // what should be playing: 'ambience' | 'chase' | null
-  let playing = null;
+  let playing = null; // { name, key, tr }
 
   function applyMusic() {
-    if (!ctx || wanted === playing) return;
+    if (!ctx) return; // browsers won't play sound before the first click or key press
+    const tr = wanted ? trackFor(wanted) : null;
+    const key = wanted ? keyOf(wanted, tr) : null;
+    if (playing && key === playing.key) return;
+    if (key && performance.now() < hold) return; // a sting is playing: the music waits for it
     const old = playing;
-    playing = wanted;
-    if (old && beds[old]) {
-      beds[old].fade(0, FADE);
-      clearTimeout(stopTimers[old]);
-      stopTimers[old] = setTimeout(
+    playing = key ? { name: wanted, key, tr } : null;
+    if (old && beds[old.key]) {
+      const k = old.key;
+      beds[k].fade(0, FADE);
+      clearTimeout(stopTimers[k]);
+      stopTimers[k] = setTimeout(
         () => {
-          if (playing === old || !beds[old]) return;
-          beds[old].stop();
-          delete beds[old];
+          if ((playing && playing.key === k) || !beds[k]) return;
+          beds[k].stop();
+          delete beds[k];
         },
         FADE * 1000 + 300
       );
     }
     if (!playing) return;
-    clearTimeout(stopTimers[playing]);
-    if (!beds[playing]) beds[playing] = TRACKS[playing] ? trackBed(TRACKS[playing]) : synthBed(playing);
-    beds[playing].fade(levelOf(playing), FADE);
+    stopShot(1.2); // the end-of-fight track gives way to the music
+    clearTimeout(stopTimers[key]);
+    if (!beds[key]) beds[key] = tr ? trackBed(tr) : synthBed(wanted);
+    beds[key].fade(levelOf(tr, wanted), FADE);
   }
 
   // New tracks: stop what's playing and start again with them.
@@ -773,8 +838,7 @@
         /* sound is optional */
       }
     },
-    // 'ambience', 'chase' or null. Safe to call every frame; it only acts on a change, and
-    // waits for the first click or key press (browsers won't play sound before one).
+    // 'ambience', 'chase' or null. Safe to call every frame; it only acts on a change.
     music(name) {
       if (name === wanted) return;
       wanted = name;
@@ -784,12 +848,42 @@
         /* sound is optional */
       }
     },
+    // Whose battle themes play: a slasher's id, or 'default' (the title screen).
+    theme(id) {
+      if (id === theme) return;
+      theme = id;
+      if (MUSIC) {
+        const th = MUSIC.themes[id] || MUSIC.themes.default;
+        preload(th.ambience);
+        preload(th.chase);
+      }
+      applyMusic();
+    },
+    // A fight starts: the music stops for the sting of this danger level, then comes back.
+    sting(danger) {
+      if (!ensure() || muted) return;
+      if (playing && beds[playing.key]) {
+        const k = playing.key;
+        beds[k].fade(0, 0.4);
+        clearTimeout(stopTimers[k]);
+        stopTimers[k] = setTimeout(() => beds[k] && (!playing || playing.key !== k) && (beds[k].stop(), delete beds[k]), 800);
+        playing = null;
+      }
+      playShot(MUSIC && MUSIC.stings[danger], true);
+    },
+    // The fight is over: escaping or dying.
+    ending(win) {
+      wanted = null;
+      if (ensure()) applyMusic();
+      if (muted) return;
+      playShot(MUSIC && MUSIC.endings[win ? 'win' : 'lose'], false, () => SC.Audio.play(win ? 'win' : 'lose'));
+    },
     get track() {
-      return playing;
+      return playing && playing.name;
     },
     // Your own music (see the top of this file). useFiles takes the files from a file picker.
     useFiles,
-    useBuiltIn() {
+    useSoundtrack() {
       clearTracks();
       return Saved.clear().catch(() => {});
     },
@@ -807,7 +901,8 @@
       } catch (e) {
         /* per-browser convenience only */
       }
-      if (playing && beds[playing]) beds[playing].fade(levelOf(playing), 0.3);
+      if (playing && beds[playing.key]) beds[playing.key].fade(levelOf(playing.tr, playing.name), 0.3);
+      if (shot) shot.a.volume = muted ? 0 : fileInfo(shot.file).volume != null ? fileInfo(shot.file).volume : 1;
       return muted;
     },
     get muted() {

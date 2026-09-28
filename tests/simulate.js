@@ -124,6 +124,12 @@ function smartPolicy(b, rng) {
       cmds[u.id] = { type: 'item', item: healItem(), target: u.id };
       continue;
     }
+    // Anyone can put the DEATHWARD on themselves; Mysti saves it for the whole team.
+    const swindler = b.party.some((w) => w.has('deitySwindler') && !w.dead);
+    if (!u.ghost && !swindler && u.hp <= 30 && b.bag.deathward > 0 && !u.status.deathward && !b.deathward) {
+      cmds[u.id] = { type: 'item', item: 'deathward' };
+      continue;
+    }
     // Trollge: hold still while it stares at you.
     if (u.status.stared && !e.status.stunned && rng() < 0.85) {
       cmds[u.id] = { type: u.ghost ? 'focus' : 'guard' };

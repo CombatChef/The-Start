@@ -1033,17 +1033,48 @@
         needsPassive: 'uncleSink',
         needsVerb: 'drink',
       },
-      // Mysti's Deity Swindler: "apply the DEATHWARD item as a group death protection".
+      // Anyone can apply the DEATHWARD to themselves. Mysti's Deity Swindler ("apply the
+      // DEATHWARD item as a group death protection") makes it cover the whole team.
       deathward: {
         name: 'DEATHWARD',
         rarity: 'Rare',
         price: 0,
-        desc: 'Group death protection, swindled from forces nobody should be messing with.',
-        inBattle: 'Only someone with Deity Swindler can apply it. For 3 turns, a blow that would kill any worker leaves them at 1 health instead.',
+        desc: 'Death protection, swindled from forces nobody should be messing with.',
+        inBattle:
+          'For 3 turns, a blow that would kill whoever applies it leaves them at 1 health instead. Applied by someone with Deity Swindler (Mysti), it covers the whole team.',
         target: 'self',
-        needsPassive: 'deitySwindler',
-        needsVerb: 'apply',
         turns: 3,
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // MUSIC  (SlashCo VR's soundtrack, in assets/audio/: credits in README.md)
+    // ------------------------------------------------------------------
+    music: {
+      dir: 'assets/audio/',
+      // Each slasher's battle theme (ambience) and desperate theme (chase: once it's weakened,
+      // when the team runs for it, and when the team is about to lose). `default` is for every
+      // slasher without its own, and for the title screen.
+      themes: {
+        default: { ambience: 'slashco-hq-low-anger.mp3', chase: 'slashco-hq-chase-overtime.mp3' },
+        trollge: { ambience: 'weather-alert-trollge-ambience.mp3', chase: 'rain-trollge-chase.mp3' },
+      },
+      // As a fight starts, by the slasher's danger level. The battle theme waits for it.
+      stings: { MODERATE: 'moderate.mp3', CONSIDERABLE: 'considerable.mp3', DEVASTATING: 'devastating.mp3' },
+      // When the fight ends.
+      endings: { win: 'escape.mp3', lose: 'death.mp3' },
+      // `volume` evens the tracks out (measured: they're mastered at very different levels), and
+      // `end` is where a one-off track's sound stops (seconds; the rest of the file is silence).
+      files: {
+        'weather-alert-trollge-ambience.mp3': { volume: 0.29 },
+        'rain-trollge-chase.mp3': { volume: 0.15 },
+        'slashco-hq-low-anger.mp3': { volume: 0.8 },
+        'slashco-hq-chase-overtime.mp3': { volume: 1 },
+        'moderate.mp3': { volume: 1, end: 10.1 },
+        'considerable.mp3': { volume: 1, end: 10.7 },
+        'devastating.mp3': { volume: 1, end: 15.2 },
+        'escape.mp3': { volume: 1, end: 16.7 },
+        'death.mp3': { volume: 1, end: 14.7 },
       },
     },
 

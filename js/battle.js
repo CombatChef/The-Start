@@ -125,7 +125,7 @@
       this.foresightTurns = 0;
       this.intel = false; // Captain Jim's Confidential Documents
       this.secrets = false; // Mysti's Hidden Documents
-      this.deathward = null; // Mysti's DEATHWARD: { turns }
+      this.deathward = null; // the DEATHWARD over the whole team (Deity Swindler): { turns }
       this.chopper = null; // Captain Jim's Helicopter Escape: { turns }
       this.spent = {}; // other once-per-battle skills that have been used
       this.failedRuns = 0;
@@ -516,7 +516,7 @@
           await this.firstResponder(t);
           return before - 1;
         }
-        if (this.deathward) {
+        if (this.deathward || t.status.deathward) {
           t.hp = 1;
           await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
           await this.fx({ type: 'ward', target: t.id });
@@ -1497,15 +1497,18 @@
           break;
         }
         case 'deathward': {
-          if (!u.has('deitySwindler')) {
-            this.bag[itemId]++;
-            await this.say(`${u.name} can’t make heads or tails of the DEATHWARD.`);
+          // Anyone can apply it to themselves; Deity Swindler makes it cover the whole team.
+          if (u.has('deitySwindler')) {
+            this.deathward = { turns: it.turns };
+            await this.fx({ type: 'ward', target: u.id, all: true });
+            await this.say(`${u.name} applies the DEATHWARD. “THESE are the forces you are choosing to mess with?”`);
+            await this.say(`The whole team is protected from death for ${it.turns} turns!`, { tone: 'buff' });
             break;
           }
-          this.deathward = { turns: it.turns };
-          await this.fx({ type: 'ward', target: u.id, all: true });
-          await this.say(`${u.name} applies the DEATHWARD. “THESE are the forces you are choosing to mess with?”`);
-          await this.say(`The whole team is protected from death for ${it.turns} turns!`, { tone: 'buff' });
+          u.status.deathward = { turns: it.turns };
+          await this.fx({ type: 'ward', target: u.id });
+          await this.say(`${u.name} applies the DEATHWARD.`);
+          await this.say(`${u.name} is protected from death for ${it.turns} turns!`, { tone: 'buff' });
           break;
         }
         default:
@@ -2545,6 +2548,7 @@
         await expire(u, 'stared', `${n} looks away from ${u.name}.`);
         await expire(u, 'seen', `${n} loses sight of ${u.name}.`);
         await expire(u, 'exposed', `${u.name} is back on guard.`);
+        await expire(u, 'deathward', `${u.name}’s DEATHWARD fades…`);
         await expire(u, 'poison');
         await expire(u, 'asleep');
         await expire(u, 'phasing');

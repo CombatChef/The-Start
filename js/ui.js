@@ -445,7 +445,7 @@
     if (b.hunted() === u) tags.push({ t: 'HUNTED', c: 'bad' });
     if (u.flags.guarding) tags.push({ t: u.flags.barrier ? 'BARRIER' : 'GUARD', c: 'good' });
     if (u.status.exposed) tags.push({ t: 'VULNERABLE', c: 'bad' });
-    if (b.deathward) tags.push({ t: 'DEATHWARD', c: 'good' });
+    if (b.deathward || u.status.deathward) tags.push({ t: 'DEATHWARD', c: 'good' });
     if (u.status.asleep) tags.push({ t: 'ASLEEP', c: 'note' });
     if (u.status.phasing) tags.push({ t: 'PHASING', c: 'note' });
     if (u.status.afraid) tags.push({ t: 'AFRAID', c: 'bad' });
@@ -561,7 +561,7 @@
     chopper.classList.add('heli');
     if (b.chopper) chopper.textContent = 'HELI ' + b.chopper.turns;
     updateEscape();
-    if (SC.Audio) SC.Audio.music(musicFor(b));
+    if (SC.Audio && UI.phase !== 'title') SC.Audio.music(musicFor(b)); // the title plays its own
   }
 
   // The chase music in desperate times: once the slasher is weakened ("Now is your time for
@@ -1778,7 +1778,7 @@
       }
       ${
         has('mysti')
-          ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Her <b>DEATHWARD</b> (in the bag) keeps the whole team from dying for 3 turns. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
+          ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Anyone can apply the <b>DEATHWARD</b> (in the bag) to keep themselves from dying for 3 turns; when Mysti applies it (<b>Deity Swindler</b>), it covers the whole team. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
           : ''
       }
       ${
@@ -1875,7 +1875,10 @@
 
   async function title() {
     UI.phase = 'title';
-    if (SC.Audio) SC.Audio.music('ambience');
+    if (SC.Audio) {
+      SC.Audio.theme('default');
+      SC.Audio.music('ambience');
+    }
     let at = 0;
     for (;;) {
       const o = overlay('screen', 'title', titleHtml());
@@ -1934,12 +1937,12 @@
     }
   }
 
-  // MUSIC: SlashCo VR's own tracks, from files on this device, played exactly as they are.
+  // MUSIC: the SlashCo VR soundtrack, or files from this device, played exactly as they are.
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
   function musicNow() {
     const s = SC.Audio.source;
     if (s.kind === 'yours') return 'YOUR FILES: ' + s.label;
-    if (s.kind === 'folder') return 'FROM assets/audio: ' + s.label;
+    if (s.kind === 'soundtrack') return 'THE SLASHCO VR SOUNDTRACK';
     return 'BUILT-IN (made in the browser)';
   }
   function musicHtml() {
@@ -1947,13 +1950,12 @@
     return `<div class="box">${winBar('SLASHERBOY', 'MUSIC')}
       <div class="help music">
         <p><b>NOW PLAYING:</b> <span id="m-now">${esc(musicNow())}</span></p>
-        <p>Play SlashCo VR's own music, exactly as it is: pick audio files on this device. They stay in this browser and aren't uploaded anywhere.</p>
-        <p><b>ONE FILE</b>, like the SlashCo ambience video: everything before <input id="m-at" value="${at}" size="5" maxlength="6" spellcheck="false"> is the ambience, and everything after it is the chase.</p>
-        <p><b>TWO FILES</b>: the ambience and the chase (the one with "chase" in its name is the chase). A file with "wail" in its name replaces Dolphin Man's wail.</p>
+        <p><b>THE SOUNDTRACK.</b> Trollge fights to <b>Weather Alert</b>, and <b>Rain?</b> plays when things get desperate (Kamija). Every other slasher fights to <b>SlashCo HQ</b>, low anger and chase (zimzbooth). A fight opens with the sting for the slasher's danger level, and ends with <b>Escape</b> or <b>Death</b> (zimzbooth).</p>
         <p>The chase plays in desperate moments: once the slasher is weakened, when the team makes a run for it, and when the team is about to lose.</p>
+        <p><b>YOUR OWN FILES</b> replace the battle themes for every slasher, played exactly as they are. They stay in this browser and aren't uploaded anywhere. <b>One file</b>: everything before <input id="m-at" value="${at}" size="5" maxlength="6" spellcheck="false"> is the ambience, everything after it the chase. <b>Two files</b>: the ambience and the chase (the one with "chase" in its name). A file with "wail" in its name replaces Dolphin Man's wail.</p>
       </div>
       <input type="file" id="m-file" accept="audio/*,video/*" multiple hidden>
-      <button class="go" id="m-pick">PICK FILES</button><button class="go" id="m-built">BUILT-IN</button><button class="go" id="m-done">DONE</button>
+      <button class="go" id="m-pick">PICK FILES</button><button class="go" id="m-built">SOUNDTRACK</button><button class="go" id="m-done">DONE</button>
     </div>`;
   }
   async function showMusic() {
@@ -1980,7 +1982,7 @@
         continue;
       }
       if (i === 1) {
-        await SC.Audio.useBuiltIn();
+        await SC.Audio.useSoundtrack();
         now.textContent = musicNow();
         continue;
       }
@@ -1992,7 +1994,7 @@
   async function showEnd(b) {
     UI.phase = 'end';
     const win = b.outcome === 'win';
-    sfx(win ? 'win' : 'lose');
+    if (SC.Audio) SC.Audio.ending(win); // the ESCAPE or DEATH track
     const lost = b.party.filter((u) => u.dead).map((u) => u.name);
     const o = overlay(
       'screen',
@@ -2080,6 +2082,8 @@
     fit();
     root.addEventListener('resize', fit);
     doc.addEventListener('keydown', onKey);
+    // Browsers only allow sound after a click or a key press: any one will do.
+    doc.addEventListener('pointerdown', () => SC.Audio && SC.Audio.unlock(), true);
 
     SC.Art.hallway().toCanvas($('#bg'));
     loadSquad();
@@ -2151,6 +2155,11 @@
     UI.lastAction = {};
     buildCards();
     placeEnemy();
+    // The slasher's own themes, after the sting for its danger level.
+    if (SC.Audio) {
+      SC.Audio.theme(b.enemy.id);
+      SC.Audio.sting(b.enemyDef.danger);
+    }
     refresh();
   }
 

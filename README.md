@@ -145,30 +145,40 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
 
 ## Music and sound
 
-The music switches between an **ambience** and a **chase**. The chase comes in at desperate moments: once the
-slasher is weakened, when the team makes a run for it (that turn and the next), and when the team is about to
-lose (one worker left standing, everyone left CRITICAL, or two left and both HURT or worse).
+The music is SlashCo VR's soundtrack, in `assets/audio/`:
 
-**SlashCo VR's own music.** The game doesn't ship the game's soundtrack (it's the composers' work; zimzbooth's
-*SlashCo VR Compositions Vol. 1* and Kamija's *SlashCo VR OST V.1* are on Bandcamp). Bring your own copy and the
-game plays it exactly as it is:
+| When | Trollge | Every other slasher |
+| --- | --- | --- |
+| The fight (battle theme) | *Weather Alert (Trollge Ambience)*, Kamija | *SlashCo HQ (Low Anger)*, zimzbooth |
+| Desperate moments (chase) | *Rain? (Trollge Chase)*, Kamija | *SlashCo HQ (Chase, Overtime)*, zimzbooth |
 
-- On the title screen, press **MUSIC** and pick the audio files from your device. They stay in your browser (it
-  remembers them) and aren't uploaded anywhere. This works on the shared page too.
-- **One file**, like the SlashCo ambience video: everything before 2:22 is the ambience and loops; everything
-  from 2:22 on is the chase. The time can be changed in the MUSIC window.
-- **Two files**: the ambience and the chase (the one with "chase" in its name is the chase).
-- A file with "wail" in its name replaces Dolphin Man's wail.
-- Or, when you play from this folder, put them in `assets/audio/`: `slashco.mp3` (one file, split at 2:22), or
-  `ambience.mp3` and `chase.mp3`, and `wail.mp3` (`.ogg` works too).
+- **Desperate moments**: once the slasher is weakened, when the team makes a run for it (that turn and the next),
+  and when the team is about to lose (one worker left standing, everyone left CRITICAL, or two left and both HURT
+  or worse). The themes crossfade.
+- **A fight opens** with the sting for the slasher's danger level: *Moderate*, *Considerable* or *Devastating*
+  (zimzbooth). The battle theme comes in once it's over.
+- **A fight ends** with *Escape* when the team gets out, or *Death* when everyone who could carry a body is gone
+  (zimzbooth).
+- **The title screen** plays *SlashCo HQ (Low Anger)*.
+- The tracks are played as they are, only at different volumes: they're mastered at very different levels, so
+  `data.js` (`music.files`) evens them out. Which track plays when is in `data.js` too (`music.themes`, `stings`,
+  `endings`).
 
-**Built-in sound**, used when you haven't picked any files. It's all synthesized in the browser:
+**Credits.** Kamija: *Weather Alert (Trollge Ambience)* and *Rain? (Trollge Chase)*, from *SlashCo VR OST V.1*
+([Bandcamp](https://kf1t.bandcamp.com/album/slashco-vr-ost-v-1)). zimzbooth: *SlashCo HQ (Low Anger)*, *SlashCo HQ
+(Chase, Overtime)*, *Moderate*, *Considerable*, *Devastating*, *Escape* and *Death*
+([SlashCo VR Compositions Vol. 1](https://zimzbooth.bandcamp.com/album/slashco-vr-compositions-vol-1)). All
+composed for SlashCo VR.
 
-- **Ambience**: a low hallway drone with the strip lights buzzing, and things clanking, thudding and creaking far
-  away.
-- **Chase**: a heartbeat and a pounding bass line.
-- **Dolphin Man's Loud Wail** is modelled on his sound in SlashCo VR gameplay footage: a shrill band of noise
-  around 3.2 kHz that buzzes about 50 times a second and swells again and again, over a hoarse, wobbling scream.
+**Your own music.** On the title screen, **MUSIC** lets you pick audio files on your device to replace the battle
+themes for every slasher, played exactly as they are. They stay in your browser (it remembers them) and aren't
+uploaded anywhere. One file: everything before 2:22 is the ambience (it loops) and everything after is the chase
+(the time can be changed). Two files: the ambience and the chase (the one with "chase" in its name). A file with
+"wail" in its name replaces Dolphin Man's wail. **SOUNDTRACK** goes back to the game's music.
+
+**Sound effects** are synthesized in the browser. Dolphin Man's Loud Wail is modelled on his sound in SlashCo VR
+gameplay footage: a shrill band of noise around 3.2 kHz that buzzes about 50 times a second and swells again and
+again, over a hoarse, wobbling scream. If a music file can't play, a synthesized hallway drone and chase stand in.
 
 **M** mutes everything.
 
@@ -209,7 +219,8 @@ means not hitting him while he's curled up.
     STANDING. Otherwise it's a heavy hit. Either way, she takes +50% damage this turn and next.
   - *Hidden Documents* works 85% of the time. It shows the slasher's exact numbers and one secret, and a win pays
     +20 CREDITS and +50% EXP (the end screen shows EXP).
-  - *Deity Swindler*: she applies the **DEATHWARD** (one in the bag). For 3 turns nobody on the team can die.
+  - **DEATHWARD** (one in the bag): anyone can apply it, and for 3 turns they can't die. *Deity Swindler* makes
+    Mysti's cover the whole team.
   - *First Responder* heals a teammate to 50 (SCATHED) the first time they reach CRITICAL.
   - *Balkan Warrior* skips the Balkan Boost crash. *Need For Revenge* only matters against The Watcher.
 - **Trollge.**
@@ -244,7 +255,7 @@ means not hitting him while he's curled up.
   into values in `data.js` and tuned with the simulator.
 - **Items the doc mentions but doesn't list** are included: *Pocket Sand* (for Mel's *Batter Up*), the *Balkan
   Boost* (from the battle dialogue example), an *Empty Bottle* so Mel's *Uncle Sink* has something to drink, and
-  Mysti's *DEATHWARD*. The *Master Lock 607* is in the bag too. It does nothing, as the doc says.
+  the *DEATHWARD*. The *Master Lock 607* is in the bag too. It does nothing, as the doc says.
 - **Carrying slows even John.** The doc's example has "John's speed decreases!" when he picks up Mel, so
   carrying ignores *Speed Addict*.
 
@@ -288,11 +299,12 @@ js/checks.js          the generator checks' rules (no DOM)
 js/ui.js              HUD, menus, targeting, animations, generator checks, title screen and squad
 js/art.js, pixel.js   hallway, Sid, Trollge and Dolphin Man's moving sprites, portrait cards
 js/images.js          portraits and sprites (generated)
-js/audio.js           sound effects, the wail, the ambience and chase music (built-in or your own files)
+js/audio.js           the music (soundtrack, or your own files) and the synthesized sound effects
 js/main.js            title → battle → end loop
 tests/simulate.js     headless balance and crash test
 tools/make_images.py  builds the portraits and sprites
-assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), portraits, sprites, source images
+assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), the soundtrack (audio/), portraits, sprites,
+                      source images
 ```
 
 SlashCo VR is by Mantibro. This is a fan project.

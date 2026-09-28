@@ -1,7 +1,7 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * art.js — everything drawn in code: the locker hallway, Sid, icons, the FIGHT!/RUN...
- * banners, and the portrait cards (backdrop + portrait + status effects).
+ * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, icons,
+ * the FIGHT!/RUN... banners, and the portrait cards (backdrop + portrait + status effects).
  *
  * Coordinates are in art pixels; the page shows them at 2x (the hallway is 640x480
  * art pixels on a 1280x960 stage).
@@ -558,6 +558,70 @@
   // Where the gun's muzzle and Sid's mouth are, for effects (art pixels in the sprite).
   const SID_POINTS = { cx: 101, muzzle: [220, 67], mouth: [102, 27], head: [102, 20], body: [101, 92], feet: [101, 204], w: SID_W, h: SID_H };
 
+  // ------------------------------------------------------------------ Trollge
+  // Made from its render by tools/make_images.py: a body layer and a separate head layer, so
+  // "the large head wobbles on its skinny body". Rows of the head slide sideways more the
+  // further they are above the neck, which swings it like a heavy pendulum.
+  const TROLL_EYES = {
+    white: [hex('#ffffff'), hex('#b8a8e8')],
+    red: [hex('#ff4040'), hex('#9a1020')],
+    dim: [hex('#8a8098'), hex('#3a3346')],
+  };
+
+  // o: { t (ms), pose: 'idle' | 'stare' | 'fast' | 'glance' | 'lunge' | 'down', eyes: 'white' | 'red' | 'dim' }
+  function trollge(o) {
+    const S = SC.SPRITES.trollge;
+    const layers = spritePix.trollge;
+    const px = new Pix(layers.body.w, layers.body.h);
+    px.blit(layers.body, 0, 0);
+    const head = layers.head;
+    const t = o.t || 0;
+    let amp = Math.sin(t / 430) * 2.6;
+    let dy = Math.round(Math.sin(t / 900) * 0.8);
+    if (o.pose === 'stare') {
+      amp = 0; // it goes perfectly still
+      dy = 0;
+    } else if (o.pose === 'fast') amp = Math.sin(t / 90) * 3.2;
+    else if (o.pose === 'glance') amp = -7;
+    else if (o.pose === 'lunge') amp = 5;
+    else if (o.pose === 'down') {
+      amp = 9 + Math.sin(t / 700);
+      dy = 4;
+    }
+    const [hx, hy] = S.headAt;
+    const span = Math.max(1, S.pivot[1] - hy);
+    const shift = (row) => Math.round(amp * clamp01((S.pivot[1] - row) / span));
+    for (let y = 0; y < head.h; y++) {
+      const dx = shift(hy + y);
+      for (let x = 0; x < head.w; x++) {
+        const i = (y * head.w + x) * 4;
+        if (head.d[i + 3]) px.set(hx + x + dx, hy + y + dy, [head.d[i], head.d[i + 1], head.d[i + 2], 255]);
+      }
+    }
+    // The glints in its big black eyes.
+    const [c0, c1] = TROLL_EYES[o.eyes] || TROLL_EYES.white;
+    for (const [ex, ey] of S.eyes) {
+      const x = hx + ex + shift(hy + ey);
+      const y = hy + ey + dy;
+      if (o.pose === 'stare') {
+        px.rect(x - 1, y - 1, 4, 4, c1);
+        px.rect(x, y, 2, 2, c0);
+      } else {
+        px.rect(x, y, 2, 2, c0);
+        px.set(x + 2, y - 1, c1);
+      }
+    }
+    return px;
+  }
+
+  // Anchor points on the Trollge sprite (in sprite pixels), for effects and targeting.
+  function trollgePoints() {
+    const S = SC.SPRITES.trollge;
+    const b = spritePix.trollge.body;
+    const face = [S.headAt[0] + S.mouth[0], S.headAt[1] + S.mouth[1] - 8];
+    return { w: b.w, h: b.h, head: face, body: S.chest, feet: S.feet, clawL: S.clawL, clawR: S.clawR, muzzle: S.clawR };
+  }
+
   // ------------------------------------------------------------------ icons
   const K = hex('#000000');
   const W = hex('#ffffff');
@@ -719,44 +783,79 @@
     ghost: R(['#05020a', '#1d0f33', '#3b2166', '#5f3d9a']),
     dead: R(['#000000', '#0a0a0a', '#161616', '#222222']),
     slasher: R(['#000000', '#1c0000', '#420000', '#6e0303']),
+    umbra: R(['#000000', '#12051c', '#2c0d42', '#4f1a6e']),
     furious: R(['#050000', '#3d0000', '#8c0000', '#d10a0a']),
     frozen: R(['#00060c', '#0b2a40', '#1f5a80', '#4fa3cf']),
   };
 
+  function loadPix(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const cv = root.document.createElement('canvas');
+        cv.width = img.width;
+        cv.height = img.height;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const px = new Pix(img.width, img.height);
+        px.d.set(ctx.getImageData(0, 0, img.width, img.height).data);
+        resolve(px);
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  // Portraits and sprite layers come from js/images.js (made by tools/make_images.py).
   const portraitPix = {};
+  const spritePix = {};
   function loadPortraits() {
     const srcs = SC.PORTRAITS || {};
+    const sprites = SC.SPRITES || {};
     return Promise.all(
-      Object.keys(srcs).map(
-        (name) =>
-          new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              const cv = root.document.createElement('canvas');
-              cv.width = img.width;
-              cv.height = img.height;
-              const ctx = cv.getContext('2d');
-              ctx.drawImage(img, 0, 0);
-              const data = ctx.getImageData(0, 0, img.width, img.height);
-              const px = new Pix(img.width, img.height);
-              px.d.set(data.data);
-              portraitPix[name] = px;
-              resolve();
-            };
-            img.onerror = () => resolve();
-            img.src = srcs[name];
+      Object.keys(srcs)
+        .map((name) =>
+          loadPix(srcs[name]).then((px) => {
+            if (!px) return;
+            // Full-frame portraits keep their photo background; cut-outs (Sid's doc card,
+            // Trollge's head) are transparent around the figure.
+            px.full = px.d.every((v, i) => i % 4 !== 3 || v === 255);
+            portraitPix[name] = px;
           })
-      )
+        )
+        .concat(
+          Object.keys(sprites).map((name) =>
+            Promise.all([loadPix(sprites[name].body), loadPix(sprites[name].head)]).then(([body, head]) => {
+              if (body && head) spritePix[name] = { body, head };
+            })
+          )
+        )
     );
   }
 
   // Where things sit on each 128x128 portrait, for the status effects.
   const ANCHORS = {
-    mel: { head: [63, 45], brow: [63, 44], cheek: [77, 69], top: [63, 6] },
-    john: { head: [64, 45], brow: [66, 40], cheek: [79, 65], top: [63, 11] },
+    mel: { head: [63, 43], brow: [63, 42], cheek: [78, 69], top: [63, 3] },
+    john: { head: [64, 44], brow: [66, 38], cheek: [79, 64], top: [63, 9] },
+    mysti: { head: [64, 70], brow: [64, 58], cheek: [80, 84], top: [60, 6] },
     purpl: { head: [62, 56], brow: [66, 45], cheek: [74, 68], top: [60, 4] },
     jim: { head: [64, 60], brow: [64, 52], cheek: [79, 82], top: [64, 6] },
     sid: { head: [60, 18], brow: [60, 18], cheek: [66, 30], top: [58, 4] },
+    trollge: { head: [62, 60], brow: [58, 40], cheek: [84, 70], top: [60, 10] },
+  };
+
+  // Full-frame portraits take on the mood's colour, the way OMORI colours a whole card.
+  const TINT = {
+    happy: hex('#ffd84a'),
+    sated: hex('#ffe07a'),
+    afraid: hex('#7aa4ff'),
+    confused: hex('#c08cff'),
+    critical: hex('#ff5a5a'),
+    berserk: hex('#ff8a3a'),
+    furious: hex('#ff5a5a'),
+    sleep: hex('#8a9cff'),
+    frozen: hex('#a6e0ff'),
+    ghost: hex('#c6a6ff'),
   };
 
   const BLOOD = R(['#3d0006', '#7a000c', '#c0101c']);
@@ -818,6 +917,7 @@
     const src = portraitPix[state.variant || state.id];
     const light = state.mood === 'neutral' || state.mood === 'hurt' || state.mood === 'dead' || state.mood === 'drained';
     const ring = state.id === 'sid' ? hex('#ff5a5a') : state.id === 'purpl' ? hex('#d8c2ff') : light ? W : K;
+    const tint = TINT[state.mood];
     if (src) {
       const fade = state.fade == null ? 1 : state.fade;
       for (let y = 0; y < 128; y++) {
@@ -825,10 +925,23 @@
           const i = (y * src.w + x) * 4;
           if (!src.d[i + 3]) continue;
           if (fade < 1 && fade < bayer(x + f, y)) continue; // ghostly fade
+          // A full-frame portrait keeps its own background, but its edges dissolve into the
+          // mood backdrop so the picture sits in the card instead of looking pasted on.
+          let edge = 0;
+          if (src.full) {
+            const ex = Math.abs(x - 63.5) / 64;
+            const ey = Math.abs(y - 63.5) / 64;
+            edge = clamp01((Math.pow(ex ** 5 + ey ** 5, 0.2) - 0.76) / 0.24);
+            if (edge > 1 - bayer(x, y)) continue;
+          }
           let c = [src.d[i], src.d[i + 1], src.d[i + 2], 255];
           if (c[0] === 255 && c[1] === 0 && c[2] === 255) c = ring;
           else if (state.mood === 'dead') c = [c[0] * 0.45, c[1] * 0.45, c[2] * 0.5, 255];
           else if (state.mood === 'drained') c = [c[0] * 0.7, c[1] * 0.7, c[2] * 0.72, 255];
+          else if (tint && src.full) {
+            const a = 0.4 + 0.35 * edge;
+            c = c.map((v, k) => (k === 3 ? 255 : v * (1 - a) + ((v * tint[k]) / 255) * a + tint[k] * 0.12 * a));
+          }
           px.set(x, y, c);
         }
       }
@@ -888,6 +1001,8 @@
   SC.Art = SC.Art || {};
   SC.Art.hallway = hallway;
   SC.Art.sid = sid;
+  SC.Art.trollge = trollge;
+  SC.Art.trollgePoints = trollgePoints;
   SC.Art.icon = icon;
   SC.Art.banner = banner;
   SC.Art.card = card;

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>SlashCo VR Battle</title>
-    <meta name="description" content="A turn-based, OMORI-style battle based on SlashCo VR: Mel, John, Purpl Lady and Captain Jim against Sid." />
+    <meta name="description" content="A turn-based, OMORI-style battle based on SlashCo VR: Mel, John, Mysti and Captain Jim against Trollge (or Sid)." />
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
@@ -13,11 +13,11 @@
         <canvas id="bg" class="px" width="640" height="480"></canvas>
         <div id="flicker"></div>
 
-        <div id="sid-wrap">
-          <canvas id="sid" class="px" width="224" height="210"></canvas>
+        <div id="enemy-wrap">
+          <canvas id="enemy" class="px" width="224" height="210"></canvas>
         </div>
-        <div id="sid-plate">
-          <div class="name">SID</div>
+        <div id="enemy-plate">
+          <div class="name"></div>
           <div class="meter hp"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
           <div class="meter anger"><div class="icon"></div><div class="pill"><div class="fill"></div><div class="txt"></div></div></div>
           <div class="tags"></div>
@@ -56,7 +56,7 @@
 
     <script src="js/data.js"></script>
     <script src="js/pixel.js"></script>
-    <script src="js/portraits.js"></script>
+    <script src="js/images.js"></script>
     <script src="js/art.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/battle.js"></script>

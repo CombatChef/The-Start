@@ -30,19 +30,21 @@
     },
 
     // Slashers never show a percent either; their bar reads the first row whose `upTo` their
-    // health fits under. Keep WEAKENED / BARELY STANDING in step with Sid's `weakenedAt` and
-    // `barelyStandingAt` below.
+    // health fits under. Keep WEAKENED / BARELY STANDING in step with each slasher's
+    // `weakenedAt` and `barelyStandingAt` below.
     slasherHealth: [
       { upTo: 0.12, id: 'BARELY STANDING' },
       { upTo: 0.35, id: 'WEAKENED' },
       { upTo: 0.6, id: 'WOUNDED' },
       { upTo: 0.8, id: 'BRUISED' },
-      { upTo: 1, id: 'UNHEALTHY' }, // Sid's doc health is "Unhealthy", so that is his normal.
+      { upTo: 1, id: null }, // their doc health: "Good" for Trollge, "Unhealthy" for Sid
     ],
 
     // Party order = HUD corners: top-left, top-right, bottom-left, bottom-right.
-    party: ['mel', 'john', 'purpl', 'jim'],
-    enemy: 'sid',
+    // Purpl Lady ('purpl') still works here if you want her back in Mysti's place.
+    party: ['mel', 'john', 'mysti', 'jim'],
+    enemy: 'trollge', // the default fight
+    enemies: ['trollge', 'sid'], // picked on the title screen
 
     // ------------------------------------------------------------------
     // WORKERS
@@ -129,11 +131,11 @@
         weapon: {
           name: 'Burner Phone',
           doc: 'Gets loud often, but it’s a NOKIA… Expect a lot of damage from this thing.',
-          rules: 'One heavy hit. 30% of the time the phone rings mid-swing and makes NOISE (Sid ANGER +5).',
+          rules: 'One heavy hit. 30% of the time the phone rings mid-swing and makes NOISE ({e} ANGER +5).',
           hits: 1,
           power: 0.95,
           verb: 'smacks',
-          line: '{n} smacks Sid with his Burner Phone!',
+          line: '{n} smacks {e} with his Burner Phone!',
           noiseChance: 0.3,
           noiseAnger: 5,
         },
@@ -144,12 +146,114 @@
         skills: ['proxyLocator', 'matthewsAid', 'confidentialDocs', 'bearTrap', 'helicopterEscape', 'zingerBurger'],
         passives: ['stealthCamo', 'grouchBehavior', 'fullBloodAussie'],
       },
+
+      mysti: {
+        name: 'Mysti',
+        title: 'BRAVO MYSTI', // doc: Bravo Team “Mysti”
+        pronouns: { he: 'she', his: 'her', him: 'her' },
+        stats: { atk: 190, def: 93, spd: 34, mag: 0, chm: 120, smt: 150, brv: 200 },
+        health: 'Scarred',
+        spiritualPower: 'None',
+        morals: 'Medium',
+        resource: { name: 'STAMINA', short: 'STA', max: 100 },
+        weapon: {
+          name: 'Knife',
+          doc: 'Retrieved from being stabbed into Trollge. Always causes bleeding upon hit, small chance to parry attacks.',
+          rules: 'One slash that always makes {e} BLEED. 15% chance to parry a close-range attack aimed at her.',
+          hits: 1,
+          power: 0.7,
+          verb: 'slashes',
+          line: '{n} slashes {e} with her Knife!',
+          bleedTurns: 3,
+          parryChance: 0.15,
+          parryLine: '{n} parries with her Knife!',
+          intro: { trollge: 'Mysti grips the Knife she once pulled out of Trollge.' },
+        },
+        armor: {
+          name: 'BRAVO Team Uniform',
+          doc: 'An elite uniform only meant for the best of the best, grants a general stat increase while neutral.',
+          rules: 'All stats +10% while she isn’t AFRAID, CONFUSED, HAPPY or boosted.',
+          neutralUp: 0.1,
+        },
+        skills: ['tacticalStab', 'exterminate', 'phantomClone', 'hiddenDocs'],
+        passives: ['firstResponder', 'deitySwindler', 'balkanWarrior', 'needForRevenge'],
+      },
     },
 
     // ------------------------------------------------------------------
     // SLASHERS
     // ------------------------------------------------------------------
     slashers: {
+      trollge: {
+        name: 'Trollge',
+        title: 'TROLLGE',
+        tags: ['[Umbra]', '[DEVASTATING]'],
+        pronouns: { he: 'it', his: 'its', him: 'it' }, // doc: "a permanent grin on its face"
+        stats: { atk: 110, def: 41, spd: 12, mag: 64, chm: 0, smt: 57, brv: 120 },
+        health: 'Good',
+        spiritualPower: 'Intact',
+        morals: 'Very Low',
+        exp: 300,
+        maxHp: 4000,
+        weakenedAt: 0.35,
+        barelyStandingAt: 0.12,
+        weakenedStun: 2,
+        getsUpAnger: 20,
+        anger: {
+          start: 10,
+          max: 100,
+          perTurn: [4, 7],
+          perDamage: 55, // it shrugs off wounds; being caught moving under its stare is what enrages it
+          charmDivisor: 400,
+          overflow: 80, // Slow Walker, Fast Runner
+          atkBonusPerPoint: 0.005,
+          wildAt: 90,
+          wildChance: 0.2,
+        },
+        // Slow Walker, Fast Runner, from `anger.overflow`: SPEED 77 (doc: "Spd: 12 -> 77"). It moves
+        // first, and so fast (`lap`) that it comes back around for a second attack after everyone.
+        fastRunner: { spd: 77, lap: true },
+        skills: ['staticStare', 'scratch'],
+        passives: ['slowWalkerFastRunner', 'statokineticDissociation'],
+        weapon: {
+          name: 'Claws',
+          doc: 'Kind of like SPEEDRUNNER’s but… Full of darkness and fears. Makes enemies feel AFRAID on hit.',
+          afraidTurns: 2,
+          braveryResist: 100, // BRAVERY over this can shrug the fear off: Mysti 50%, Captain Jim 22%
+        },
+        armor: {
+          name: 'Trollface',
+          doc: 'Not the prettiest thing; a permanent grin on its face definitely is unsettling… And heavy. And the large head wobbles on its skinny body.',
+          unsettling: 110, // on turn 1, a worker is AFRAID with (110 - BRAVERY)% chance: Mel 30%, John 20%
+        },
+        // How often Trollge picks each move (weights). It re-rolls every turn.
+        ai: {
+          unseen: { claws: 50, stare: 50 }, // nobody is SEEN yet
+          seen: { claws: 25, scratch: 60, stare: 15 },
+        },
+        claws: [
+          { text: 'Trollge rakes {t} with its claws!', power: 0.85, crit: 0 },
+          { text: 'Trollge’s stick arm whips across {t}!', power: 0.8, crit: 0.05 },
+          { text: 'Trollge jabs its long claws at {t}!', power: 0.9, crit: 0 },
+        ],
+        scratchLines: ['Trollge scratches {t}! Its stick arms creak…', 'Trollge drags its claws down {t}!'],
+        escapeOverflow: { label: 'Trollge is running fast', value: -10 },
+        secret: 'EXTRA-SECRET: Trollge only sees what moves. Whoever GUARDS holds still: its claws mostly miss them, and its stare can’t catch them.',
+        lines: {
+          intro: 'A grin floats at the end of the hallway…',
+          overflow: ['Trollge’s stick legs start twitching…', 'Slow Walker, Fast Runner! Trollge’s speed massively increases!'],
+          overflowShort: 'FAST',
+          calm: 'Trollge slows back down to a crawl.',
+          barelyStanding: 'Trollge folds up on its stick legs!',
+          dazed: 'Trollge’s head lolls around on its skinny neck…',
+          blocksEscape: [
+            'Trollge’s stick arm reaches across the hallway and blocks the way!',
+            'Trollge is already standing in the doorway, grinning.',
+            'The door won’t budge!',
+          ],
+        },
+      },
+
       sid: {
         name: 'Sid',
         title: 'SID',
@@ -158,6 +262,7 @@
         health: 'Unhealthy',
         spiritualPower: 'None',
         morals: 'None',
+        exp: 100,
         maxHp: 2000,
         weakenedAt: 0.35, // "Sid is weakened! Now is your time for escape!"
         barelyStandingAt: 0.12,
@@ -197,17 +302,28 @@
           armed: { gun: 45, magdump: 35, deagle: 10, claims: 8 }, // 80+ ANGER
           cookieMinAnger: 25,
         },
-        // Basic attacks. `power` multiplies ATK, `crit` adds to crit chance.
+        // Basic attacks. `power` multiplies ATK, `crit` adds to crit chance, `close` ones can
+        // be parried (Mysti's Knife).
         melee: [
-          { text: 'Sid bites {t}…', power: 0.75, crit: 0 },
-          { text: 'Sid slams {t} into a wall!', power: 0.9, crit: 0 },
-          { text: 'Sid throws {t} to the ground, and stomps!', power: 1.0, crit: 0.1 },
-          { text: 'Sid swipes at {t} with his matted claws!', power: 0.8, crit: 0 },
+          { text: 'Sid bites {t}…', power: 0.75, crit: 0, close: true },
+          { text: 'Sid slams {t} into a wall!', power: 0.9, crit: 0, close: true },
+          { text: 'Sid throws {t} to the ground, and stomps!', power: 1.0, crit: 0.1, close: true },
+          { text: 'Sid swipes at {t} with his matted claws!', power: 0.8, crit: 0, close: true },
         ],
         gunAttacks: [
-          { text: 'Sid whips {t} with his gun!', power: 1.1, crit: 0.05 },
+          { text: 'Sid whips {t} with his gun!', power: 1.1, crit: 0.05, close: true },
           { text: 'Sid fires the Desert Eagle at {t}!', power: 1.0, crit: 0.05 },
         ],
+        escapeOverflow: { label: 'Sid has his gun out', value: -5 },
+        secret: 'EXTRA-SECRET: Sid can’t say no to a cookie. Below 80 ANGER he eats them to calm down… and anyone else eating one sets him off.',
+        lines: {
+          overflow: ['Sid has had enough, and draws his gun!'],
+          overflowShort: 'DESERT EAGLE', // tag on the plate from 80 ANGER
+          calm: 'Sid calms down and tucks the Desert Eagle away.',
+          barelyStanding: 'Sid collapses to one knee!',
+          dazed: 'Sid stares at {by} in confusion.',
+          blocksEscape: ['Sid cuts off the escape route!', 'Sid blocks the way!', 'The door won’t budge!'],
+        },
         claimsLines: [
           '“C IS FOR CRANIUM! THAT GOOD ENOUGH FOR ME!”',
           '“ME HEAR THE VENTS TALKING. VENTS SAY YOU TOOK ME COOKIE.”',
@@ -220,7 +336,7 @@
     },
 
     // ------------------------------------------------------------------
-    // SKILLS  (cost = STAMINA for Mel/John, SPIRIT for Purpl Lady)
+    // SKILLS  (cost = STAMINA for workers, SPIRIT for Purpl Lady)
     // ------------------------------------------------------------------
     skills: {
       // ---------------- MEL ----------------
@@ -230,7 +346,7 @@
         target: 'none',
         skillCheck: 'fuel',
         doc: 'Mel is put into a mini skill-check of pouring fuel into a generator; if done correctly, grants 10 CREDITS (20 with Cookie under effect) and slightly increases the teams’ DEFENSE. If he fails the skill check, the fuel canister will fall on his foot, dealing small damage as well as increasing ANGER of the slashers by 5% of their max.',
-        rules: 'Timing mini-game. Hit: +10 credits (20 with Cookie), team DEF +15% for 3 turns. Miss: small damage to Mel, Sid ANGER +5.',
+        rules: 'Timing mini-game. Hit: +10 credits (20 with Cookie), team DEF +15% for 3 turns. Miss: small damage to Mel, {e} ANGER +5.',
         credits: 10,
         creditsWithCookie: 20,
         teamDefUp: 0.15,
@@ -310,7 +426,7 @@
         target: 'none',
         skillCheck: 'battery',
         doc: 'John is put into a mini skill-check of applying a battery into a generator, if done correctly in the limited amount of time, creates an electrical shock to all enemies and slightly increases John’s ATTACK. If he fails the skill check, he will be shocked, dealing light damage to himself.',
-        rules: 'Timing mini-game. Hit: shocks Sid (ignores half his DEF), John ATK +15% for 3 turns. Miss: John takes light damage.',
+        rules: 'Timing mini-game. Hit: shocks {e} (ignores half of its DEF), John ATK +15% for 3 turns. Miss: John takes light damage.',
         power: 1.2,
         defIgnore: 0.5,
         atkUp: 0.15,
@@ -324,7 +440,7 @@
         cost: 30,
         target: 'enemy',
         doc: 'Even in death, you’re still causing problems!  Makes all enemies extremely cold, drastically decreasing defense and speed.',
-        rules: 'Sid is FREEZING: DEF -40% and SPD -40% for 3 turns.',
+        rules: '{e} is FREEZING: DEF -40% and SPD -40% for 3 turns.',
         defDown: 0.4,
         spdDown: 0.4,
         turns: 3,
@@ -334,7 +450,7 @@
         cost: 40,
         target: 'enemy',
         doc: 'Solidifying enough just to hit someone!  Deals massive damage to a single enemy, making them very confused.',
-        rules: 'Massive MAGIC damage (ignores half of DEF). Sid is CONFUSED for 2 turns.',
+        rules: 'Massive MAGIC damage (ignores half of DEF). {e} is CONFUSED for 2 turns.',
         power: 2.0,
         defIgnore: 0.5,
         confuseTurns: 2,
@@ -344,7 +460,7 @@
         cost: 15,
         target: 'none',
         doc: 'A friendly warning of inevitable death!  At the start of a turn, warns all members of the power of the upcoming enemy attack.',
-        rules: 'For 3 turns, reveals how strong Sid’s next attack is. Warned workers take 15% less damage.',
+        rules: 'For 3 turns, reveals how strong {e}’s next attack is. Warned workers take 15% less damage.',
         turns: 3,
         braced: 0.15,
       },
@@ -368,7 +484,7 @@
         toggle: true,
         offName: 'Switch off Proxy Locator',
         doc: 'An obsolete piece of equipment used once by SlashCo Exterminator teams. At the start of a turn, has a small chance to gain a random item, but also makes NOISE, ANGERING enemies often.',
-        rules: 'Switch it on (free to switch off). While on, at the start of every turn: 20% chance to find an item, 60% chance of NOISE (Sid ANGER +6).',
+        rules: 'Switch it on (free to switch off). While on, at the start of every turn: 20% chance to find an item, 60% chance of NOISE ({e} ANGER +6).',
         findChance: 0.2,
         noiseChance: 0.6,
         noiseAnger: 6,
@@ -388,7 +504,7 @@
         target: 'none',
         oncePerBattle: true,
         doc: 'Collect information about the current enemy being fought. Once per battle, works on all enemies.',
-        rules: 'Once per battle. Shows Sid’s exact health and ANGER and how hard every planned attack will hit, for the rest of the battle. Knowing his weak spots: team crit chance +10%.',
+        rules: 'Once per battle. Shows {e}’s exact health and ANGER and how hard every planned attack will hit, for the rest of the battle. Knowing its weak spots: team crit chance +10%.',
         critUp: 0.1,
       },
       bearTrap: {
@@ -396,7 +512,7 @@
         cost: 20,
         target: 'ally',
         doc: 'Set a bear trap at the feet of any ally, if they are targeted by a physical attack, deals large damage to the enemy, and renders them momentarily vulnerable,',
-        rules: 'Lasts 4 turns. When Sid goes for that ally with a physical attack, the trap snaps first: large damage, his attack is stopped, and he is VULNERABLE (DEF -50%) for 2 turns.',
+        rules: 'Lasts 4 turns. When {e} goes for that ally with a physical attack, the trap snaps first: large damage, the attack is stopped, and {e} is VULNERABLE (DEF -50%) for 2 turns.',
         damage: [130, 170],
         vulnerable: 0.5,
         vulnerableTurns: 2,
@@ -424,6 +540,69 @@
         happySpd: 0.25,
         happyCrit: 0.1,
         happyHit: -0.1,
+      },
+
+      // ---------------- MYSTI ----------------
+      tacticalStab: {
+        name: 'Tactical Stab',
+        cost: 35,
+        target: 'enemy',
+        doc: 'Extremely effective against Trollge. Deals massive damage to the target, and causes bleeding, decreases defense, ignores defense, and deals damage equal to 5% of the enemy’s current health.',
+        rules: 'Massive damage that ignores DEF (x1.5 against Trollge), plus 5% of {e}’s current health. {e} BLEEDS, and its DEF drops 25% for 3 turns.',
+        power: 1.0,
+        strongVs: { trollge: 1.5 },
+        currentHp: 0.05,
+        bleedTurns: 3,
+        defDown: 0.25,
+        turns: 3,
+      },
+      exterminate: {
+        name: 'Exterminate',
+        cost: 35,
+        target: 'enemy',
+        doc: 'We’re not playing anymore games… Gulp. Has a very small chance to instantly eliminate an enemy, but leaves you vulnerable for an extra turn after.',
+        rules: 'A heavy strike with an 8% chance to drop {e} straight to BARELY STANDING (slashers can’t be killed). Mysti is VULNERABLE (takes +50% damage) this turn and next.',
+        power: 0.9,
+        chance: 0.08,
+        exposedTurns: 1,
+        exposedDamage: 0.5,
+      },
+      phantomClone: {
+        name: 'Bababooey’s Phantom Clone Extract',
+        short: 'Phantom Clone Extract', // for the skills menu
+        cost: 20,
+        target: 'none',
+        oncePerBattle: true,
+        doc: 'Just a droplet of this will make you want to vanish. Massively increases EVASION for a good number of turns, and significantly increases SPEED for the rest of the game. (Used once per battle.)',
+        rules: 'Once per battle. Mysti: EVASION +45% for 4 turns, SPEED +40% for the rest of the battle, and {e} loses track of her (no longer SEEN).',
+        evaUp: 0.45,
+        evaTurns: 4,
+        spdUp: 0.4,
+      },
+      hiddenDocs: {
+        name: 'Hidden Documents',
+        cost: 15,
+        target: 'none',
+        oncePerBattle: true,
+        doc: 'Attempts to collect extra-secret information about the current enemy being fought. Once per battle, works on all enemies. Grants extra EXP and CREDITS after battle if done.',
+        rules: 'Works 85% of the time (try again if it doesn’t). Shows {e}’s exact health and ANGER, and one extra-secret weakness. After a win: +20 CREDITS and +50% EXP.',
+        chance: 0.85,
+        credits: 20,
+        expBonus: 0.5,
+      },
+
+      // ---------------- TROLLGE ----------------
+      staticStare: {
+        name: 'Static Stare',
+        doc: 'The scariest experience of someone’s life. Stare at an enemy… If they move by any means, anger increases by 20. And marks the enemy with SEEN.',
+        angerUp: 20,
+        seenTurns: 3, // SEEN lasts this many turns
+      },
+      scratch: {
+        name: 'Scratch',
+        doc: 'Not too easy on those stick arms, but does dangerous amounts of damage. Can only hit SEEN enemies.',
+        power: 1.5,
+        crit: 0.05,
       },
 
       // ---------------- SID ----------------
@@ -546,6 +725,36 @@
         angerCaused: 0.5,
         itemBoost: 1.3,
       },
+      // MYSTI
+      firstResponder: {
+        name: 'First Responder',
+        doc: 'Things can get pretty dire out there. Luckily, your team has you! Right...?  The first time any team member reaches CRITICAL health, immediately heals them to SCATHED health. (Once per team member, doesn’t include self.)',
+        healTo: 50,
+      },
+      deitySwindler: {
+        name: 'Deity Swindler',
+        doc: 'THESE are the forces you are choosing to mess with? Didn’t Mauser warn you?  Grants the ability to apply the DEATHWARD item as a group death protection for a short number of turns.',
+      },
+      balkanWarrior: {
+        name: 'Balkan Warrior',
+        doc: 'Biće snijega jedanaestog dana ushićenja. Ne zaboravite da spakujete svoje stvari i skuvate ih srednje pečenja. The after effects of the Balkan boost no longer cripple you.',
+      },
+      needForRevenge: {
+        name: 'Need For Revenge',
+        doc: 'I remember what you did to me. When facing The Watcher, she will only be able to target him. Causes her to face permanent ANGER, and greatly increases ATTACK.',
+        rules: 'Only against The Watcher, who isn’t in this fight.',
+      },
+      // TROLLGE
+      slowWalkerFastRunner: {
+        name: 'Slow Walker, Fast Runner',
+        doc: 'At 80 ANGER or higher, massively increases SPEED and marks a random enemy as SEEN once per turn.',
+      },
+      statokineticDissociation: {
+        name: 'Statokinetic Dissociation',
+        doc: 'When attacking with basic attacks, hit rate is heavily decreased when an enemy hasn’t acted yet.',
+        rules: 'Its Claws hit a worker who hasn’t moved this turn (hasn’t acted yet, or GUARDED) at a third of the usual HIT RATE.',
+        hitMult: 0.35,
+      },
       // SID
       methAddict: {
         name: 'METH Addict',
@@ -578,6 +787,7 @@
         doc: 'A jumbo-sized chocolate chip cookie. Its sugar seems to have been substituted with crystal methamphetamine.',
         inBattle: 'Heals light Damage, increases ATTACK slightly.',
         warning: 'Sid is a METH Addict: eating this raises his ANGER by 35!',
+        warnIf: 'methAddict', // only shown when the slasher has it
         target: 'ally',
         heal: 20,
         atkUp: 0.15,
@@ -633,7 +843,7 @@
         rarity: 'Common',
         price: 5,
         desc: 'Sand. In a pocket. For throwing into eyes.',
-        inBattle: 'Blinds the enemy (HIT RATE -40%) for 2 turns. Mel’s Batter Up turns it into CREDITS, ATTACK and SPEED.',
+        inBattle: 'Blinds {e} (HIT RATE -40%) for 2 turns. Mel’s Batter Up turns it into CREDITS, ATTACK and SPEED.',
         target: 'enemy',
         blind: 0.4,
         turns: 2,
@@ -662,6 +872,19 @@
         inBattle: 'Only someone with Uncle Sink can drink from it: slight healing.',
         target: 'self',
         needsPassive: 'uncleSink',
+        needsVerb: 'drink',
+      },
+      // Mysti's Deity Swindler: "apply the DEATHWARD item as a group death protection".
+      deathward: {
+        name: 'DEATHWARD',
+        rarity: 'Rare',
+        price: 0,
+        desc: 'Group death protection, swindled from forces nobody should be messing with.',
+        inBattle: 'Only someone with Deity Swindler can apply it. For 3 turns, a blow that would kill any worker leaves them at 1 health instead.',
+        target: 'self',
+        needsPassive: 'deitySwindler',
+        needsVerb: 'apply',
+        turns: 3,
       },
     },
 
@@ -675,6 +898,7 @@
       balkanBoost: 1,
       emptyBottle: 1,
       masterLock: 1,
+      deathward: 1,
     },
 
     // Items Purpl Lady can bring back from Phase for ITEMS.
@@ -688,14 +912,14 @@
     // ------------------------------------------------------------------
     escape: {
       base: 3,
-      perHealthLost: 40, // +40% spread over Sid losing all his health
-      weakened: 15, // Sid at or below `weakenedAt`
-      stunned: 25, // Sid can't move this turn
+      perHealthLost: 40, // +40% spread over the slasher losing all its health
+      weakened: 15, // the slasher at or below `weakenedAt`
+      stunned: 25, // the slasher can't move this turn
       chilled: 5,
       confused: 5,
       blind: 5,
-      gunDrawn: -5,
-      speedPerPoint: 0.25, // per point of (team average SPD - Sid SPD)
+      // (each slasher's `escapeOverflow` applies from its overflow ANGER: Sid's gun, Trollge's run)
+      speedPerPoint: 0.25, // per point of (team average SPD - slasher SPD)
       speedMin: -15,
       speedMax: 15,
       perCarried: 12, // "decreases escape chance"
@@ -723,8 +947,8 @@
       afraidSkip: 0.35,
       afraidDef: 0.15,
       confusedSkip: 0.35,
-      sidConfusedFumble: 0.3,
-      bleedPercent: 0.025, // of Sid's max health per turn
+      enemyConfusedFumble: 0.3,
+      bleedPercent: 0.025, // of the slasher's max health per turn
       skillCheck: { baseZone: 0.16, perSmarts: 0.0008, sweepMs: 950, timeLimitMs: 2800 },
     },
   };

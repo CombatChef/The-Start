@@ -22,12 +22,20 @@
   const sfx = (name) => SC.Audio && SC.Audio.play(name);
   const rand = (a, b) => a + Math.random() * (b - a);
 
-  const SLOT = { mel: 'tl', john: 'tr', purpl: 'bl', jim: 'br' };
+  // Party order = HUD corners.
+  const SLOTS = ['tl', 'tr', 'bl', 'br'];
+  const slotOf = (id) => SLOTS[SC.DATA.party.indexOf(id)];
   const CARD_XY = { tl: [28, 8], tr: [1024, 8], bl: [28, 608], br: [1024, 608] };
-  const SID_BOX = { left: 438, top: 252, scale: 2 }; // must match #sid-wrap in the CSS
+  // Where each slasher's sprite sits on the stage (it is drawn at 2x).
+  const ENEMY_BOX = {
+    sid: { left: 438, top: 252 },
+    trollge: { left: 390, top: 262 },
+  };
+  const SCALE = 2;
 
   const UI = {
     battle: null,
+    enemy: SC.DATA.enemy, // the slasher picked on the title screen
     fast: false,
     cards: {},
     frame: 0,
@@ -38,20 +46,26 @@
   let stage;
   let fxLayer;
   let flashEl;
-  let sidWrap;
-  let sidCanvas;
+  let enemyWrap;
+  let enemyCanvas;
   let command;
   let panel;
   let escapeEl;
   let hand;
 
+  const enemyId = () => (UI.battle ? UI.battle.enemy.id : UI.enemy);
+  const enemyDef = () => SC.DATA.slashers[enemyId()];
+  const enemyPoints = () => (enemyId() === 'trollge' ? SC.Art.trollgePoints() : SC.Art.SID_POINTS);
+
   function cardCenter(id) {
-    const [x, y] = CARD_XY[SLOT[id]];
+    const [x, y] = CARD_XY[slotOf(id)];
     return [x + 114, y + 152];
   }
-  function sidPoint(name) {
-    const p = SC.Art.SID_POINTS[name];
-    return [SID_BOX.left + p[0] * SID_BOX.scale, SID_BOX.top + p[1] * SID_BOX.scale];
+  function enemyPoint(name) {
+    const pts = enemyPoints();
+    const p = pts[name] || pts.body;
+    const box = ENEMY_BOX[enemyId()];
+    return [box.left + p[0] * SCALE, box.top + p[1] * SCALE];
   }
   function stageRect(elem) {
     const r = elem.getBoundingClientRect();
@@ -128,11 +142,19 @@
   }
 
   // ------------------------------------------------------------------ battle log
+  // Every worker's and slasher's name gets its own colour in the log.
+  const NAMES = {};
+  for (const [id, d] of Object.entries(SC.DATA.workers).concat(Object.entries(SC.DATA.slashers))) NAMES[d.name] = id;
+  const NAME_RE = new RegExp(
+    '\\b(' +
+      Object.keys(NAMES)
+        .sort((a, b) => b.length - a.length)
+        .join('|') +
+      ')\\b',
+    'g'
+  );
   function colorize(text) {
-    return esc(text).replace(/\b(Purpl Lady|Mel|John|Sid)\b/g, (m) => {
-      const id = m === 'Purpl Lady' ? 'purpl' : m.toLowerCase();
-      return `<b class="n-${id}">${m}</b>`;
-    });
+    return esc(text).replace(NAME_RE, (m) => `<b class="n-${NAMES[m]}">${m}</b>`);
   }
   const Log = {
     skip: false,
@@ -181,7 +203,7 @@
 
   function buildCard(id, enemy) {
     const r = el('div', 'card' + (enemy ? ' enemy' : ''));
-    r.dataset.slot = SLOT[id];
+    r.dataset.slot = slotOf(id);
     r.id = 'card-' + id;
     r.innerHTML = `
       <div class="frame"></div>
@@ -218,22 +240,45 @@
     return c;
   }
 
-  // Sid's health and ANGER, shown above him instead of in a character slot.
+  // The slasher's health and ANGER, shown above it instead of in a character slot.
   function buildPlate() {
-    const r = $('#sid-plate');
+    const r = $('#enemy-plate');
     $('.hp .icon', r).appendChild(iconCanvas('heart', 2));
     $('.anger .icon', r).appendChild(iconCanvas('anger', 2));
-    const S = SC.DATA.slashers.sid;
-    addNotch($('.hp .pill', r), S.weakenedAt, 'Weakened: run!');
-    addNotch($('.anger .pill', r), S.anger.overflow / S.anger.max, 'Desert Eagle');
     UI.plate = {
       root: r,
+      name: $('.name', r),
+      hpPill: $('.hp .pill', r),
+      angerPill: $('.anger .pill', r),
       hpFill: $('.hp .fill', r),
       hpTxt: $('.hp .txt', r),
       angerFill: $('.anger .fill', r),
       angerTxt: $('.anger .txt', r),
       tags: $('.tags', r),
     };
+  }
+
+  // Put the chosen slasher on stage: sprite box, plate name, and the plate's notches.
+  function placeEnemy() {
+    const id = enemyId();
+    const S = enemyDef();
+    const pts = enemyPoints();
+    const box = ENEMY_BOX[id];
+    stage.dataset.enemy = id;
+    enemyCanvas.width = pts.w;
+    enemyCanvas.height = pts.h;
+    Object.assign(enemyWrap.style, {
+      left: box.left + 'px',
+      top: box.top + 'px',
+      width: pts.w * SCALE + 'px',
+      height: pts.h * SCALE + 'px',
+    });
+    const P = UI.plate;
+    P.name.textContent = S.title;
+    P.root.querySelectorAll('.notch').forEach((n) => n.remove());
+    addNotch(P.hpPill, S.weakenedAt, 'Weakened: run!');
+    addNotch(P.angerPill, S.anger.overflow / S.anger.max, S.lines.overflowShort);
+    view().draw(performance.now(), true);
   }
 
   function addNotch(pill, pct, title) {
@@ -335,7 +380,11 @@
       else tags.push({ t: 'NEEDS CARRYING', c: 'bad' });
       return tags;
     }
+    if (u.status.stared) tags.push({ t: 'STARED AT', c: 'bad' });
+    if (u.status.seen) tags.push({ t: 'SEEN', c: 'bad' });
     if (u.flags.guarding) tags.push({ t: u.flags.barrier ? 'BARRIER' : 'GUARD', c: 'good' });
+    if (u.status.exposed) tags.push({ t: 'VULNERABLE', c: 'bad' });
+    if (b.deathward) tags.push({ t: 'DEATHWARD', c: 'good' });
     if (u.status.asleep) tags.push({ t: 'ASLEEP', c: 'info' });
     if (u.status.phasing) tags.push({ t: 'PHASING', c: 'info' });
     if (u.status.afraid) tags.push({ t: 'AFRAID', c: 'bad' });
@@ -350,14 +399,15 @@
     for (const id of u.carrying) tags.push({ t: 'CARRYING ' + b.unit(id).name.toUpperCase(), c: 'info' });
     if (u.ghost && u.res <= 0 && !u.status.phasing) tags.push({ t: 'DRAINED', c: 'bad' });
     if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'info' });
+    if (b.uniformBonus(u)) tags.push({ t: 'NEUTRAL', c: 'info' }); // BRAVO Team Uniform is on
     return tags.concat(buffTags(b, u)).slice(0, 5);
   }
 
-  function sidTags(b) {
+  function enemyTags(b) {
     const s = b.enemy;
     const tags = [];
     if (s.status.stunned) tags.push({ t: 'CAN’T MOVE', c: 'good' });
-    if (s.flags.gun) tags.push({ t: 'DESERT EAGLE', c: 'bad' });
+    if (s.flags.overflow) tags.push({ t: b.enemyDef.lines.overflowShort, c: 'bad' });
     if (s.status.bleed) tags.push({ t: 'BLEEDING', c: 'good' });
     if (s.status.shards) tags.push({ t: 'GLASS', c: 'good' });
     if (s.status.chilled) tags.push({ t: 'FREEZING', c: 'good' });
@@ -365,7 +415,7 @@
     if (s.status.blind) tags.push({ t: 'BLIND', c: 'good' });
     if (s.status.vulnerable) tags.push({ t: 'VULNERABLE', c: 'good' });
     if (s.flags.deagleFocus) tags.push({ t: 'AIMING', c: 'bad' });
-    if (b.intel) tags.push({ t: 'INTEL', c: 'info' });
+    if (b.known()) tags.push({ t: 'INTEL', c: 'info' });
     return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 4);
   }
 
@@ -378,7 +428,9 @@
     if (!b.intentKnown || b.enemyActed || !b.intent) return null;
     const k = b.intent.kind;
     const word = b.intentWord ? b.intentWord + '!' : null;
-    if ((k === 'melee' || k === 'gun') && b.intent.targetId === u.id) return word || 'TARGET';
+    if (k === 'stare' && b.intent.targetId === u.id) return 'STARE';
+    if (k === 'scratch' && b.intent.targetId === u.id) return word || 'SCRATCH';
+    if ((k === 'melee' || k === 'gun' || k === 'claws') && b.intent.targetId === u.id) return word || 'TARGET';
     if (k === 'magdump' && !u.dead && !u.status.phasing) return word || 'ALL';
     if (k === 'claims' && !u.dead && !u.status.phasing) return 'RAMBLE';
     return null;
@@ -417,13 +469,14 @@
     const s = b.enemy;
     const plate = UI.plate;
     plate.hpFill.style.width = (s.hp / s.maxHp) * 100 + '%';
-    plate.hpTxt.textContent = b.healthState(s).id + (b.intel ? ` ${s.hp}/${s.maxHp}` : '');
-    plate.angerFill.style.width = (s.anger / b.sidDef.anger.max) * 100 + '%';
+    plate.hpTxt.textContent = b.healthState(s).id + (b.known() ? ` ${s.hp}/${s.maxHp}` : '');
+    plate.angerFill.style.width = (s.anger / b.enemyDef.anger.max) * 100 + '%';
     plate.angerTxt.textContent = 'ANGER ' + Math.round(s.anger);
-    setTags(plate, sidTags(b));
-    plate.root.classList.toggle('armed', !!s.flags.gun);
-    sidWrap.classList.toggle('rage', s.anger >= b.sidDef.anger.overflow && !s.status.chilled);
-    sidWrap.classList.toggle('chilled', !!s.status.chilled);
+    setTags(plate, enemyTags(b));
+    plate.root.classList.toggle('armed', !!s.flags.overflow);
+    enemyWrap.classList.toggle('rage', !!s.flags.overflow && !s.status.chilled && !s.status.stunned);
+    enemyWrap.classList.toggle('chilled', !!s.status.chilled);
+    enemyWrap.classList.toggle('down', !!s.status.stunned);
     $('#turn-chip').textContent = 'TURN ' + Math.max(1, b.turn);
     $('#credits-chip').textContent = 'CREDITS ' + b.credits;
     const chopper = $('#chopper-chip');
@@ -442,7 +495,7 @@
     $('.pct', escapeEl).textContent = e.blocked ? '--' : e.chance + '%';
     let label = 'ESCAPE CHANCE';
     if (e.blocked) label = e.short || 'NO WAY OUT';
-    else if (b.enemy.flags.weakened) label = 'SID IS WEAKENED — RUN!';
+    else if (b.enemy.flags.weakened) label = `${b.enemyDef.title} IS WEAKENED — RUN!`;
     else if (b.chopper) label = `CHOPPER LANDS IN ${b.chopper.turns} TURN${b.chopper.turns === 1 ? '' : 'S'}`;
     $('.label', escapeEl).textContent = flashReason || label;
     const sub = $('#command .banner.run .sub');
@@ -471,7 +524,7 @@
       `<div class="row"><span>Total (max 95%)</span><span class="v pos">${e.chance}%</span></div>`;
   }
 
-  // ------------------------------------------------------------------ Sid sprite
+  // ------------------------------------------------------------------ slasher sprites
   const SidView = {
     pupils: [
       [0, 0],
@@ -510,19 +563,44 @@
       }
       let pose = 'idle';
       if (s && s.status.stunned) pose = 'down';
-      else if (s && s.flags.gun) pose = 'gun';
+      else if (s && s.flags.overflow) pose = 'gun';
       if (this.override && now < this.until) pose = this.override;
       const px = SC.Art.sid({
         pose,
         breathe: this.breathe,
         pupils: this.pupils,
-        angry: !!s && s.anger >= (b ? b.sidDef.anger.overflow : 80),
+        angry: !!s && s.flags.overflow,
         frame: UI.frame,
       });
-      px.toCanvas(sidCanvas);
-      if (force) sidCanvas.dataset.pose = pose;
+      px.toCanvas(enemyCanvas);
+      if (force) enemyCanvas.dataset.pose = pose;
     },
   };
+
+  // Trollge barely moves: the big head sways on its neck, freezes when it stares, and
+  // jitters once it's running fast.
+  const TrollgeView = {
+    override: null,
+    until: 0,
+    set(pose, ms) {
+      this.override = pose;
+      this.until = performance.now() + ms;
+      this.draw(performance.now(), true);
+    },
+    draw(now, force) {
+      const b = UI.battle;
+      const s = b && b.enemy;
+      let pose = 'idle';
+      if (s && s.status.stunned) pose = 'down';
+      else if (s && s.flags.overflow) pose = 'fast';
+      if (this.override && now < this.until) pose = this.override;
+      const eyes = pose === 'down' ? 'dim' : s && s.flags.overflow ? 'red' : 'white';
+      SC.Art.trollge({ t: now, pose, eyes }).toCanvas(enemyCanvas);
+      if (force) enemyCanvas.dataset.pose = pose;
+    },
+  };
+
+  const view = () => (enemyId() === 'trollge' ? TrollgeView : SidView);
 
   // ------------------------------------------------------------------ effects
   function pop(x, y, text, cls, ms) {
@@ -557,19 +635,36 @@
     setTimeout(() => t.remove(), 220);
   }
   function posOf(id) {
-    if (id === 'sid') return sidPoint('body');
+    if (id === enemyId()) return enemyPoint('body');
     return cardCenter(id);
+  }
+  // Three claw marks raked across a worker's card.
+  function slash(id, big) {
+    const [x, y] = cardCenter(id);
+    const s = el('div', 'slash' + (big ? ' big' : ''), '<i></i><i></i><i></i>');
+    s.style.left = x + 'px';
+    s.style.top = y - 30 + 'px';
+    fxLayer.appendChild(s);
+    setTimeout(() => s.remove(), 520);
+  }
+  // Lean the slasher toward a card for a moment.
+  async function lunge(id, ms, reach) {
+    const [tx, ty] = cardCenter(id);
+    const k = reach || 1;
+    enemyWrap.style.translate = `${(tx - 640) * 0.14 * k}px ${(ty - 430) * 0.08 * k}px`;
+    await T(ms);
+    enemyWrap.style.translate = '';
   }
 
   async function fx(e) {
     const b = UI.battle;
     const card = (id) => UI.cards[id] && UI.cards[id].root;
     switch (e.type) {
-      case 'hitSid': {
+      case 'hitEnemy': {
         refresh();
-        pulse(sidWrap, 'hit', 280);
-        pulse(sidWrap, 'flash', 110);
-        const [x, y] = sidPoint('body');
+        pulse(enemyWrap, 'hit', 280);
+        pulse(enemyWrap, 'flash', 110);
+        const [x, y] = enemyPoint('body');
         pop(x + rand(-70, 70), y - 70 + rand(-50, 30), e.amount, e.crit ? 'crit' : e.kind === 'page' ? 'small' : '');
         if (e.crit) pop(x, y - 190, 'CRITICAL', 'status', 800);
         sfx(e.crit ? 'crit' : 'hit');
@@ -616,11 +711,54 @@
         pulse(card(e.target), 'shield', 450);
         sfx('buff');
         return T(320);
+      case 'ward':
+        refresh();
+        flash('#ffe9a8');
+        for (const u of b.party) if (!u.dead && (e.all || u.id === e.target)) pulse(card(u.id), 'glow', 600);
+        sfx('success');
+        return T(e.all ? 520 : 320);
+      case 'exterminate':
+        flash('#ff2a2a');
+        shake(true);
+        sfx('crit');
+        return T(600);
       case 'guard':
         refresh();
         pulse(card(e.target), 'shield', 450);
         return T(150);
-      case 'sidAttack': {
+      case 'enemyAttack': {
+        if (e.kind === 'stare') {
+          TrollgeView.set('stare', 1600);
+          pulse(stage, 'staring', 1500);
+          pulse(card(e.target), 'stared', 1500);
+          sfx('growl');
+          return T(700);
+        }
+        if (e.kind === 'caught') {
+          flash('#b98cff');
+          pulse(card(e.target), 'hit', 380);
+          sfx('crit');
+          return T(380);
+        }
+        if (e.kind === 'glance') {
+          TrollgeView.set('glance', 500);
+          pulse(card(e.target), 'stared', 700);
+          sfx('whiff');
+          return T(380);
+        }
+        if (e.kind === 'claws' || e.kind === 'scratch' || e.kind === 'lap') {
+          TrollgeView.set(e.kind === 'lap' ? 'fast' : 'lunge', 520);
+          sfx(e.kind === 'scratch' ? 'crit' : 'growl');
+          if (e.kind === 'lap') {
+            enemyWrap.style.translate = `${rand(-90, 90)}px 0px`;
+            await T(140);
+          }
+          const hitting = lunge(e.target, e.kind === 'scratch' ? 240 : 170, e.kind === 'scratch' ? 1.5 : 1);
+          slash(e.target, e.kind === 'scratch');
+          if (e.kind === 'scratch') shake(false);
+          await hitting;
+          return T(90);
+        }
         if (e.kind === 'cookie') {
           SidView.set('cookie', 1500);
           sfx('growl');
@@ -642,29 +780,29 @@
         }
         if (e.kind === 'trapped') {
           const [tx, ty] = cardCenter(e.target);
-          sidWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
+          enemyWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
           await T(150);
-          const [fx0, fy0] = sidPoint('feet');
+          const [fx0, fy0] = enemyPoint('feet');
           pop(fx0, fy0 - 40, 'SNAP!', 'crit', 900);
           shake(false);
           sfx('crit');
           await T(200);
-          sidWrap.style.translate = '';
+          enemyWrap.style.translate = '';
           return T(120);
         }
         const [tx, ty] = cardCenter(e.target);
-        sidWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
+        enemyWrap.style.translate = `${(tx - 640) * 0.14}px ${(ty - 430) * 0.08}px`;
         if (e.kind === 'gun') {
-          const [mx, my] = sidPoint('muzzle');
+          const [mx, my] = enemyPoint('muzzle');
           muzzle(mx, my);
           sfx('gun');
         } else sfx('growl');
         await T(170);
-        sidWrap.style.translate = '';
+        enemyWrap.style.translate = '';
         return T(90);
       }
       case 'shot': {
-        const [mx, my] = sidPoint('muzzle');
+        const [mx, my] = enemyPoint('muzzle');
         const [tx, ty] = cardCenter(e.target);
         const jx = tx + rand(-60, 60);
         const jy = ty + rand(-80, 60);
@@ -685,7 +823,7 @@
         fxLayer.appendChild(bolt);
         setTimeout(() => bolt.remove(), 300);
         flash('#bfe6ff');
-        pulse(sidWrap, 'hit', 280);
+        pulse(enemyWrap, 'hit', 280);
         sfx('zap');
         return T(420);
       }
@@ -695,7 +833,7 @@
         return T(320);
       case 'status': {
         const [x, y] = posOf(e.target);
-        pop(x, y - (e.target === 'sid' ? 150 : 90), e.text, 'status', 900);
+        pop(x, y - (e.target === enemyId() ? 150 : 90), e.text, 'status', 900);
         sfx('debuff');
         return T(240);
       }
@@ -746,7 +884,7 @@
       }
       case 'throw': {
         const [x0, y0] = cardCenter(e.from);
-        const [x1, y1] = sidPoint('head');
+        const [x1, y1] = enemyPoint('head');
         const p = el('div', 'projectile');
         p.style.left = x0 + 'px';
         p.style.top = y0 + 'px';
@@ -782,9 +920,9 @@
         refresh();
         sfx('tick');
         return undefined;
-      case 'sidPose':
+      case 'enemyPose':
         refresh();
-        SidView.draw(performance.now(), true);
+        view().draw(performance.now(), true);
         return undefined;
       default:
         refresh();
@@ -920,7 +1058,8 @@
       };
       const handler = Input.push({
         key(k) {
-          if (k === 'up') move(-cols);
+          if (o.scroll && (k === 'up' || k === 'down')) o.scroll.scrollTop += k === 'up' ? -90 : 90;
+          else if (k === 'up') move(-cols);
           else if (k === 'down') move(cols);
           else if (k === 'left' && cols > 1 && i % cols > 0) move(-1);
           else if (k === 'right' && cols > 1 && i % cols < cols - 1) move(1);
@@ -1001,12 +1140,17 @@
   }
 
   const ACTION_HINTS = {
-    attack: (b, u) =>
-      u.ghost ? `HEX — ${u.def.weapon.name}: no damage, a random debuff on Sid.` : `${u.def.weapon.name}: ${u.def.weapon.hits} hits (the 2nd is less accurate).`,
+    attack: (b, u) => {
+      const W = u.def.weapon;
+      if (u.ghost) return `HEX — ${W.name}: no damage, a random debuff on ${b.en}.`;
+      return `${W.name}: ${W.rules ? b.fill(W.rules) : `${W.hits} hits (the 2nd is less accurate).`}`;
+    },
     skills: (b, u) => `Use a skill. Costs ${u.def.resource.name}.`,
     items: () => 'Use something from the team bag.',
     guard: (b, u) =>
-      u.ghost ? 'FOCUS — gather SPIRIT (+20). Keeps Freaky Doctor running.' : 'Take half damage this turn, recover 20 STAMINA. Acts first.',
+      u.ghost
+        ? 'FOCUS — gather SPIRIT (+20). Keeps Freaky Doctor running.'
+        : `Take half damage this turn, recover 20 STAMINA. Acts first.${b.enemy.id === 'trollge' ? ' Holds still: Trollge can’t catch you moving.' : ''}`,
     carry: () => 'Pick up a dead ally so the team can escape. Slows the carrier.',
     back: () => 'Go back.',
   };
@@ -1061,13 +1205,14 @@
     panel.classList.add('show');
     const opts = entries.map((x) => {
       const right = kind === 'skills' ? `${x.cost} ${x.resource}` : x.count == null ? '' : 'x' + x.count;
-      const e = el('button', 'opt' + (x.enabled ? '' : ' disabled'), `<span>${esc(x.name)}</span><span class="cost">${esc(right)}</span>`);
+      const e = el('button', 'opt' + (x.enabled ? '' : ' disabled'), `<span>${esc(x.short || x.name)}</span><span class="cost">${esc(right)}</span>`);
       list.appendChild(e);
       return { el: e, enabled: x.enabled, x };
     });
     const show = (op) => {
       const x = op.x;
       desc.innerHTML =
+        (x.short ? `<div class="full">${esc(x.name)}</div>` : '') +
         `<div class="doc">${esc(x.doc || '')}</div>` +
         `<div class="rules">${esc(x.rules || '')}</div>` +
         (x.enabled ? '' : `<div class="why">${esc(x.reason || '')}</div>`);
@@ -1090,15 +1235,16 @@
     if (!cands.length) return Promise.resolve(null);
     return new Promise((resolve) => {
       if (kind === 'enemy') {
-        const hint = prompt(title || 'TARGET: SID');
-        hint.textContent = `Sid — ${b.healthState(b.enemy).id}, ANGER ${Math.round(b.enemy.anger)}.`;
-        sidWrap.classList.add('targeted');
-        const [bx, by] = sidPoint('body');
+        const e = b.enemy;
+        const hint = prompt(title || `TARGET: ${b.enemyDef.title}`);
+        hint.textContent = `${e.name} — ${b.healthState(e).id}, ANGER ${Math.round(e.anger)}.`;
+        enemyWrap.classList.add('targeted');
+        const [bx, by] = enemyPoint('body');
         showHand(bx - 170, by - 14);
         const done = (v) => {
           Input.remove(handler);
-          sidWrap.classList.remove('targeted');
-          sidWrap.onclick = null;
+          enemyWrap.classList.remove('targeted');
+          enemyWrap.onclick = null;
           hideHand();
           resolve(v);
         };
@@ -1106,17 +1252,17 @@
           key(k) {
             if (k === 'ok') {
               sfx('select');
-              done('sid');
+              done(e.id);
             } else if (k === 'back') {
               sfx('cancel');
               done(null);
             }
           },
         });
-        sidWrap.onclick = (ev) => {
+        enemyWrap.onclick = (ev) => {
           ev.stopPropagation();
           sfx('select');
-          done('sid');
+          done(e.id);
         };
         return;
       }
@@ -1130,7 +1276,7 @@
         i = (n + cands.length) % cands.length;
         cands.forEach((c, k) => UI.cards[c.id].root.classList.toggle('pick', k === i));
         const c = cands[i];
-        const [x, y] = CARD_XY[SLOT[c.id]];
+        const [x, y] = CARD_XY[slotOf(c.id)];
         showHand(x - 46, y + 150);
         hint.textContent = c.dead ? `${c.name}’s body.` : `${c.name} — ${b.healthState(c).id}.`;
       };
@@ -1177,7 +1323,7 @@
       const act = await actionMenu(b, u, first);
       if (act == null) return null;
       if (act === 'attack') {
-        const t = await pickTarget(b, 'enemy', u, u.ghost ? 'HEX: SID?' : 'ATTACK: SID?');
+        const t = await pickTarget(b, 'enemy', u, `${u.ghost ? 'HEX' : 'ATTACK'}: ${b.enemyDef.title}?`);
         if (t) return { type: 'attack', target: t };
       } else if (act === 'guard') {
         return { type: u.ghost ? 'focus' : 'guard' };
@@ -1211,7 +1357,7 @@
   function setActive(id) {
     for (const k of Object.keys(UI.cards)) {
       UI.cards[k].root.classList.toggle('active', k === id);
-      UI.cards[k].root.classList.toggle('dim', !!id && k !== id && k !== 'sid');
+      UI.cards[k].root.classList.toggle('dim', !!id && k !== id);
     }
   }
 
@@ -1284,42 +1430,67 @@
   }
 
   function lineupHtml() {
-    return '<div class="lineup"><span data-p="mel"></span><span data-p="john"></span><span data-p="purpl"></span><span data-p="jim"></span><span class="vs">VS</span><span data-p="sid"></span></div>';
+    const party = SC.DATA.party.map((id) => `<span data-p="${id}"></span>`).join('');
+    return `<div class="lineup">${party}<span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span></div>`;
   }
   function fillLineup(o) {
     o.querySelectorAll('[data-p]').forEach((s) => {
       const id = s.dataset.p;
-      const look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: id === 'purpl' ? 'ghost' : 'neutral', fx: [] };
+      let look;
+      if (s.dataset.foe) look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: 'umbra', fx: [] };
+      else look = { id, mood: SC.DATA.workers[id].ghost ? 'ghost' : 'neutral', fx: [] };
       const c = SC.Art.card(look).toCanvas();
       c.className = 'px';
       s.replaceWith(c);
     });
   }
 
-  function waitChoice(o, buttons) {
+  // `scroll`: an element the up/down keys scroll instead.
+  function waitChoice(o, buttons, initial, scroll) {
     return new Promise((resolve) => {
       const btns = buttons.map((sel) => $(sel, o));
       const opts = btns.map((b) => ({ el: b, enabled: true }));
-      choose({ opts, columns: opts.length, back: false }).then((i) => resolve(i));
+      choose({ opts, columns: opts.length, back: false, initial, scroll }).then((i) => resolve(i));
     });
   }
 
-  const HELP = `
-    <div class="help">
-      <p><b>GOAL.</b> You can't kill a slasher. Weaken Sid until his bar reads <b>WEAKENED</b>, then pick <b>RUN...</b>. The bar above the buttons shows your odds of getting away (click it for the breakdown).</p>
-      <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the escape chance. Purpl Lady is a ghost: she can't carry anyone, but once Sid is weakened she <b>POSSESSES</b> a body so it walks out on its own.</p>
+  // How-to-play text: the rules every fight shares, plus the chosen slasher's own.
+  const HELP_FOE = {
+    trollge: `
+      <p><b>TROLLGE ONLY SEES WHAT MOVES.</b> When it stares at someone (<b>STARED AT</b>), anything but GUARD counts as moving: they become <b>SEEN</b> and it gets angrier. It can only <b>Scratch</b>, which hits very hard, someone who is SEEN. Its claws mostly miss whoever hasn't moved yet this turn, or is guarding, and every claw hit can leave you AFRAID.</p>
+      <p><b>ANGER.</b> The orange bar on its plate. At <b>80</b>, <b>Slow Walker, Fast Runner</b>: its speed jumps from 12 to 77, it moves first <i>and</i> comes back around after everyone, it marks someone SEEN every turn, and it's much harder to outrun. Get out before that, or hold on.</p>
+      <p><b>READ ITS NEXT MOVE.</b> John's Hyperceptive marks who it goes for: <b>STARE</b>, <b>SCRATCH</b> or <b>TARGET</b>. Captain Jim's Confidential Documents say how hard. GUARD, heal first, or set a Bear Trap. Mysti's Tactical Stab is extremely effective against Trollge.</p>`,
+    sid: `
       <p><b>ANGER.</b> The orange bar on Sid's plate. It rises every turn and whenever he gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
-      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive marks who Sid will hit first (<b>TARGET</b>). Purpl Lady's Foresight, or Captain Jim's Confidential Documents, say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>
+      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive marks who Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
+  };
+  function helpHtml() {
+    const has = (id) => SC.DATA.party.includes(id);
+    return `
+    <div class="help">
+      <p><b>GOAL.</b> You can't kill a slasher. Weaken it until its bar reads <b>WEAKENED</b>, then pick <b>RUN...</b>. The bar above the buttons shows your odds of getting away (click it for the breakdown).</p>
+      <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the escape chance.${
+        has('purpl')
+          ? " Purpl Lady is a ghost: she can't carry anyone, but once the slasher is weakened she <b>POSSESSES</b> a body so it walks out on its own."
+          : ''
+      }</p>
+      ${HELP_FOE[enemyId()] || ''}
+      ${
+        has('mysti')
+          ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Her <b>DEATHWARD</b> (in the bag) keeps the whole team from dying for 3 turns. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
+          : ''
+      }
       <p><b>THE CHOPPER.</b> Captain Jim's Helicopter Escape gets everyone out, bodies included, after 5 turns, as long as someone who can carry a body survives until it lands.</p>
       <p><b>HEALTH</b> is shown as condition, not numbers: CRITICAL, HURT, SCATHED, STABLE, OK, SATED, OVERSATED. The gold stripe is health above 100%.</p>
       <p><b>SKILL CHECKS</b> (Mel's Fuel, John's Battery): press Z / Space, or tap, while the needle is in the green.</p>
       <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · F fast text · M mute. Mouse and touch work everywhere.</p>
     </div>`;
+  }
 
   function showHelp() {
     return new Promise((resolve) => {
-      const o = overlay('help', '', `<div class="box"><h2>HOW TO PLAY</h2>${HELP}<button class="go" id="help-ok">GOT IT</button></div>`);
-      waitChoice(o, ['#help-ok']).then(() => {
+      const o = overlay('help', '', `<div class="box"><h2>HOW TO PLAY</h2>${helpHtml()}<button class="go" id="help-ok">GOT IT</button></div>`);
+      waitChoice(o, ['#help-ok'], 0, $('.help', o)).then(() => {
         closeOverlay('help');
         resolve();
       });
@@ -1328,7 +1499,9 @@
 
   async function title() {
     UI.phase = 'title';
+    let at = 0;
     for (;;) {
+      const S = enemyDef();
       const o = overlay(
         'screen',
         'title',
@@ -1336,17 +1509,30 @@
           <h1>SLASHCO <span class="red">VR</span></h1>
           <h2>TURN-BASED BATTLE</h2>
           ${lineupHtml()}
-          <p>Weaken Sid, then run for it. Nobody gets left behind.</p>
-          <button class="go" id="t-start">START</button><button class="go alt" id="t-help">HOW TO PLAY</button>
+          <p class="foe-tags">${esc(S.title + ' ' + S.tags.join(' '))}</p>
+          <p>Weaken ${esc(S.name)}, then run for it. Nobody gets left behind.</p>
+          <button class="go" id="t-start">START</button><button class="go alt foe" id="t-foe">VS ${esc(S.title)} ▸</button><button class="go alt" id="t-help">HOW TO PLAY</button>
           <div class="keys">Z / Enter: confirm · X / Esc: back · Arrows: move · F: fast text · M: mute</div>
         </div>`
       );
       fillLineup(o);
-      const i = await waitChoice(o, ['#t-start', '#t-help']);
+      at = await waitChoice(o, ['#t-start', '#t-foe', '#t-help'], at);
       if (SC.Audio) SC.Audio.unlock();
-      if (i === 0) {
+      if (at === 0) {
         closeOverlay('screen');
         return;
+      }
+      if (at === 1) {
+        // Next slasher.
+        const list = SC.DATA.enemies;
+        UI.enemy = list[(list.indexOf(UI.enemy) + 1) % list.length];
+        try {
+          root.localStorage.setItem('sc-enemy', UI.enemy);
+        } catch (e) {
+          /* convenience only */
+        }
+        placeEnemy();
+        continue;
       }
       closeOverlay('screen');
       await showHelp();
@@ -1363,14 +1549,15 @@
       win ? 'win' : 'lose',
       `<div class="box">
         <h1>${win ? 'YOU ESCAPED!' : 'NO ONE MADE IT OUT…'}</h1>
-        <h2>${win ? `A SUCCESSFUL ESCAPE! ${esc(b.partyNames().toUpperCase())} WIN!` : 'SID GOT EVERYONE WHO COULD CARRY A BODY.'}</h2>
+        <h2>${win ? `A SUCCESSFUL ESCAPE! ${esc(b.partyNames().toUpperCase())} WIN!` : `${esc(b.enemyDef.title)} GOT EVERYONE WHO COULD CARRY A BODY.`}</h2>
         <div class="stats">
           <span>Turns</span><span>${b.turn}</span>
           <span>Credits earned</span><span>${b.credits}</span>
-          <span>Damage dealt to Sid</span><span>${b.stats.damageDealt}</span>
+          ${win ? `<span>EXP earned</span><span>${b.exp}${b.secrets ? ' (Hidden Documents: +50%)' : ''}</span>` : ''}
+          <span>Damage dealt to ${esc(b.en)}</span><span>${b.stats.damageDealt}</span>
           <span>Workers lost</span><span>${lost.length ? esc(lost.join(', ')) : 'None'}</span>
           <span>Escape attempts</span><span>${b.stats.runs}</span>
-          <span>Sid's ANGER at the end</span><span>${Math.round(b.enemy.anger)}</span>
+          <span>${esc(b.en)}'s ANGER at the end</span><span>${Math.round(b.enemy.anger)}</span>
         </div>
         <button class="go" id="e-again">${win ? 'PLAY AGAIN' : 'TRY AGAIN'}</button><button class="go alt" id="e-log">BATTLE LOG</button>
       </div>`
@@ -1431,8 +1618,8 @@
     stage = $('#stage');
     fxLayer = $('#fx');
     flashEl = $('#flash');
-    sidWrap = $('#sid-wrap');
-    sidCanvas = $('#sid');
+    enemyWrap = $('#enemy-wrap');
+    enemyCanvas = $('#enemy');
     command = $('#command');
     panel = $('#panel');
     escapeEl = $('#escape');
@@ -1446,6 +1633,13 @@
     SC.Art.hallway().toCanvas($('#bg'));
     for (const id of SC.DATA.party) buildCard(id, false);
     buildPlate();
+    try {
+      const saved = root.localStorage.getItem('sc-enemy');
+      if (SC.DATA.enemies.includes(saved)) UI.enemy = saved;
+    } catch (e) {
+      /* convenience only */
+    }
+    placeEnemy();
 
     $('#log').addEventListener('click', () => {
       Log.skip = true;
@@ -1479,13 +1673,14 @@
     }
     drawRoot(true);
 
-    // Animation loop: Sid's wandering eyes and breathing, animated portraits, lights.
+    // Animation loop: the slasher (Sid's wandering eyes, Trollge's head), animated
+    // portraits, flickering lights.
     let last = 0;
     const loop = (now) => {
       if (now - last > 110) {
         last = now;
         UI.frame++;
-        SidView.draw(now);
+        view().draw(now);
         if (UI.battle && UI.frame % 2 === 0) refresh();
         if (Math.random() < 0.012) {
           $('#flicker').classList.add('on');
@@ -1502,6 +1697,7 @@
     Log.history = [];
     $('#log-lines').innerHTML = '';
     UI.lastAction = {};
+    placeEnemy();
     refresh();
   }
 

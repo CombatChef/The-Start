@@ -44,7 +44,11 @@
   --mel: #9fe3ff;
   --john: #ffb45e;
   --purpl: #d3a6ff;
+  --mysti: #ff8a96;
+  --jim: #b6e36f;
   --sid: #ff5d5d;
+  --trollge: #c49bff;
+  --foe: var(--sid); /* the current slasher's colour (plate, VS) */
   --warn: #ffd23f;
   --good: #8dff9a;
   --bad: #ff7b7b;
@@ -192,38 +196,65 @@ button {
   }
 }
 
-/* 224x210 art pixels at 2x, feet on the floor just above the escape bar. Keep in step
-   with SID_BOX in js/ui.js. */
-#sid-wrap {
+#stage[data-enemy='trollge'] {
+  --foe: var(--trollge);
+}
+
+/* The slasher sprite, drawn at 2x with its feet on the floor just above the escape bar.
+   js/ui.js (ENEMY_BOX) places and sizes it for the slasher being fought. */
+#enemy-wrap {
   position: absolute;
   left: 438px;
   top: 252px;
   width: 448px;
   height: 420px;
-  transition: translate 140ms ease-out, filter 120ms linear;
+  transition: translate 140ms ease-out, filter 120ms linear, rotate 400ms ease-out, top 400ms ease-out;
   cursor: pointer;
 }
-#sid {
-  width: 448px;
-  height: 420px;
+#enemy {
+  width: 100%;
+  height: 100%;
   display: block;
 }
-#sid-wrap.hit {
-  animation: sid-hit 260ms steps(4) 1;
+#enemy-wrap.hit {
+  animation: enemy-hit 260ms steps(4) 1;
 }
-#sid-wrap.flash #sid {
+#enemy-wrap.flash #enemy {
   filter: brightness(2.6) saturate(0.2);
 }
-#sid-wrap.rage #sid {
+#enemy-wrap.rage #enemy {
   filter: drop-shadow(0 0 14px rgba(255, 30, 30, 0.55));
 }
-#sid-wrap.chilled #sid {
+#enemy-wrap.chilled #enemy {
   filter: hue-rotate(-12deg) brightness(1.15) drop-shadow(0 0 10px rgba(140, 210, 255, 0.6));
 }
-#sid-wrap.targeted #sid {
+#enemy-wrap.targeted #enemy {
   filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 2px #fff);
 }
-@keyframes sid-hit {
+/* Trollge: folds up when weakened, and flickers with speed once it's a Fast Runner. */
+#stage[data-enemy='trollge'] #enemy-wrap.down {
+  rotate: -7deg;
+  translate: 0 26px;
+}
+#stage[data-enemy='trollge'] #enemy-wrap.rage #enemy {
+  filter: drop-shadow(0 0 12px rgba(255, 40, 60, 0.5));
+  animation: fast-runner 240ms steps(2) infinite;
+}
+@keyframes fast-runner {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 3px -1px;
+  }
+}
+/* Static Stare: the hallway goes dark around it. */
+#stage.staring #bg {
+  filter: brightness(0.35) saturate(0.6);
+  transition: filter 200ms linear;
+}
+@keyframes enemy-hit {
   0%,
   100% {
     translate: 0 0;
@@ -239,8 +270,8 @@ button {
   }
 }
 
-/* ------------------------------------------------------------------ Sid's plate */
-#sid-plate {
+/* ------------------------------------------------------------------ the slasher's plate */
+#enemy-plate {
   position: absolute;
   left: 272px;
   top: 214px;
@@ -251,53 +282,53 @@ button {
   gap: 10px;
   padding: 0 10px;
   background: #000;
-  border: 3px solid var(--sid);
+  border: 3px solid var(--foe);
   box-shadow: 0 0 0 3px #000;
 }
-#sid-plate.armed {
+#enemy-plate.armed {
   border-color: #ff2a2a;
 }
-#sid-plate.hit {
+#enemy-plate.hit {
   animation: card-hit 300ms steps(5) 1;
 }
-#sid-plate .name {
+#enemy-plate .name {
   font-family: var(--pixel-font);
   font-weight: 700;
   font-size: 22px;
   letter-spacing: 1px;
-  color: var(--sid);
+  color: var(--foe);
   padding-top: 2px;
 }
-#sid-plate .meter {
+#enemy-plate .meter {
   display: flex;
   align-items: center;
   gap: 5px;
 }
-#sid-plate .meter .icon canvas {
+#enemy-plate .meter .icon canvas {
   width: 22px;
   height: 20px;
   display: block;
 }
-#sid-plate .hp .pill {
-  width: 236px;
+#enemy-plate .hp .pill {
+  width: 206px;
   flex: none;
   height: 26px;
 }
-#sid-plate .anger .pill {
-  width: 176px;
+#enemy-plate .anger .pill {
+  width: 160px;
   flex: none;
   height: 26px;
 }
-#sid-plate .hp .fill {
+#enemy-plate .hp .fill {
   background-color: #b3141b;
 }
-#sid-plate .anger .fill {
+#enemy-plate .anger .fill {
   background: linear-gradient(90deg, #ff9d2e, #ff3b1f 70%, #b3000c);
 }
-#sid-plate .pill .txt {
+#enemy-plate .pill .txt {
   font-size: 13px;
 }
-#sid-plate .tags {
+#enemy-plate .tags {
   flex: 1;
   display: flex;
   flex-wrap: wrap;
@@ -654,6 +685,59 @@ button {
     opacity: 0;
   }
 }
+/* Someone Trollge is staring at. */
+.card.stared .frame {
+  box-shadow: 0 0 0 4px #000, 0 0 26px 8px rgba(196, 155, 255, 0.85);
+}
+/* Claw marks raked across a card. */
+.slash {
+  position: absolute;
+  width: 170px;
+  height: 150px;
+  translate: -50% -50%;
+  pointer-events: none;
+  z-index: 5;
+}
+.slash i {
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 150px;
+  background: linear-gradient(#fff, #ff3048 35%, #7a0012);
+  border: 3px solid #000;
+  rotate: 28deg;
+  transform-origin: top center;
+  animation: slash 420ms ease-out forwards;
+}
+.slash i:nth-child(1) {
+  left: 40px;
+}
+.slash i:nth-child(2) {
+  left: 80px;
+  animation-delay: 40ms;
+}
+.slash i:nth-child(3) {
+  left: 120px;
+  animation-delay: 80ms;
+}
+.slash.big i {
+  width: 16px;
+  height: 180px;
+}
+@keyframes slash {
+  0% {
+    scale: 1 0;
+    opacity: 1;
+  }
+  45% {
+    scale: 1 1;
+    opacity: 1;
+  }
+  100% {
+    scale: 1 1;
+    opacity: 0;
+  }
+}
 @keyframes card-hit {
   0%,
   100% {
@@ -796,6 +880,18 @@ button {
 }
 .line b.n-sid {
   color: var(--sid);
+  font-weight: normal;
+}
+.line b.n-mysti {
+  color: var(--mysti);
+  font-weight: normal;
+}
+.line b.n-jim {
+  color: var(--jim);
+  font-weight: normal;
+}
+.line b.n-trollge {
+  color: var(--trollge);
   font-weight: normal;
 }
 #log .more {
@@ -1170,6 +1266,10 @@ button {
   line-height: 24px;
   overflow: hidden;
 }
+#panel .desc .full {
+  color: var(--gold);
+  margin-bottom: 4px;
+}
 #panel .desc .doc {
   color: #c9c9c9;
   font-style: italic;
@@ -1321,7 +1421,7 @@ button {
   font-family: var(--title-font);
   font-weight: 700;
   font-size: 40px;
-  color: var(--sid);
+  color: var(--foe);
   padding: 0 10px;
 }
 .overlay .go {
@@ -1344,6 +1444,21 @@ button {
   background: #000;
   color: #fff;
   animation: none;
+}
+.overlay .go.foe {
+  color: var(--foe);
+  box-shadow: 0 0 0 3px var(--foe);
+}
+.overlay.title .go {
+  font-size: 30px;
+  padding: 10px 26px 8px;
+}
+.overlay .foe-tags {
+  margin: 0;
+  font-family: var(--pixel-font);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--foe);
 }
 .overlay .keys {
   margin-top: 16px;
@@ -1373,10 +1488,10 @@ button {
 }
 .help {
   text-align: left;
-  font-size: 26px;
-  line-height: 29px;
+  font-size: 25px;
+  line-height: 28px;
   color: #ddd;
-  max-height: 610px;
+  max-height: 640px;
   overflow: auto;
 }
 .help b {
@@ -1407,7 +1522,9 @@ button {
   #stage.shake,
   #stage.shake-big,
   .card.hit,
-  #sid-wrap.hit,
+  #enemy-wrap.hit,
+  #stage[data-enemy='trollge'] #enemy-wrap.rage #enemy,
+  .slash i,
   .card.tremble .portrait canvas,
   .hand,
   .card .intent {

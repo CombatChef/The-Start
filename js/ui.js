@@ -773,6 +773,37 @@
     enemyWrap.style.translate = '';
   }
 
+  // What a worker's blow sounds like: the weapon's own sound, or by the kind of hit.
+  const HIT_SOUND = {
+    stab: 'stab',
+    page: 'page',
+    shock: 'shock',
+    explosion: 'explode',
+    hex: 'hex',
+    shadow: 'shadow',
+    trap: 'trap',
+    bleed: 'bleed',
+    shards: 'shards',
+    self: 'punch',
+    exterminate: 'exterminate',
+  };
+  // A slasher's move: [the sound of it being thrown, the sound of it landing on a worker].
+  const BLOW = {
+    claws: ['claws', 'hurtTear'],
+    lap: ['claws', 'hurtTear'],
+    scratch: ['scratch', 'hurtTear'],
+    melee: ['swing', 'hurtHeavy'],
+    gun: ['gun', 'hurtShot'],
+    hands: ['swing', 'hurtWet'],
+    whip: ['whip', 'hurtCrack'],
+    wail: ['wail', 'hurtSound'],
+    trapped: ['trap', 'hurt'],
+  };
+  // Skills being cast.
+  const CAST_SOUND = { hex: 'hex', chill: 'hex', shadow: 'hex', foresight: 'hex', clone: 'phase', proxy: 'zap', pages: 'item', docs: 'item' };
+  // How a worker gets hurt when it isn't the slasher's last move.
+  const HURT_BY_SOURCE = { gun: 'hurtShot', magdump: 'hurtShot', wail: 'hurtSound', self: 'hurt', lob: 'hurt', poison: 'hurt' };
+
   async function fx(e) {
     const b = UI.battle;
     const card = (id) => UI.cards[id] && UI.cards[id].root;
@@ -785,13 +816,15 @@
         pop(x + rand(-70, 70), y - 70 + rand(-50, 30), e.amount, e.crit ? 'crit' : e.kind === 'page' || e.slipped ? 'small' : '');
         if (e.crit) pop(x, y - 190, 'CRITICAL', 'status', 800);
         else if (e.slipped && !e.quick) pop(x, y - 190, 'SLIPS', 'status', 800);
-        sfx(e.crit ? 'crit' : 'hit');
+        sfx(e.sound || HIT_SOUND[e.kind] || 'punch');
+        if (e.slipped) sfx('slip');
+        if (e.crit) sfx('crit');
         return T(e.quick ? 110 : 320);
       }
       case 'hitWorker': {
         refresh();
         pulse(card(e.target), 'hit', e.quick ? 200 : 400);
-        sfx('hurt');
+        sfx(HURT_BY_SOURCE[e.source] || UI.impact || 'hurt');
         if (e.big) shake(false);
         return T(e.big ? 450 : e.quick ? 150 : 320);
       }
@@ -799,7 +832,7 @@
         refresh();
         const [x, y] = enemyPoint('body');
         pop(x, y - 110, '+' + e.amount, 'heal', 800);
-        sfx('heal');
+        sfx('slurp');
         return T(300);
       }
       case 'wailPulse': {
@@ -839,35 +872,38 @@
         refresh();
         flash('#ffffff');
         pulse(card(e.target), 'glow', 500);
-        sfx('success');
+        sfx('revive');
         return T(550);
       }
       case 'block':
       case 'barrier':
         pulse(card(e.target), 'shield', 450);
-        sfx('buff');
+        sfx('guard');
         return T(320);
       case 'ward':
         refresh();
         flash('#ffffff');
         for (const u of b.party) if (!u.dead && (e.all || u.id === e.target)) pulse(card(u.id), 'glow', 600);
-        sfx('success');
+        sfx('ward');
         return T(e.all ? 520 : 320);
       case 'exterminate':
         flash('#ff2a2a');
         shake(true);
-        sfx('crit');
+        sfx('exterminate');
         return T(600);
       case 'guard':
         refresh();
         pulse(card(e.target), 'shield', 450);
+        sfx('guard');
         return T(150);
       case 'enemyAttack': {
+        // What a worker hit by this move will sound like (see hitWorker).
+        UI.impact = e.impact || (BLOW[e.kind] || [])[1] || 'hurt';
         if (e.kind === 'stare') {
           TrollgeView.set('stare', 1600);
           pulse(stage, 'staring', 1500);
           pulse(card(e.target), 'stared', 1500);
-          sfx('growl');
+          sfx('stare');
           return T(700);
         }
         if (e.kind === 'caught') {
@@ -884,7 +920,7 @@
         }
         if (e.kind === 'claws' || e.kind === 'scratch' || e.kind === 'lap') {
           TrollgeView.set(e.kind === 'lap' ? 'fast' : 'lunge', 520);
-          sfx(e.kind === 'scratch' ? 'crit' : 'growl');
+          sfx(BLOW[e.kind][0]);
           if (e.kind === 'lap') {
             enemyWrap.style.translate = `${rand(-90, 90)}px 0px`;
             await T(140);
@@ -897,7 +933,7 @@
         }
         if (e.kind === 'cookie') {
           SidView.set('cookie', 1500);
-          sfx('growl');
+          sfx('crunch');
           return T(420);
         }
         if (e.kind === 'claims') {
@@ -907,16 +943,17 @@
         }
         if (e.kind === 'deagle') {
           SidView.set('gun', 900);
-          sfx('growl');
+          sfx('spin');
           return T(260);
         }
         if (e.kind === 'magdump') {
           SidView.set('gun', 2600);
+          sfx('rack');
           return T(160);
         }
         if (e.kind === 'hands') {
           DolphinView.set('lunge', 700);
-          sfx('growl');
+          sfx('swing');
           await lunge(e.target, 220, 1.2);
           return T(60);
         }
@@ -924,7 +961,7 @@
           // He spins around, and the tail cracks across the profile.
           DolphinView.set('whip', 600);
           pulse(enemyWrap, 'spin', 420);
-          sfx('whiff');
+          sfx('whip');
           await T(200);
           const hitting = lunge(e.target, 160, 1.3);
           slash(e.target, true);
@@ -953,14 +990,15 @@
           const [fx0, fy0] = enemyPoint('feet');
           pop(fx0, fy0 - 40, 'SNAP!', 'crit', 900);
           shake(false);
-          sfx('crit');
+          sfx('trap');
           return T(320);
         }
-        if (e.kind === 'gun') {
+        const thrown = e.sound || (BLOW[e.kind] || [])[0] || 'swing';
+        if (thrown === 'gun') {
           const [mx, my] = enemyPoint('muzzle');
           muzzle(mx, my);
-          sfx('gun');
-        } else sfx('growl');
+        }
+        sfx(thrown);
         await lunge(e.target, 170);
         return T(90);
       }
@@ -971,7 +1009,7 @@
         const jy = ty + rand(-80, 60);
         muzzle(mx, my);
         tracer(mx, my, jx, jy);
-        sfx('gun');
+        sfx('shot');
         if (e.hit) pulse(card(e.target), 'hit', 320);
         else pop(jx, jy - 20, e.ghost ? 'PASS' : 'MISS', 'miss', 600);
         return T(190);
@@ -987,7 +1025,7 @@
         setTimeout(() => bolt.remove(), 300);
         flash('#bfe6ff');
         pulse(enemyWrap, 'hit', 280);
-        sfx('zap');
+        sfx('shock');
         return T(420);
       }
       case 'shockSelf':
@@ -997,7 +1035,7 @@
       case 'status': {
         const [x, y] = posOf(e.target);
         pop(x, y - (e.target === enemyId() ? 150 : 90), e.text, 'status', 900);
-        sfx('debuff');
+        sfx('status');
         return T(240);
       }
       case 'credits': {
@@ -1009,23 +1047,23 @@
       case 'carry':
         refresh();
         pulse(card(e.carrier), 'glow', 400);
-        sfx('hurt');
+        sfx('lift');
         return T(320);
       case 'possess':
         refresh();
         flash('#8a3fd1');
         pulse(card(e.target), 'glow', 500);
-        sfx('buff');
+        sfx('hex');
         return T(480);
       case 'phase':
       case 'unphase':
         refresh();
-        sfx('buff');
+        sfx('phase');
         return T(360);
       case 'chopper':
         flash('#ffffff');
         pop(496, 420, 'HELI ON THE PAD!', 'crit', 1400);
-        sfx('run');
+        sfx('chopper');
         return T(900);
       case 'run':
         if (e.success) {
@@ -1040,7 +1078,7 @@
         const c = card(e.from);
         if (!c) return undefined;
         c.classList.add('lunge');
-        sfx('whiff');
+        sfx('swing');
         await T(150);
         c.classList.remove('lunge');
         return undefined;
@@ -1067,7 +1105,7 @@
       case 'passThrough':
         refresh();
         pulse(card(e.target || e.from), 'glow', 420);
-        sfx(e.type === 'item' ? 'select' : 'buff');
+        sfx(e.type === 'item' ? 'item' : e.type === 'passThrough' ? 'phase' : CAST_SOUND[e.kind] || 'buff');
         return T(e.type === 'passThrough' ? 150 : 240);
       case 'loot':
         sfx('coin');
@@ -1159,7 +1197,7 @@
       function tap(dir) {
         if (done || performance.now() < t0) return;
         s.tap(dir);
-        sfx('tick');
+        sfx('pump');
         // In the game the bar over [Q] turns into an arrow when it's pressed.
         const key = $(dir < 0 ? '.key.l' : '.key.r', box);
         $('.arrow', key).textContent = dir < 0 ? '<' : '>';

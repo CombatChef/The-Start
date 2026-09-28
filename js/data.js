@@ -66,6 +66,7 @@
           hits: 2,
           followUpHitRate: 1 / 3,
           verb: 'punches',
+          sound: 'knock', // mannequin fists: a hollow knock
         },
         armor: {
           name: 'Slash Co Uniform',
@@ -90,6 +91,7 @@
           hits: 2,
           followUpHitRate: 1 / 2,
           verb: 'jabs',
+          sound: 'punch',
         },
         armor: {
           name: 'Slash Co Uniform',
@@ -146,6 +148,7 @@
           hits: 1,
           power: 0.95,
           verb: 'smacks',
+          sound: 'phone',
           line: '{n} smacks {e} with his Burner Phone!',
           noiseChance: 0.3,
           noiseAnger: 5,
@@ -175,6 +178,7 @@
           hits: 1,
           power: 0.7,
           verb: 'slashes',
+          sound: 'slash',
           line: '{n} slashes {e} with her Knife!',
           bleedTurns: 3,
           parryChance: 0.15,
@@ -319,16 +323,17 @@
           cookieMinAnger: 25,
         },
         // Basic attacks. `power` multiplies ATK, `crit` adds to crit chance, `close` ones can
-        // be parried (Mysti's Knife).
+        // be parried (Mysti's Knife). `sound` is the move being thrown, `impact` the blow
+        // landing (js/audio.js).
         melee: [
-          { text: 'Sid bites {t}…', power: 0.75, crit: 0, close: true },
-          { text: 'Sid slams {t} into a wall!', power: 0.9, crit: 0, close: true },
-          { text: 'Sid throws {t} to the ground, and stomps!', power: 1.0, crit: 0.1, close: true },
-          { text: 'Sid swipes at {t} with his matted claws!', power: 0.8, crit: 0, close: true },
+          { text: 'Sid bites {t}…', power: 0.75, crit: 0, close: true, sound: 'bite', impact: 'hurtTear' },
+          { text: 'Sid slams {t} into a wall!', power: 0.9, crit: 0, close: true, sound: 'swing', impact: 'hurtHeavy' },
+          { text: 'Sid throws {t} to the ground, and stomps!', power: 1.0, crit: 0.1, close: true, sound: 'swing', impact: 'hurtHeavy' },
+          { text: 'Sid swipes at {t} with his matted claws!', power: 0.8, crit: 0, close: true, sound: 'claws', impact: 'hurtTear' },
         ],
         gunAttacks: [
-          { text: 'Sid whips {t} with his gun!', power: 1.1, crit: 0.05, close: true },
-          { text: 'Sid fires the Desert Eagle at {t}!', power: 1.0, crit: 0.05 },
+          { text: 'Sid whips {t} with his gun!', power: 1.1, crit: 0.05, close: true, sound: 'swing', impact: 'hurtHeavy' },
+          { text: 'Sid fires the Desert Eagle at {t}!', power: 1.0, crit: 0.05, sound: 'gun', impact: 'hurtShot' },
         ],
         escapeOverflow: { label: 'Sid has his gun out', value: -5 },
         secret: 'EXTRA-SECRET: Sid can’t say no to a cookie. Below 80 ANGER he eats them to calm down… and anyone else eating one sets him off.',

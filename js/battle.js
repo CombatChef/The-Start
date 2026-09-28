@@ -422,7 +422,7 @@
       e.hp = after;
       this.stats.damageDealt += dealt;
       if (attacker) attacker.aggro += dealt;
-      await this.fx({ type: 'hitEnemy', amount: dealt, crit: !!o.crit, kind: o.kind || 'hit', quick: !!o.quick, slipped });
+      await this.fx({ type: 'hitEnemy', amount: dealt, crit: !!o.crit, kind: o.kind || 'hit', sound: o.sound, quick: !!o.quick, slipped });
       if (slipped && !o.quick) await this.say(`It slips right off ${this.en}’s slimy skin!`);
       if (o.crit && !o.quietCrit && !slipped) await this.say('It hits a weak point!', { tone: 'crit' });
       this.refresh();
@@ -510,7 +510,7 @@
       if (dmg >= before) {
         if (t.has('aliveHard') && before >= D.passives.aliveHard.threshold) {
           t.hp = 1;
-          await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
+          await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true, source: o.source });
           await this.say(`${t.name} survives on the edge of life!`, { tone: 'good' });
           this.refresh();
           await this.firstResponder(t);
@@ -518,7 +518,7 @@
         }
         if (this.deathward || t.status.deathward) {
           t.hp = 1;
-          await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
+          await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true, source: o.source });
           await this.fx({ type: 'ward', target: t.id });
           await this.say(`The DEATHWARD holds! ${t.name} refuses to die!`, { tone: 'good' });
           this.refresh();
@@ -526,12 +526,12 @@
           return before - 1;
         }
         t.hp = 0;
-        await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true });
+        await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, big: true, source: o.source });
         await this.onDeath(t, o.source);
         return before;
       }
       t.hp = before - dmg;
-      await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, quick: !!o.quick });
+      await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, quick: !!o.quick, source: o.source });
       this.refresh();
       if (!o.silent) await this.announce(t);
       await this.firstResponder(t);
@@ -1257,7 +1257,7 @@
           continue;
         }
         const crit = this.rng.chance(this.critChance(u));
-        await this.hitEnemy(u, this.physical(u, e, power, { crit }), { crit });
+        await this.hitEnemy(u, this.physical(u, e, power, { crit }), { crit, sound: o.sound || W.sound });
         if (W.bleedTurns && !this.outcome) await this.bleedEnemy(W.bleedTurns); // Mysti's Knife
       }
       if (W.noiseChance && !this.outcome && this.rng.chance(W.noiseChance)) {
@@ -1278,10 +1278,10 @@
 
     async berserk(u) {
       if (!this.present(this.enemy)) return;
-      await this.basicAttack(u, { hits: 1, power: 0.9, line: `${u.name} delivers a roundhouse kick to ${this.en}’s face!` });
+      await this.basicAttack(u, { hits: 1, power: 0.9, line: `${u.name} delivers a roundhouse kick to ${this.en}’s face!`, sound: 'kick' });
       if (this.outcome || u.dead) return;
       await this.say(`${u.name} just can’t calm down!`, { tone: 'buff' });
-      await this.basicAttack(u, { hits: 1, power: 0.7, line: `${u.name} rushes at ${this.en}!` });
+      await this.basicAttack(u, { hits: 1, power: 0.7, line: `${u.name} rushes at ${this.en}!`, sound: 'punch' });
     }
 
     async guard(u) {
@@ -1626,7 +1626,7 @@
           await this.fx({ type: 'portrait', target: u.id });
           if (hit) {
             const crit = this.rng.chance(this.critChance(u));
-            await this.hitEnemy(u, this.physical(u, e, sk.power, { crit }), { crit });
+            await this.hitEnemy(u, this.physical(u, e, sk.power, { crit }), { crit, sound: 'glass' });
             if (!this.outcome && this.rng.chance(sk.bleedChance)) await this.bleedEnemy(sk.bleedTurns);
           } else {
             await this.fx({ type: 'miss', target: e.id });
@@ -1689,7 +1689,7 @@
           await this.say(streak ? `${u.name} slaps ${n} with ${u.pr.his} cap! (x${streak + 1})` : `${u.name} slaps ${n} with ${u.pr.his} cap!`);
           if (this.rollHit(u, e)) {
             const crit = this.rng.chance(this.critChance(u));
-            await this.hitEnemy(u, this.physical(u, e, power, { crit }), { crit });
+            await this.hitEnemy(u, this.physical(u, e, power, { crit }), { crit, sound: 'slap' });
             if (streak) await this.say('The slaps are getting stronger!', { tone: 'buff' });
           } else {
             await this.fx({ type: 'miss', target: e.id });
@@ -1873,7 +1873,7 @@
             await this.hitEnemy(u, Math.max(1, e.hp - floor), { crit: true, quietCrit: true, kind: 'exterminate' });
           } else {
             const crit = this.rng.chance(this.critChance(u));
-            await this.hitEnemy(u, this.physical(u, e, sk.power, { crit }), { crit });
+            await this.hitEnemy(u, this.physical(u, e, sk.power, { crit }), { crit, sound: 'stab' });
             if (!this.outcome) await this.say(`${n} is still standing…`);
           }
           if (this.outcome) break;
@@ -2120,7 +2120,7 @@
       const move = this.rng.pick(intent.kind === 'gun' ? S.gunAttacks : S.melee);
       t.timesTargeted++;
       if (await this.trapSnaps(t)) return;
-      await this.fx({ type: 'enemyAttack', kind: intent.kind, target: t.id });
+      await this.fx({ type: 'enemyAttack', kind: intent.kind, target: t.id, sound: move.sound, impact: move.impact });
       await this.say(move.text.replace('{t}', t.name));
       if (move.close && (await this.parried(t))) return;
       if (!this.rollHit(sid, t)) {

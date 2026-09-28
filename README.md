@@ -176,9 +176,24 @@ uploaded anywhere. One file: everything before 2:22 is the ambience (it loops) a
 (the time can be changed). Two files: the ambience and the chase (the one with "chase" in its name). A file with
 "wail" in its name replaces Dolphin Man's wail. **SOUNDTRACK** goes back to the game's music.
 
-**Sound effects** are synthesized in the browser. Dolphin Man's Loud Wail is modelled on his sound in SlashCo VR
-gameplay footage: a shrill band of noise around 3.2 kHz that buzzes about 50 times a second and swells again and
-again, over a hoarse, wobbling scream. If a music file can't play, a synthesized hallway drone and chase stand in.
+**Sound effects** are synthesized in the browser, heavy and mechanical: low thumps give blows their weight, struck
+metal clanks and rings, relays click. Every attack sounds like what it is:
+
+- The workers: Mel's Mannequin Fists knock hollow, John's fists punch and his cap slaps, Captain Jim's Burner Phone
+  cracks and rattles, Mysti's Knife slashes and stabs with a ring of steel, Mel's glasses shatter, John's battery
+  arcs, a Beer Keg booms, a Bear Trap snaps, Purpl Lady's hexes hum.
+- The slashers: Trollge's claws rake, and its Scratch tears; Sid bites, swings and fires the Desert Eagle (with
+  the slide coming back), racks it for the Magdump and spins it; Dolphin Man's slaps are wet, his tail cracks, and
+  blows slip off his mucus.
+- A worker taking a hit sounds like the blow: torn by claws, shot, slammed, slapped wet, cracked by a tail, or just
+  rattled by the wail.
+- The rest: menus click like relays, SLASHERBOY ticks as it types, the fuel pump lever clacks, statuses stamp,
+  CREDITS ring up on a register, a body drops and flatlines, the DEATHWARD tolls like a gong, the heli's rotor
+  thumps.
+
+Dolphin Man's Loud Wail is modelled on his sound in SlashCo VR gameplay footage: a shrill band of noise around
+3.2 kHz that buzzes about 50 times a second and swells again and again, over a hoarse, wobbling scream. If a music
+file can't play, a synthesized hallway drone and chase stand in.
 
 **M** mutes everything.
 

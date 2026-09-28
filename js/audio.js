@@ -32,6 +32,7 @@
       master = ctx.createGain();
       master.gain.value = 0.16;
       master.connect(ctx.destination);
+      busses();
       applyMusic();
     }
     if (ctx.state === 'suspended') ctx.resume();
@@ -180,56 +181,479 @@
     src.stop(t + dur + 0.05);
   }
 
+  // ------------------------------------------------------------------ effect building blocks
+  // Heavy, mechanical sounds: low thumps give them weight, inharmonic partials make metal,
+  // filtered noise makes impacts, scrapes and air, and relays click. The heaviest go through
+  // some grit (saturation), and a little of most goes into a short, dark room (the hallway).
+  let grit = null;
+  let room = null;
+
+  function busses() {
+    grit = ctx.createWaveShaper();
+    const n = 1024;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) curve[i] = Math.tanh(((i / (n - 1)) * 2 - 1) * 3) / Math.tanh(3);
+    grit.curve = curve;
+    grit.oversample = '2x';
+    const gritOut = ctx.createGain();
+    gritOut.gain.value = 0.7;
+    grit.connect(gritOut).connect(master);
+    // The room: half a second of dark, decaying noise as the impulse.
+    const len = Math.floor(ctx.sampleRate * 0.5);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        lp += (Math.random() * 2 - 1 - lp) * 0.25;
+        d[i] = lp * Math.pow(1 - i / len, 3);
+      }
+    }
+    room = ctx.createConvolver();
+    room.buffer = ir;
+    const roomOut = ctx.createGain();
+    roomOut.gain.value = 0.6;
+    room.connect(roomOut).connect(master);
+  }
+
+  // Where a sound goes: out (or through the grit, `heavy`), with `wet` of it into the room.
+  function outlet(o) {
+    const g = ctx.createGain();
+    g.connect(o.heavy ? grit : master);
+    if (o.wet) {
+      const send = ctx.createGain();
+      send.gain.value = o.wet;
+      g.connect(send).connect(room);
+    }
+    return g;
+  }
+
+  // A low sine whose pitch drops: the weight in a blow. { f, to, dur, vol, delay, heavy, wet }
+  function thump(o) {
+    const t = ctx.currentTime + (o.delay || 0);
+    const dur = o.dur || 0.2;
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(o.f, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.to || o.f * 0.4), t + dur * 0.7);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(o.vol == null ? 0.8 : o.vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g).connect(outlet(o));
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  // Filtered noise: impacts, scrapes, air. { type, f, to, q, dur, vol, attack, delay, heavy, wet }
+  function burst(o) {
+    const t = ctx.currentTime + (o.delay || 0);
+    const dur = o.dur || 0.1;
+    const src = noise(true);
+    const f = ctx.createBiquadFilter();
+    f.type = o.type || 'bandpass';
+    f.frequency.setValueAtTime(o.f || 1000, t);
+    if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+    if (o.q) f.Q.value = o.q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(o.vol == null ? 0.5 : o.vol, t + (o.attack || 0.003));
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f).connect(g).connect(outlet(o));
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + dur + 0.05);
+  }
+
+  // Struck metal: inharmonic partials, each dying away faster than the one below it.
+  // { f, ratios, dur, vol, delay, wet }
+  function metal(o) {
+    const t = ctx.currentTime + (o.delay || 0);
+    const out = outlet(o);
+    (o.ratios || [1, 2.76, 5.4, 8.93]).forEach((r, i) => {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = o.f * r;
+      const g = ctx.createGain();
+      const d = (o.dur || 0.6) / (1 + i * 0.5);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime((o.vol == null ? 0.3 : o.vol) / (1 + i * 0.8), t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t + d);
+      osc.connect(g).connect(out);
+      osc.start(t);
+      osc.stop(t + d + 0.05);
+    });
+  }
+
+  // A relay or a switch.
+  const click = (o) =>
+    burst({ type: 'bandpass', f: o.f || 2000, q: 2, dur: o.dur || 0.012, vol: (o.vol == null ? 0.4 : o.vol) * 2.5, attack: 0.0005, delay: o.delay });
+
+  // Clicks rising or falling in pitch: a ratchet. { n, gap, f, step, vol, delay }
+  function ratchet(o) {
+    for (let i = 0; i < o.n; i++) click({ f: o.f * Math.pow(o.step || 1, i), dur: 0.01, vol: o.vol, delay: (o.delay || 0) + i * o.gap });
+  }
+
+  // Air moving: a swing, a throw. { f, to, dur, vol, delay }
+  const whoosh = (o) =>
+    burst({
+      type: 'bandpass',
+      f: o.f || 600,
+      to: o.to || 2600,
+      q: 1.2,
+      dur: o.dur || 0.16,
+      vol: o.vol == null ? 1.2 : o.vol,
+      attack: (o.dur || 0.16) * 0.5,
+      delay: o.delay,
+    });
+
+  // Mains hum or a buzzer. { f, dur, vol, delay }
+  function buzz(o) {
+    const t = ctx.currentTime + (o.delay || 0);
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = o.f;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = o.f * 8;
+    f.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(o.vol, t + 0.01);
+    g.gain.setValueAtTime(o.vol, t + o.dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.001, t + o.dur);
+    osc.connect(f).connect(g).connect(outlet(o));
+    osc.start(t);
+    osc.stop(t + o.dur + 0.05);
+  }
+
+  // Sparks: little clicks scattered over `dur`. { dur, vol, f, rate, delay }
+  function crackle(o) {
+    const dur = o.dur || 0.3;
+    const n = Math.round(dur * (o.rate || 50));
+    for (let i = 0; i < n; i++) {
+      burst({
+        type: 'highpass',
+        f: o.f || 3000,
+        dur: 0.006,
+        vol: (o.vol || 0.3) * (0.4 + Math.random() * 0.6),
+        delay: (o.delay || 0) + Math.random() * dur,
+      });
+    }
+  }
+
+  // ------------------------------------------------------------------ the effects
   const SFX = {
-    blip: () => tone({ freq: 740, dur: 0.018, vol: 0.08 }),
-    move: () => tone({ freq: 620, dur: 0.035, vol: 0.18 }),
+    // ---- SLASHERBOY and the menus: relays and switches
+    blip: () => click({ f: 3200, dur: 0.006, vol: 0.5 }),
+    move: () => {
+      click({ f: 2200, vol: 0.3 });
+      thump({ f: 260, to: 180, dur: 0.03, vol: 0.25 });
+    },
     select: () => {
-      tone({ freq: 880, dur: 0.05, vol: 0.2 });
-      tone({ freq: 1320, dur: 0.07, vol: 0.2, delay: 0.05 });
+      click({ f: 1800, vol: 0.45 });
+      thump({ f: 150, to: 60, dur: 0.12, vol: 0.7 });
+      metal({ f: 310, dur: 0.12, vol: 0.12 });
     },
-    cancel: () => tone({ freq: 330, dur: 0.08, vol: 0.2, slide: -120 }),
+    cancel: () => {
+      thump({ f: 110, to: 200, dur: 0.08, vol: 0.5 });
+      click({ f: 1400, vol: 0.3, delay: 0.03 });
+    },
     denied: () => {
-      tone({ freq: 180, dur: 0.08, vol: 0.25, type: 'sawtooth' });
-      tone({ freq: 150, dur: 0.1, vol: 0.25, type: 'sawtooth', delay: 0.08 });
+      buzz({ f: 95, dur: 0.22, vol: 0.4 });
+      click({ f: 1500, vol: 0.35 });
+      click({ f: 1500, vol: 0.35, delay: 0.2 });
     },
-    hit: () => {
-      hiss({ dur: 0.12, vol: 0.55, filter: 900 });
-      tone({ freq: 150, type: 'triangle', dur: 0.12, slide: -70, vol: 0.5 });
+    tick: () => {
+      click({ f: 2600, vol: 0.35 });
+      click({ f: 1900, vol: 0.3, delay: 0.09 });
+      thump({ f: 120, to: 70, dur: 0.08, vol: 0.35 });
     },
-    crit: () => {
-      hiss({ dur: 0.2, vol: 0.7, filter: 1600 });
-      tone({ freq: 220, type: 'square', dur: 0.16, slide: -150, vol: 0.35 });
+    // Mel's fuel check: the pump lever.
+    pump: () => {
+      click({ f: 1600, vol: 0.4 });
+      thump({ f: 200, to: 90, dur: 0.07, vol: 0.45 });
+      burst({ type: 'lowpass', f: 600, dur: 0.08, vol: 0.18, delay: 0.02 });
     },
-    hurt: () => {
-      hiss({ dur: 0.16, vol: 0.6, filter: 700 });
-      tone({ freq: 110, type: 'sawtooth', dur: 0.18, slide: -40, vol: 0.35 });
+
+    // ---- the workers' blows, by what landed
+    punch: () => {
+      thump({ f: 150, to: 48, dur: 0.22, vol: 1, heavy: true, wet: 0.25 });
+      burst({ type: 'lowpass', f: 1500, dur: 0.06, vol: 0.55 });
     },
-    whiff: () => hiss({ dur: 0.12, vol: 0.25, filter: 2600, band: true }),
-    gun: () => {
-      hiss({ dur: 0.22, vol: 0.9, filter: 2400 });
-      tone({ freq: 95, type: 'sine', dur: 0.2, slide: -55, vol: 0.9 });
+    // Mel's Mannequin Fists: a hollow, plastic knock.
+    knock: () => {
+      thump({ f: 190, to: 70, dur: 0.18, vol: 0.9, heavy: true, wet: 0.2 });
+      metal({ f: 420, ratios: [1, 1.9, 3.1], dur: 0.12, vol: 0.25 });
+      burst({ type: 'bandpass', f: 1800, q: 2, dur: 0.03, vol: 0.4 });
     },
-    heal: () => [523, 659, 784, 1046].forEach((f, i) => tone({ freq: f, dur: 0.09, vol: 0.18, type: 'triangle', delay: i * 0.06 })),
-    buff: () => [440, 660, 880].forEach((f, i) => tone({ freq: f, dur: 0.07, vol: 0.15, delay: i * 0.05 })),
-    debuff: () => [660, 440, 330].forEach((f, i) => tone({ freq: f, dur: 0.07, vol: 0.15, delay: i * 0.05 })),
-    success: () => [660, 880, 1320].forEach((f, i) => tone({ freq: f, dur: 0.08, vol: 0.22, delay: i * 0.07 })),
-    fail: () => tone({ freq: 220, dur: 0.3, vol: 0.3, type: 'sawtooth', slide: -140 }),
-    tick: () => tone({ freq: 1200, dur: 0.02, vol: 0.1 }),
-    coin: () => {
-      tone({ freq: 988, dur: 0.06, vol: 0.2 });
-      tone({ freq: 1319, dur: 0.12, vol: 0.2, delay: 0.06 });
+    kick: () => {
+      thump({ f: 120, to: 40, dur: 0.3, vol: 1.1, heavy: true, wet: 0.3 });
+      burst({ type: 'lowpass', f: 900, dur: 0.1, vol: 0.6 });
+    },
+    // Captain Jim's Burner Phone: a hard plastic crack, and it rattles.
+    phone: () => {
+      burst({ type: 'highpass', f: 2200, dur: 0.035, vol: 0.7 });
+      thump({ f: 170, to: 55, dur: 0.2, vol: 0.9, heavy: true, wet: 0.2 });
+      metal({ f: 1320, ratios: [1, 1.47, 2.3], dur: 0.09, vol: 0.12, delay: 0.02 });
+    },
+    // Mysti's Knife.
+    slash: () => {
+      burst({ type: 'bandpass', f: 2500, to: 6500, q: 3, dur: 0.12, vol: 0.45, attack: 0.04 });
+      metal({ f: 2350, ratios: [1, 1.52, 2.61], dur: 0.35, vol: 0.14, delay: 0.05 });
+      thump({ f: 130, to: 60, dur: 0.12, vol: 0.5, delay: 0.05 });
+    },
+    stab: () => {
+      burst({ type: 'bandpass', f: 3000, to: 5000, q: 4, dur: 0.08, vol: 0.4, attack: 0.02 });
+      metal({ f: 2100, ratios: [1, 1.52, 2.61], dur: 0.3, vol: 0.13 });
+      thump({ f: 110, to: 38, dur: 0.3, vol: 1, heavy: true, wet: 0.25, delay: 0.04 });
+      burst({ type: 'lowpass', f: 700, dur: 0.12, vol: 0.5, delay: 0.05 });
+    },
+    // John's Cap Slap.
+    slap: () => {
+      burst({ type: 'highpass', f: 1400, dur: 0.03, vol: 1.2 });
+      thump({ f: 220, to: 110, dur: 0.08, vol: 0.7 });
+    },
+    // One of Mel's pages.
+    page: () => burst({ type: 'bandpass', f: 2600, q: 1.5, dur: 0.02, vol: 1 }),
+    // Mel's glasses, breaking.
+    glass: () => {
+      for (let i = 0; i < 5; i++) metal({ f: 3000 + Math.random() * 3000, ratios: [1, 1.41], dur: 0.25, vol: 0.08, delay: i * 0.018 });
+      burst({ type: 'highpass', f: 3500, dur: 0.15, vol: 0.35 });
+      thump({ f: 160, to: 80, dur: 0.1, vol: 0.4 });
+    },
+    // John's battery, arcing into the slasher.
+    shock: () => {
+      buzz({ f: 55, dur: 0.35, vol: 0.5 });
+      crackle({ dur: 0.35, vol: 0.4 });
+      thump({ f: 90, to: 40, dur: 0.25, vol: 0.8, heavy: true });
     },
     zap: () => {
-      hiss({ dur: 0.3, vol: 0.5, filter: 3500, band: true });
-      tone({ freq: 60, type: 'sawtooth', dur: 0.3, vol: 0.3 });
+      buzz({ f: 60, dur: 0.3, vol: 0.45 });
+      crackle({ dur: 0.3, vol: 0.35 });
     },
     explode: () => {
-      hiss({ dur: 0.8, vol: 1, filter: 500 });
-      tone({ freq: 70, type: 'sine', dur: 0.6, slide: -40, vol: 1 });
+      thump({ f: 90, to: 28, dur: 0.9, vol: 1.3, heavy: true, wet: 0.5 });
+      burst({ type: 'lowpass', f: 2400, to: 180, dur: 1.1, vol: 1, heavy: true, wet: 0.4 });
+      crackle({ dur: 0.6, vol: 0.25, delay: 0.15 });
+    },
+    // Purpl Lady's magic.
+    hex: () => {
+      tone({ freq: 440, type: 'sine', dur: 0.6, slide: -180, vol: 0.18 });
+      tone({ freq: 466, type: 'sine', dur: 0.6, slide: -200, vol: 0.18 });
+      metal({ f: 620, ratios: [1, 2.4, 3.7], dur: 0.9, vol: 0.12, wet: 0.5 });
+      thump({ f: 80, to: 40, dur: 0.4, vol: 0.6 });
+    },
+    shadow: () => {
+      whoosh({ f: 300, to: 1600, dur: 0.25, vol: 0.4 });
+      thump({ f: 100, to: 35, dur: 0.35, vol: 1, heavy: true, wet: 0.3, delay: 0.2 });
+    },
+    // Captain Jim's Bear Trap: SNAP.
+    trap: () => {
+      click({ f: 2500, vol: 0.8 });
+      metal({ f: 520, dur: 0.7, vol: 0.35, wet: 0.3 });
+      thump({ f: 140, to: 50, dur: 0.2, vol: 0.9, heavy: true });
+      tone({ freq: 880, type: 'triangle', dur: 0.5, slide: -60, vol: 0.08, delay: 0.02 });
+    },
+    bleed: () => {
+      thump({ f: 95, to: 60, dur: 0.12, vol: 0.45 });
+      burst({ type: 'lowpass', f: 420, dur: 0.1, vol: 0.25 });
+    },
+    // Glass under the slasher's feet.
+    shards: () => {
+      crackle({ dur: 0.25, vol: 0.6, f: 5000 });
+      for (let i = 0; i < 3; i++) metal({ f: 3500 + Math.random() * 2500, ratios: [1, 1.41], dur: 0.2, vol: 0.1, delay: i * 0.03 });
+    },
+    // Dolphin Man's Mucus Layer: the blow slides off.
+    slip: () => {
+      burst({ type: 'bandpass', f: 900, to: 300, q: 2, dur: 0.18, vol: 0.8, attack: 0.02 });
+      tone({ freq: 240, type: 'sine', dur: 0.16, slide: -140, vol: 0.35 });
+    },
+    // A weak point: an extra heavy layer under the blow.
+    crit: () => {
+      thump({ f: 70, to: 30, dur: 0.35, vol: 1.1, heavy: true, wet: 0.4 });
+      metal({ f: 180, ratios: [1, 2.76, 5.4], dur: 0.35, vol: 0.18 });
+    },
+    exterminate: () => {
+      SFX.crit();
+      thump({ f: 60, to: 25, dur: 0.8, vol: 1.2, heavy: true, wet: 0.5, delay: 0.05 });
+      metal({ f: 140, dur: 1.2, vol: 0.25, wet: 0.5, delay: 0.05 });
+    },
+    whiff: () => whoosh({ f: 700, to: 2600, dur: 0.14, vol: 0.28 }),
+
+    // ---- the slashers' blows
+    // Trollge's claws: three long scrapes, and its stick arm creaks.
+    claws: () => {
+      for (let i = 0; i < 3; i++) burst({ type: 'bandpass', f: 1800 + i * 500, to: 4500, q: 3, dur: 0.08, vol: 1.1, delay: i * 0.045 });
+      tone({ freq: 90, type: 'sawtooth', dur: 0.12, slide: -20, vol: 0.2 });
+      thump({ f: 200, to: 90, dur: 0.1, vol: 0.4 });
+    },
+    scratch: () => {
+      SFX.claws();
+      thump({ f: 110, to: 35, dur: 0.3, vol: 1, heavy: true, wet: 0.3, delay: 0.08 });
+      burst({ type: 'lowpass', f: 1600, dur: 0.2, vol: 0.5, heavy: true, delay: 0.08 });
+    },
+    // Sid: jaws, and a heavy swing.
+    bite: () => {
+      burst({ type: 'bandpass', f: 1200, q: 2, dur: 0.05, vol: 1.2 });
+      burst({ type: 'bandpass', f: 1000, q: 2, dur: 0.06, vol: 1.2, delay: 0.07 });
+      thump({ f: 180, to: 90, dur: 0.1, vol: 0.5, delay: 0.07 });
+    },
+    swing: () => whoosh({ f: 250, to: 1400, dur: 0.22, vol: 0.4 }),
+    // The Desert Eagle: the crack, the boom, and the slide coming back.
+    gun: () => {
+      click({ f: 3000, vol: 0.9 });
+      burst({ type: 'highpass', f: 900, dur: 0.07, vol: 1, heavy: true });
+      thump({ f: 160, to: 38, dur: 0.35, vol: 1.3, heavy: true, wet: 0.5 });
+      click({ f: 2200, vol: 0.4, delay: 0.16 });
+      metal({ f: 900, ratios: [1, 1.7], dur: 0.06, vol: 0.12, delay: 0.17 });
+    },
+    // One round of the Magdump.
+    shot: () => {
+      click({ f: 3000, vol: 0.6 });
+      burst({ type: 'highpass', f: 1100, dur: 0.05, vol: 0.7, heavy: true });
+      thump({ f: 150, to: 45, dur: 0.2, vol: 0.9, heavy: true, wet: 0.35 });
+    },
+    // Racking the Desert Eagle before the Magdump, and spinning it around a finger.
+    rack: () => {
+      click({ f: 1800, vol: 0.5 });
+      metal({ f: 700, ratios: [1, 1.8], dur: 0.08, vol: 0.2 });
+      click({ f: 2200, vol: 0.5, delay: 0.12 });
+      metal({ f: 950, ratios: [1, 1.8], dur: 0.08, vol: 0.2, delay: 0.12 });
+    },
+    spin: () => ratchet({ n: 10, gap: 0.035, f: 2400, vol: 0.3 }),
+    // Sid's cookie.
+    crunch: () => {
+      for (let i = 0; i < 4; i++) burst({ type: 'lowpass', f: 1400, dur: 0.05, vol: 0.9, delay: i * 0.07 });
+    },
+    // Dolphin Man's tail: the swish, then the crack.
+    whip: () => {
+      whoosh({ f: 400, to: 3000, dur: 0.2, vol: 0.4 });
+      burst({ type: 'highpass', f: 1800, dur: 0.035, vol: 1, delay: 0.19 });
+      thump({ f: 130, to: 45, dur: 0.18, vol: 0.8, heavy: true, delay: 0.19 });
     },
     growl: () => {
-      tone({ freq: 70, type: 'sawtooth', dur: 0.35, vol: 0.35, slide: 25 });
-      hiss({ dur: 0.35, vol: 0.2, filter: 400 });
+      tone({ freq: 55, type: 'sawtooth', dur: 0.45, vol: 0.4, slide: 20, to: grit });
+      burst({ type: 'lowpass', f: 320, dur: 0.45, vol: 0.4, heavy: true });
+    },
+    // Trollge's Static Stare: a low drone and a thin whine.
+    stare: () => {
+      tone({ freq: 42, type: 'sine', dur: 1.4, vol: 0.6 });
+      tone({ freq: 2960, type: 'sine', dur: 1.4, vol: 0.025 });
+      burst({ type: 'lowpass', f: 200, dur: 1.2, vol: 0.3, attack: 0.5 });
+    },
+
+    // ---- a worker takes the hit, by what hit them
+    hurt: () => {
+      thump({ f: 120, to: 45, dur: 0.22, vol: 0.9, heavy: true, wet: 0.2 });
+      burst({ type: 'lowpass', f: 800, dur: 0.09, vol: 0.45 });
+    },
+    hurtHeavy: () => {
+      thump({ f: 110, to: 36, dur: 0.35, vol: 1.2, heavy: true, wet: 0.35 });
+      burst({ type: 'lowpass', f: 650, dur: 0.2, vol: 0.7, heavy: true });
+    },
+    hurtTear: () => {
+      burst({ type: 'bandpass', f: 1500, to: 700, q: 1.5, dur: 0.14, vol: 0.5 });
+      SFX.hurt();
+    },
+    hurtShot: () => {
+      click({ f: 2600, vol: 0.4 });
+      SFX.hurt();
+    },
+    hurtWet: () => {
+      burst({ type: 'lowpass', f: 1300, dur: 0.07, vol: 1 });
+      burst({ type: 'bandpass', f: 500, to: 250, q: 2, dur: 0.12, vol: 0.5, delay: 0.01 });
+      thump({ f: 150, to: 70, dur: 0.1, vol: 0.8 });
+    },
+    hurtCrack: () => {
+      burst({ type: 'highpass', f: 1600, dur: 0.03, vol: 0.6 });
+      SFX.hurt();
+    },
+    // The Loud Wail: more pressure than impact.
+    hurtSound: () => thump({ f: 90, to: 50, dur: 0.14, vol: 0.5 }),
+
+    // ---- statuses, items and the rest
+    // A status stamped on: a rubber stamp on paperwork.
+    status: () => {
+      thump({ f: 160, to: 90, dur: 0.07, vol: 0.5 });
+      click({ f: 1300, vol: 0.3 });
+    },
+    guard: () => {
+      metal({ f: 240, ratios: [1, 2.76, 5.4], dur: 0.35, vol: 0.25, wet: 0.2 });
+      thump({ f: 120, to: 60, dur: 0.12, vol: 0.6 });
+    },
+    heal: () => {
+      burst({ type: 'bandpass', f: 1200, to: 2400, q: 1, dur: 0.25, vol: 0.12, attack: 0.1 });
+      metal({ f: 880, ratios: [1, 2, 3], dur: 0.5, vol: 0.2 });
+      metal({ f: 1320, ratios: [1, 2], dur: 0.6, vol: 0.16, delay: 0.1 });
+    },
+    // A ratchet winding up (or down) over a servo.
+    buff: () => {
+      ratchet({ n: 6, gap: 0.04, f: 1300, step: 1.12, vol: 0.28 });
+      tone({ freq: 220, type: 'sawtooth', dur: 0.3, slide: 220, vol: 0.06 });
+    },
+    debuff: () => {
+      ratchet({ n: 6, gap: 0.04, f: 2600, step: 0.89, vol: 0.28 });
+      tone({ freq: 440, type: 'sawtooth', dur: 0.3, slide: -220, vol: 0.06 });
+    },
+    // Rummaging through the bag.
+    item: () => {
+      click({ f: 1500, vol: 0.3 });
+      burst({ type: 'bandpass', f: 2200, q: 1, dur: 0.12, vol: 0.35, delay: 0.03 });
+      click({ f: 1100, vol: 0.3, delay: 0.12 });
+    },
+    // A cash register.
+    coin: () => {
+      click({ f: 1500, vol: 0.4 });
+      thump({ f: 180, to: 90, dur: 0.08, vol: 0.4 });
+      metal({ f: 2093, ratios: [1, 2, 3], dur: 0.8, vol: 0.2, delay: 0.08 });
+    },
+    success: () => {
+      thump({ f: 150, to: 70, dur: 0.12, vol: 0.7 });
+      click({ f: 1800, vol: 0.5 });
+      metal({ f: 1046, ratios: [1, 2, 3], dur: 0.6, vol: 0.16, delay: 0.06 });
+    },
+    fail: () => {
+      thump({ f: 120, to: 50, dur: 0.2, vol: 0.8, heavy: true });
+      buzz({ f: 70, dur: 0.35, vol: 0.35, delay: 0.05 });
+    },
+    // A body hits the floor, then a flatline.
+    death: () => {
+      thump({ f: 80, to: 28, dur: 0.7, vol: 1.2, heavy: true, wet: 0.5 });
+      burst({ type: 'lowpass', f: 500, dur: 0.3, vol: 0.5 });
+      tone({ freq: 1000, type: 'sine', dur: 1.2, vol: 0.05, delay: 0.5 });
+    },
+    // A defibrillator: the charge, then the jolt.
+    revive: () => {
+      tone({ freq: 300, type: 'sine', dur: 0.5, slide: 1600, vol: 0.12 });
+      thump({ f: 110, to: 40, dur: 0.3, vol: 1, heavy: true, delay: 0.5 });
+      crackle({ dur: 0.2, vol: 0.3, delay: 0.5 });
+    },
+    // The DEATHWARD: a deep gong.
+    ward: () => {
+      metal({ f: 110, dur: 1.6, vol: 0.35, wet: 0.6 });
+      thump({ f: 70, to: 40, dur: 0.5, vol: 0.8 });
+    },
+    // Hauling a body up.
+    lift: () => {
+      thump({ f: 100, to: 60, dur: 0.25, vol: 0.7 });
+      burst({ type: 'bandpass', f: 700, q: 1, dur: 0.25, vol: 0.2, attack: 0.08 });
+    },
+    phase: () => {
+      whoosh({ f: 2000, to: 300, dur: 0.4, vol: 0.8 });
+      metal({ f: 700, ratios: [1, 2.4], dur: 0.6, vol: 0.08, wet: 0.6 });
+    },
+    // Footsteps running, then a door slamming behind them.
+    run: () => {
+      for (let i = 0; i < 6; i++) thump({ f: 120, to: 50, dur: 0.1, vol: 0.7 - i * 0.06, delay: i * 0.13 });
+      burst({ type: 'lowpass', f: 900, dur: 0.25, vol: 0.5, heavy: true, delay: 0.8 });
+      thump({ f: 90, to: 35, dur: 0.35, vol: 1, heavy: true, wet: 0.4, delay: 0.8 });
+    },
+    // Captain Jim's heli: the rotor.
+    chopper: () => {
+      for (let i = 0; i < 16; i++) burst({ type: 'lowpass', f: 300, dur: 0.07, vol: 1.2, delay: i * 0.085 });
+    },
+    // Dolphin Man licking his hands.
+    slurp: () => {
+      burst({ type: 'bandpass', f: 600, to: 1600, q: 3, dur: 0.25, vol: 0.6, attack: 0.08 });
+      tone({ freq: 180, type: 'sine', dur: 0.15, slide: -80, vol: 0.35, delay: 0.25 });
     },
     wail: () => {
       if (TRACKS.wail) return playOnce(TRACKS.wail, 0.9, wail);
@@ -237,11 +661,10 @@
     },
     // Dolphin Man curling up: a thin, falling squeak.
     whimper: () => {
-      tone({ freq: 1500, type: 'triangle', dur: 0.35, slide: -520, vol: 0.18 });
-      tone({ freq: 1250, type: 'triangle', dur: 0.3, slide: -420, vol: 0.12, delay: 0.3 });
+      tone({ freq: 1500, type: 'triangle', dur: 0.35, slide: -520, vol: 0.35 });
+      tone({ freq: 1250, type: 'triangle', dur: 0.3, slide: -420, vol: 0.25, delay: 0.3 });
     },
-    death: () => [392, 330, 262, 196].forEach((f, i) => tone({ freq: f, dur: 0.22, vol: 0.22, type: 'triangle', delay: i * 0.16 })),
-    run: () => [262, 330, 392, 523, 659].forEach((f, i) => tone({ freq: f, dur: 0.1, vol: 0.2, delay: i * 0.07 })),
+    // Only if the Escape or Death track can't play.
     win: () => [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone({ freq: f, dur: 0.14, vol: 0.22, type: 'triangle', delay: i * 0.12 })),
     lose: () => [330, 311, 294, 277, 262].forEach((f, i) => tone({ freq: f, dur: 0.3, vol: 0.2, type: 'sawtooth', delay: i * 0.25 })),
   };

@@ -1,7 +1,7 @@
 /* SLASHCO VR — TURN-BASED BATTLE
- * The HUD is a SlashCo monitor room: the hallway is a camera feed on a monitor, the log is
- * the field radio, SLASHERBOY keeps the slasher's file, the workers are employee ID badges
- * and orders go through the field console.
+ * A black-and-white HUD in the style of SlashCo VR's own: bracketed pixel text, health shown
+ * as a coloured word under a heart (a skull when it's critical), and SLASHERBOY, the computer
+ * from SlashCo's monitor room, printing the battle log.
  * The stage is a fixed 1280x960 board scaled to fit the window; every position below is in
  * those stage pixels. */
 
@@ -11,69 +11,52 @@
   font-display: block;
 }
 @font-face {
-  font-family: 'Barlow Condensed';
-  font-weight: 600;
-  src: url('../assets/fonts/barlow-condensed-600.woff2') format('woff2');
+  font-family: 'Russo One';
+  src: url('../assets/fonts/russo-one.woff2') format('woff2');
   font-display: block;
 }
 @font-face {
-  font-family: 'Barlow Condensed';
+  font-family: 'Silkscreen';
+  font-weight: 400;
+  src: url('../assets/fonts/silkscreen.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Silkscreen';
   font-weight: 700;
-  src: url('../assets/fonts/barlow-condensed-700.woff2') format('woff2');
-  font-display: block;
-}
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-weight: 800;
-  src: url('../assets/fonts/barlow-condensed-800.woff2') format('woff2');
-  font-display: block;
-}
-@font-face {
-  font-family: 'Saira Stencil One';
-  src: url('../assets/fonts/saira-stencil-one.woff2') format('woff2');
+  src: url('../assets/fonts/silkscreen-bold.woff2') format('woff2');
   font-display: block;
 }
 
 :root {
   color-scheme: dark;
-  /* console */
-  --chassis: #15181b;
-  --steel-hi: #2d343a;
-  --steel: #22282d;
-  --steel-lo: #0b0d0f;
-  --label: #97a0a8;
-  /* screens (camera, radio, SLASHERBOY) */
-  --screen: #0b100d;
-  --screen-line: #1f2a23;
-  --phosphor: #7dffa8;
-  --text: #e8e6dc;
-  /* SlashCo safety colours */
-  --slash: #c91c25;
-  --hazard: #f2c12e;
-  --good: #7fe0a0;
-  --bad: #ff7b7b;
-  --warn: #ffd86b;
-  /* the laminated ID badge */
-  --badge: #ece7d9;
-  --badge-shade: #d5cfbf;
-  --ink: #16181b;
-  --ink-soft: #676f76;
-  /* who is talking in the radio log */
-  --mel: #9fe3ff;
-  --john: #ffb45e;
-  --purpl: #d3a6ff;
-  --mysti: #ff8a96;
-  --jim: #b6e36f;
-  --sid: #ff5d5d;
-  --trollge: #c49bff;
-  --foe: var(--sid); /* the current slasher's colour */
-  /* SlashCo danger levels are colour-coded: 1 yellow, 2 orange, 3 red */
+  --panel: rgba(0, 0, 0, 0.88);
+  --line: #d9d9d9; /* panel borders */
+  --white: #f2f2f2;
+  --grey-1: #bdbdbd; /* secondary text */
+  --grey-2: #7c7c7c; /* dim text */
+  --grey-3: #3a3a3a; /* dim borders */
+  --red: #ff4a3d;
+  --good: #8dff9d;
+  /* Health colours, sampled from SlashCo VR's in-game HUD (OK, STABLE, SCATHED, CRITICAL)
+     and filled in between. */
+  --hp-oversated: #5ce1ff;
+  --hp-sated: #3cffc8;
+  --hp-ok: #38f90a;
+  --hp-stable: #8dbe89;
+  --hp-scathed: #e6e7c2;
+  --hp-hurt: #f0a04b;
+  --hp-critical: #ff6b3d;
+  --hp-dead: #8c8c8c;
+  --hp-none: #b58cff;
+  /* SlashCo's danger levels: 1 yellow, 2 orange, 3 red */
   --danger-1: #f2c12e;
   --danger-2: #f07a1a;
-  --danger-3: #e0242c;
-  --display: 'Saira Stencil One', 'Barlow Condensed', 'Arial Narrow', sans-serif;
-  --ui: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
-  --lcd: 'VT323', ui-monospace, 'Courier New', monospace;
+  --danger-3: #ff3b30;
+  --logo: 'Russo One', 'Arial Black', sans-serif; /* the SLASHCO logo's blocky letters */
+  --pixel: 'Silkscreen', ui-monospace, 'Courier New', monospace; /* the in-game HUD text */
+  --term: 'VT323', ui-monospace, 'Courier New', monospace; /* SLASHERBOY's screen */
+  --outline: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
 }
 
 * {
@@ -85,7 +68,7 @@ body {
   margin: 0;
   height: 100%;
   background: #000;
-  color: var(--text);
+  color: var(--white);
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -112,11 +95,8 @@ body {
   transform: translate(-50%, -50%);
   transform-origin: center center;
   overflow: hidden;
-  font-family: var(--ui);
-  background: var(--chassis);
-}
-#stage[data-enemy='trollge'] {
-  --foe: var(--trollge);
+  font-family: var(--pixel);
+  background: #000;
 }
 
 canvas.px,
@@ -134,7 +114,7 @@ button {
   cursor: pointer;
 }
 button:focus-visible {
-  outline: 3px solid var(--hazard);
+  outline: 2px solid #fff;
   outline-offset: 2px;
 }
 
@@ -255,7 +235,7 @@ button:focus-visible {
   filter: hue-rotate(-12deg) brightness(1.15) drop-shadow(0 0 10px rgba(140, 210, 255, 0.6));
 }
 #enemy-wrap.targeted #enemy {
-  filter: drop-shadow(0 0 6px var(--hazard)) drop-shadow(0 0 2px var(--hazard));
+  filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 2px #fff);
 }
 /* Trollge: folds up when weakened, and flickers with speed once it's a Fast Runner. */
 #stage[data-enemy='trollge'] #enemy-wrap.down {
@@ -290,512 +270,256 @@ button:focus-visible {
     translate: 6px 0;
   }
 }
-/* Static Stare: the feed goes dark around it. */
+/* Static Stare: the hallway goes dark around it. */
 #stage.staring #bg {
   filter: brightness(0.35) saturate(0.6);
   transition: filter 200ms linear;
 }
 
-/* ------------------------------------------------------------------ the monitor */
-/* A window onto the camera feed. Its giant shadow is the console chassis around it. */
-#monitor {
-  position: absolute;
-  left: 16px;
-  top: 208px;
-  width: 960px;
-  height: 492px;
-  border-radius: 16px;
-  box-shadow:
-    0 0 0 5px #050607,
-    0 0 0 8px #3a4249,
-    0 0 0 2000px var(--chassis);
-  pointer-events: none;
-  overflow: hidden;
-}
-#monitor .scan {
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.13) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(0, 0, 0, 0.5) 100%);
-}
-#monitor .cam-id,
-#monitor .rec,
-#monitor .clock {
-  position: absolute;
-  font-family: var(--lcd);
-  font-size: 26px;
-  line-height: 26px;
-  color: #e9f5ea;
-  text-shadow:
-    0 0 6px rgba(125, 255, 168, 0.45),
-    2px 2px 0 #000;
-  letter-spacing: 1px;
-}
-#monitor .cam-id {
-  left: 30px;
-  top: 20px;
-}
-#monitor .rec {
-  right: 30px;
-  top: 20px;
-}
-#monitor .rec::before {
-  content: '';
-  display: inline-block;
-  width: 13px;
-  height: 13px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background: #ff2a2a;
-  box-shadow: 0 0 8px #ff2a2a;
-  animation: blink-rec 1400ms steps(1) infinite;
-}
-@keyframes blink-rec {
+@keyframes blink {
   50% {
-    opacity: 0.15;
+    opacity: 0;
   }
 }
-#monitor .clock {
-  left: 30px;
-  bottom: 18px;
-  font-size: 24px;
-}
-#monitor .corner {
-  position: absolute;
-  width: 34px;
-  height: 34px;
-  border: 0 solid rgba(233, 245, 234, 0.75);
-}
-#monitor .corner.tl {
-  left: 14px;
-  top: 14px;
-  border-width: 3px 0 0 3px;
-}
-#monitor .corner.tr {
-  right: 14px;
-  top: 14px;
-  border-width: 3px 3px 0 0;
-}
-#monitor .corner.bl {
-  left: 14px;
-  bottom: 14px;
-  border-width: 0 0 3px 3px;
-}
-#monitor .corner.br {
-  right: 14px;
-  bottom: 14px;
-  border-width: 0 3px 3px 0;
-}
 
-/* Shared panel skin: brushed steel with a dark edge. */
-#radio,
-#console {
+/* ------------------------------------------------------------------ SLASHERBOY (battle log) */
+#slasherboy {
   position: absolute;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px), linear-gradient(var(--steel-hi), var(--steel));
-  border: 2px solid var(--steel-lo);
-  border-radius: 12px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 4px 0 var(--steel-lo);
-}
-
-/* ------------------------------------------------------------------ field radio (battle log) */
-#radio {
   left: 16px;
   top: 12px;
-  width: 960px;
-  height: 184px;
+  width: 1248px;
+  height: 188px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 2px solid var(--line);
 }
-#radio .rhead {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 7px;
-  height: 28px;
+#slasherboy .bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.brand {
-  font-family: var(--display);
-  font-size: 19px;
-  line-height: 24px;
-  color: #fff;
-  background: var(--slash);
-  padding: 0 8px;
-  letter-spacing: 1px;
-  border-radius: 3px;
-}
-#radio .lbl {
-  font-weight: 700;
+  gap: 18px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  background: var(--line);
+  color: #000;
   font-size: 16px;
-  letter-spacing: 3px;
-  color: var(--label);
 }
-#radio .led {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #3cff7c;
-  box-shadow: 0 0 7px #3cff7c;
+#slasherboy .sys {
+  font-weight: 700;
+  letter-spacing: 0.05em;
 }
-#radio.rx .led {
-  animation: blink-rec 200ms steps(1) infinite;
-}
-.readout {
-  font-family: var(--lcd);
-  font-size: 21px;
-  line-height: 24px;
-  padding: 0 8px;
-  color: #d8f7df;
-  background: var(--screen);
-  border: 1px solid var(--steel-lo);
-  border-radius: 3px;
+#slasherboy .readout {
   white-space: nowrap;
 }
-.readout.gold {
-  color: var(--hazard);
+#slasherboy .readout.heli {
+  color: #b3150c;
+  animation: blink 1s steps(1) infinite;
 }
-.readout.heli {
-  color: #0b0d0f;
-  background: var(--hazard);
-  animation: ready 900ms ease-in-out infinite;
-}
-#radio .gap {
+#slasherboy .gap {
   flex: 1;
 }
-.key {
-  font-weight: 700;
+#slasherboy .key {
+  height: 22px;
+  padding: 0 10px;
   font-size: 14px;
-  letter-spacing: 1.5px;
-  line-height: 20px;
-  padding: 1px 10px 0;
-  color: #e6e9ec;
-  background: #3c444b;
-  border-radius: 4px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 3px 0 var(--steel-lo);
+  line-height: 22px;
+  color: var(--white);
+  background: #000;
 }
-.key.on {
-  background: var(--hazard);
-  color: #111;
-}
-.key:active {
-  translate: 0 2px;
-  box-shadow: 0 1px 0 var(--steel-lo);
-}
-#radio .grille {
-  position: absolute;
-  left: 12px;
-  top: 44px;
-  width: 30px;
-  bottom: 12px;
-  border-radius: 6px;
-  background: repeating-linear-gradient(0deg, #0b0d0f 0 3px, #2a3035 3px 8px);
-  box-shadow: inset 0 0 0 2px #1a1e22;
+#slasherboy .key.on {
+  color: #000;
+  background: var(--danger-1);
 }
 #log {
   position: absolute;
-  left: 52px;
-  right: 12px;
-  top: 44px;
-  bottom: 12px;
-  background: var(--screen);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 0 0 2px #050607,
-    inset 0 0 22px rgba(0, 0, 0, 0.8);
-  overflow: hidden;
-  cursor: pointer;
-}
-#log::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
-  pointer-events: none;
-}
-#log-lines {
-  position: absolute;
   left: 16px;
-  right: 34px;
-  bottom: 4px;
-  max-height: 120px;
+  right: 16px;
+  top: 38px;
+  bottom: 8px;
+  cursor: pointer;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
 }
 .line {
-  font-family: var(--lcd);
-  font-size: 29px;
-  line-height: 30px;
-  color: var(--text);
-  opacity: 0.5;
+  font-family: var(--term);
+  font-size: 31px;
+  line-height: 35px;
+  color: var(--grey-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.line::before {
+  content: '> ';
 }
 .line.new {
-  opacity: 1;
+  color: var(--white);
 }
-.line.turn {
-  color: var(--hazard);
+.line b {
+  font-weight: normal;
+  color: #fff;
 }
-.line.intro,
-.line.win {
-  color: var(--good);
-}
-.line.warn {
-  color: #ffe08a;
+.line.new b.foe {
+  color: var(--red);
 }
 .line.danger,
 .line.death,
 .line.bad {
-  color: var(--bad);
+  color: #a8433b;
 }
-.line.good,
-.line.buff {
-  color: #b7ffbe;
+.line.new.danger,
+.line.new.death,
+.line.new.bad {
+  color: var(--red);
 }
-.line.debuff {
-  color: #ffc49b;
-}
-.line.status {
-  color: #d7c2ff;
-}
-.line.crit,
-.line.anger {
-  color: #ffb36b;
-}
-.line.sid {
-  color: #9fc4ff;
-}
-.line b {
-  font-weight: normal;
-}
-.line b.n-mel {
-  color: var(--mel);
-}
-.line b.n-john {
-  color: var(--john);
-}
-.line b.n-purpl {
-  color: var(--purpl);
-}
-.line b.n-mysti {
-  color: var(--mysti);
-}
-.line b.n-jim {
-  color: var(--jim);
-}
-.line b.n-sid {
-  color: var(--sid);
-}
-.line b.n-trollge {
-  color: var(--trollge);
+.line.new.win,
+.line.new.intro {
+  color: var(--good);
 }
 #log .more {
   position: absolute;
-  right: 14px;
-  bottom: 12px;
+  right: 0;
+  bottom: 4px;
   width: 14px;
-  height: 10px;
-  background: var(--hazard);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  animation: bob 600ms steps(2) infinite;
+  height: 26px;
+  background: var(--white);
   display: none;
+  animation: blink 900ms steps(1) infinite;
 }
 #log.waiting .more {
   display: block;
 }
 
-/* ------------------------------------------------------------------ SLASHERBOY threat file */
-#enemy-plate {
-  position: absolute;
-  left: 988px;
-  top: 12px;
-  width: 276px;
-  height: 184px;
-  padding: 8px 12px 10px;
-  background: var(--screen);
-  border: 7px solid #262c31;
-  border-radius: 12px;
-  box-shadow:
-    inset 0 0 0 2px #050607,
-    inset 0 0 24px rgba(0, 0, 0, 0.85),
-    0 4px 0 var(--steel-lo);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
+/* ------------------------------------------------------------------ bracketed pixel text */
+/* Silkscreen is set a little tighter, like the lettering on SlashCo VR's HUD. */
+#slasherboy .bar,
+#slasherboy .key,
+.tag,
+#foe .name,
+#foe .facts,
+#foe .state,
+#foe .anger,
+.pop.status,
+.profile .name,
+.profile .state,
+.profile .res,
+.profile .intent,
+#escape .lbl,
+#escape .label,
+.order .sub,
+.menu .who,
+.menu .hint .k,
+#panel .title,
+#panel .opt .cost,
+#panel .desc .full,
+#skillcheck .sc-title,
+#skillcheck .sc-res,
+#skillcheck .sc-keys,
+.fuel .x,
+.fuel .key,
+.overlay .win-bar,
+.overlay .keys,
+.member .nm,
+.member .role,
+.versus .who b,
+.versus .who span,
+.overlay h2 {
+  letter-spacing: -0.1em;
 }
-#enemy-plate.armed {
-  border-color: #5a1216;
-}
-#enemy-plate.hit {
-  animation: card-hit 300ms steps(5) 1;
-}
-#enemy-plate .phead {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--label);
-  border-bottom: 1px dashed var(--screen-line);
-  padding-bottom: 2px;
-}
-#enemy-plate .phead .sys {
-  font-family: var(--lcd);
-  font-size: 21px;
-  font-weight: normal;
-  letter-spacing: 1px;
-  color: var(--phosphor);
-  text-shadow: 0 0 6px rgba(125, 255, 168, 0.4);
-}
-#enemy-plate .name {
-  font-family: var(--display);
-  font-size: 30px;
-  line-height: 30px;
-  letter-spacing: 2px;
-  color: var(--foe);
-  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
-}
-#enemy-plate .facts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 1.5px;
-  color: #cfd6dc;
-}
-.dlvl {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-.dlvl i {
-  width: 8px;
-  height: 14px;
-  background: #2a3330;
-  transform: skewX(-18deg);
-}
-.dlvl b {
-  margin-left: 5px;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-.dlvl[data-level='1'] i:nth-child(-n + 1),
-.dlvl[data-level='2'] i:nth-child(-n + 2),
-.dlvl[data-level='3'] i:nth-child(-n + 3) {
-  background: var(--lvl);
-  box-shadow: 0 0 6px var(--lvl);
-}
-.dlvl[data-level='1'] {
-  --lvl: var(--danger-1);
-}
-.dlvl[data-level='2'] {
-  --lvl: var(--danger-2);
-}
-.dlvl[data-level='3'] {
-  --lvl: var(--danger-3);
-}
-.dlvl b {
-  color: var(--lvl);
-}
-#enemy-plate .meter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-#enemy-plate .meter .lbl {
-  width: 44px;
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  color: var(--label);
-}
-.pill {
-  position: relative;
-  flex: 1;
-  height: 18px;
-  background: #121a15;
-  border: 1px solid #2b3a30;
-  border-radius: 2px;
-  overflow: hidden;
-}
-.pill .fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-  transition: width 350ms ease-out;
-}
-#enemy-plate .hp .fill {
-  background: repeating-linear-gradient(90deg, #d9303a 0 6px, #9c141c 6px 8px);
-}
-#enemy-plate .anger .fill {
-  background: repeating-linear-gradient(90deg, #ff9d2e 0 6px, #c9420f 6px 8px);
-}
-.pill .notch {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #fff;
-  z-index: 1;
-}
-.pill .txt {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  font-family: var(--lcd);
-  font-size: 19px;
-  line-height: 18px;
-  color: #fff;
-  text-shadow:
-    1px 1px 0 #000,
-    -1px -1px 0 #000,
-    1px -1px 0 #000,
-    -1px 1px 0 #000;
-  white-space: nowrap;
-}
-#enemy-plate .tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  min-height: 18px;
-}
-
-/* Label-maker tape, for every status. */
 .tag {
-  font-weight: 700;
   font-size: 13px;
-  line-height: 17px;
-  letter-spacing: 1px;
-  padding: 0 6px;
-  color: #fff;
-  background: #3b434b;
-  border-radius: 2px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 1px 0 rgba(0, 0, 0, 0.5);
-  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45);
+  line-height: 16px;
+  color: var(--grey-1);
   white-space: nowrap;
+}
+.tag::before {
+  content: '[';
+}
+.tag::after {
+  content: ']';
 }
 .tag.bad {
-  background: #b3151d;
+  color: var(--red);
 }
 .tag.good {
-  background: #1f7a44;
+  color: var(--good);
 }
-.tag.info {
-  background: #1f4f8c;
+.tag.note {
+  color: var(--white);
+}
+
+/* ------------------------------------------------------------------ the slasher (left) */
+#foe {
+  position: absolute;
+  left: 16px;
+  top: 214px;
+  min-width: 250px;
+  max-width: 400px;
+  padding: 14px 18px 16px 16px;
+  background: rgba(0, 0, 0, 0.84);
+  text-shadow: var(--outline);
+  pointer-events: none;
+}
+#foe .name {
+  font-size: 30px;
+  line-height: 34px;
+  color: #fff;
+}
+#foe .facts {
+  margin-top: 6px;
+  font-size: 16px;
+  color: var(--grey-1);
+}
+#foe .facts .dlvl::before {
+  content: ' · ';
+  color: var(--grey-2);
+}
+#foe .dlvl[data-level='1'] {
+  color: var(--danger-1);
+}
+#foe .dlvl[data-level='2'] {
+  color: var(--danger-2);
+}
+#foe .dlvl[data-level='3'] {
+  color: var(--danger-3);
+}
+#foe .state {
+  margin-top: 18px;
+  font-size: 26px;
+  line-height: 30px;
+  color: var(--hc, var(--white));
+}
+#foe .state small {
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--grey-1);
+}
+#foe .state.run {
+  animation: blink 1s steps(1) infinite;
+}
+#foe .anger {
+  margin-top: 6px;
+  font-size: 20px;
+  color: var(--white);
+}
+#foe .anger.hot {
+  color: var(--hp-hurt);
+}
+#foe .anger.max {
+  color: var(--red);
+}
+#foe .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 10px;
+}
+#foe .tags .tag {
+  font-size: 14px;
+}
+#foe.hit {
+  animation: card-hit 300ms steps(5) 1;
+}
+/* Out of the way while a skill check or the skills list covers the hallway. */
+#stage.covered #foe {
+  visibility: hidden;
 }
 
 /* ------------------------------------------------------------------ fx layer */
@@ -807,7 +531,7 @@ button:focus-visible {
 }
 .pop {
   position: absolute;
-  font-family: var(--display);
+  font-family: var(--logo);
   font-size: 46px;
   color: #fff;
   text-shadow:
@@ -824,7 +548,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 .pop.crit {
-  color: var(--hazard);
+  color: var(--danger-1);
   font-size: 58px;
 }
 .pop.small {
@@ -834,15 +558,13 @@ button:focus-visible {
   color: var(--good);
 }
 .pop.miss {
-  color: #cfd6ff;
+  color: var(--grey-1);
   font-size: 34px;
 }
 .pop.status {
-  font-family: var(--ui);
-  font-weight: 800;
-  font-size: 26px;
-  letter-spacing: 2px;
-  color: var(--warn);
+  font-family: var(--pixel);
+  font-size: 24px;
+  color: var(--white);
 }
 @keyframes pop {
   0% {
@@ -907,7 +629,7 @@ button:focus-visible {
     top 260ms ease-in,
     rotate 260ms linear;
 }
-/* Claw marks raked across a badge. */
+/* Claw marks raked across a profile. */
 .slash {
   position: absolute;
   width: 170px;
@@ -956,329 +678,172 @@ button:focus-visible {
   }
 }
 
-/* ------------------------------------------------------------------ employee ID badges */
-.badge {
+/* ------------------------------------------------------------------ worker profiles */
+.profile {
   position: absolute;
   top: 714px;
-  width: 305px;
-  height: 232px;
-  color: var(--ink);
-  background: linear-gradient(118deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 34%), linear-gradient(var(--badge), var(--badge-shade));
-  border: 2px solid var(--steel-lo);
-  border-radius: 12px;
-  box-shadow: 0 4px 0 var(--steel-lo);
+  width: 306px;
+  height: 234px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 2px solid var(--grey-3);
   transition:
-    translate 140ms ease-out,
-    filter 200ms linear;
+    translate 120ms ease-out,
+    filter 120ms linear,
+    border-color 120ms linear;
+  --hc: var(--hp-ok);
 }
-.badge[data-slot='0'] {
+.profile[data-slot='0'] {
   left: 16px;
 }
-.badge[data-slot='1'] {
+.profile[data-slot='1'] {
   left: 330px;
 }
-.badge[data-slot='2'] {
+.profile[data-slot='2'] {
   left: 644px;
 }
-.badge[data-slot='3'] {
+.profile[data-slot='3'] {
   left: 958px;
 }
-.badge .strip {
-  height: 34px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--slash);
-  border-radius: 10px 10px 0 0;
+.profile .name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10px;
+  text-align: center;
+  font-size: 22px;
+  line-height: 26px;
   color: #fff;
+  white-space: nowrap;
 }
-.badge .strip .brand {
-  padding: 0;
-  font-size: 20px;
-  background: none;
-}
-.badge .strip .emp {
-  font-family: var(--lcd);
-  font-size: 21px;
-  color: #ffd9dc;
-}
-/* Every SlashCo ID has a barcode. */
-.badge::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 84px;
-  height: 18px;
-  opacity: 0.55;
-  background:
-    repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px),
-    repeating-linear-gradient(90deg, transparent 0 7px, var(--ink) 7px 8px, transparent 8px 11px);
-  pointer-events: none;
-}
-.badge.dead::after {
-  display: none;
-}
-/* The slot a lanyard clip goes through. */
-.badge .clip {
-  position: absolute;
-  left: 50%;
-  top: 7px;
-  width: 44px;
-  height: 9px;
-  translate: -50% 0;
-  border-radius: 5px;
-  background: var(--chassis);
-  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.6);
-}
-.badge .photo {
+.profile .photo {
   position: absolute;
   left: 12px;
   top: 44px;
-  width: 134px;
-  height: 134px;
-  padding: 3px;
-  background: var(--ink);
-  overflow: hidden;
+  width: 132px;
+  height: 132px;
+  border: 2px solid var(--grey-3);
+  background: #000;
 }
-.badge .photo canvas {
+.profile .photo canvas {
   width: 128px;
   height: 128px;
   display: block;
 }
-.badge .ident {
+.profile .vitals {
   position: absolute;
-  left: 158px;
-  right: 12px;
-  top: 42px;
-}
-.badge .name {
-  font-weight: 800;
-  font-size: 27px;
-  line-height: 28px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.badge .name.long {
-  font-size: 23px;
-}
-.badge .role {
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--ink-soft);
-}
-.badge .row {
+  left: 148px;
+  right: 6px;
+  top: 44px;
+  height: 132px;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-top: 8px;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  color: var(--ink-soft);
-}
-.badge .state {
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 1px;
-  line-height: 17px;
-  padding: 0 5px;
-  color: #fff;
-  background: #2f9e5d;
-  border-radius: 2px;
-}
-.badge .vital {
-  position: relative;
-  height: 14px;
-  margin-top: 3px;
-  background: #c8c1ae;
-  border: 2px solid var(--ink);
-  overflow: hidden;
-}
-.badge .vital .fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: repeating-linear-gradient(90deg, var(--vc, #2f9e5d) 0 9px, transparent 9px 11px);
-  transition: width 350ms ease-out;
-}
-.badge .vital .over {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 4px;
-  background: #d9a300;
-  transition: width 350ms ease-out;
-}
-/* STAMINA is a generator battery. */
-.badge .batt {
-  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: 3px;
 }
-.badge .cell {
-  position: relative;
-  width: 96px;
-  height: 20px;
-  padding: 2px;
-  background: #c8c1ae;
-  border: 2px solid var(--ink);
-  border-radius: 3px;
+.profile .heart {
+  width: 52px;
+  height: 48px;
+  color: var(--hc);
 }
-.badge .cell::after {
-  content: '';
-  position: absolute;
-  right: -6px;
-  top: 4px;
-  width: 4px;
-  height: 8px;
-  background: var(--ink);
-  border-radius: 0 2px 2px 0;
-}
-.badge .cell .fill {
+.profile .heart svg {
+  width: 100%;
   height: 100%;
-  background: repeating-linear-gradient(90deg, #1d8f86 0 15px, transparent 15px 18px);
-  transition: width 350ms ease-out;
+  display: block;
+  fill: currentColor;
 }
-.badge.spirit .cell .fill {
-  background: repeating-linear-gradient(90deg, #8a5fd1 0 15px, transparent 15px 18px);
-}
-.badge .batt .txt {
-  font-family: var(--lcd);
-  font-size: 21px;
-  line-height: 18px;
+.profile .state {
+  font-size: 20px;
+  line-height: 22px;
+  color: var(--hc);
   white-space: nowrap;
 }
-.badge .tags {
+.profile .state.long {
+  font-size: 16px;
+}
+.profile .res {
+  font-size: 14px;
+  line-height: 16px;
+  color: var(--grey-1);
+  white-space: nowrap;
+}
+.profile .tags {
   position: absolute;
   left: 12px;
-  right: 12px;
-  bottom: 9px;
-  height: 38px;
+  right: 10px;
+  bottom: 10px;
+  height: 36px;
   display: flex;
   flex-wrap: wrap-reverse;
   align-content: flex-start;
-  gap: 4px;
+  gap: 4px 10px;
   overflow: hidden;
   pointer-events: none;
-  z-index: 1; /* over the barcode */
 }
-/* "Who the enemy will hit first": a flag sticking up off the badge. */
-.badge .intent {
+/* "Who the slasher goes for next" (John's Hyperceptive): a red flag over the profile. */
+.profile .intent {
   position: absolute;
-  right: 14px;
-  top: -18px;
-  z-index: 3;
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 1.5px;
-  line-height: 18px;
-  padding: 2px 8px 1px;
+  right: 10px;
+  top: -24px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 14px;
+  line-height: 24px;
   color: #fff;
-  background: var(--slash);
-  border: 2px solid var(--ink);
-  border-radius: 3px;
+  background: #c4140c;
   display: none;
-  animation: bob 900ms ease-in-out infinite;
+  animation: blink 1.2s steps(1) infinite;
 }
-.badge .intent.show {
+.profile .intent.show {
   display: block;
 }
-.badge .stamp {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  rotate: -13deg;
-  z-index: 4;
-  padding: 0 12px;
-  font-family: var(--display);
-  font-size: 42px;
-  line-height: 50px;
-  letter-spacing: 3px;
-  color: var(--slash);
-  border: 4px solid var(--slash);
-  border-radius: 6px;
-  background: rgba(236, 231, 217, 0.55);
-  display: none;
-  pointer-events: none;
+.profile.dead .name {
+  color: var(--grey-2);
 }
-.badge.dead .stamp {
-  display: block;
-}
-.badge.dead {
-  filter: grayscale(0.6) brightness(0.85);
-}
-.badge.dead .vital .fill,
-.badge.dead .cell .fill {
-  width: 0 !important;
-}
-.badge.critical .vital .fill,
-.badge.critical .state {
-  animation: blink 700ms steps(2) infinite;
-}
-@keyframes blink {
-  50% {
-    filter: brightness(1.7);
-  }
-}
-.badge.away {
+.profile.away {
   filter: opacity(0.55);
 }
-.badge.active {
-  translate: 0 -12px;
-  box-shadow:
-    0 4px 0 var(--steel-lo),
-    0 0 0 3px var(--hazard),
-    0 0 22px 4px rgba(242, 193, 46, 0.55);
+.profile.active {
+  translate: 0 -10px;
+  border-color: #fff;
 }
-.badge.dim {
-  filter: brightness(0.72);
+.profile.dim {
+  filter: brightness(0.62);
 }
-.badge.pick {
+.profile.pick {
   cursor: pointer;
-  box-shadow:
-    0 4px 0 var(--steel-lo),
-    0 0 0 3px var(--hazard);
+  border-color: #fff;
 }
-.badge.stared {
-  box-shadow:
-    0 4px 0 var(--steel-lo),
-    0 0 0 3px #b98cff,
-    0 0 28px 8px rgba(196, 155, 255, 0.8);
+.profile.stared {
+  border-color: #b98cff;
+  box-shadow: 0 0 28px 6px rgba(185, 140, 255, 0.7);
 }
-.badge.lunge {
+.profile.lunge {
   translate: 0 -18px;
 }
-.badge.hit {
+.profile.hit {
   animation: card-hit 300ms steps(5) 1;
 }
-.badge.hit .photo::after,
-.badge.heal .photo::after,
-.badge.shield .photo::after,
-.badge.glow .photo::after {
+.profile.hit .photo::after,
+.profile.heal .photo::after,
+.profile.shield .photo::after,
+.profile.glow .photo::after {
   content: '';
   position: absolute;
   inset: 0;
   animation: tint 380ms ease-out forwards;
 }
-.badge.hit .photo::after {
+.profile.hit .photo::after {
   background: rgba(255, 30, 30, 0.6);
 }
-.badge.heal .photo::after {
+.profile.heal .photo::after {
   background: rgba(90, 255, 140, 0.45);
 }
-.badge.shield .photo::after {
-  background: rgba(120, 190, 255, 0.55);
+.profile.shield .photo::after {
+  background: rgba(200, 220, 255, 0.5);
 }
-.badge.glow .photo::after {
-  background: rgba(255, 240, 180, 0.45);
+.profile.glow .photo::after {
+  background: rgba(255, 255, 255, 0.45);
 }
 @keyframes tint {
   to {
@@ -1303,7 +868,7 @@ button:focus-visible {
     translate: 3px -1px;
   }
 }
-.badge.tremble .photo canvas {
+.profile.tremble .photo canvas {
   animation: tremble 160ms steps(2) infinite;
 }
 @keyframes tremble {
@@ -1311,129 +876,75 @@ button:focus-visible {
     transform: translateX(2px);
   }
 }
-@keyframes bob {
-  50% {
-    translate: 0 -4px;
-  }
-}
-@keyframes ready {
-  50% {
-    filter: brightness(1.25);
-  }
-}
 
-/* ------------------------------------------------------------------ field console */
-#console {
-  left: 988px;
-  top: 208px;
-  width: 276px;
-  height: 492px;
-  overflow: hidden;
+/* ------------------------------------------------------------------ menu (right) */
+#menu {
+  position: absolute;
+  left: 904px;
+  top: 214px;
+  width: 360px;
+  height: 486px;
+  background: var(--panel);
+  border: 2px solid var(--line);
 }
-#console .chead {
-  height: 30px;
-  display: grid;
-  place-items: center;
-  background: repeating-linear-gradient(-45deg, var(--hazard) 0 12px, #16181b 12px 24px);
-  border-radius: 10px 10px 0 0;
-  border-bottom: 2px solid var(--steel-lo);
-}
-#console .chead span:first-child {
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 3px;
-  padding: 0 10px;
-  color: var(--hazard);
-  background: #16181b;
-}
-#console .chead .screws {
-  display: none;
-}
-
-/* Extraction odds: how likely the team gets out alive if it runs now. */
 #escape {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 42px;
-  height: 100px;
-  padding: 8px 10px;
-  background: var(--screen);
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 2px #050607;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 70px;
+  padding: 10px 14px 0;
+  border-bottom: 2px solid var(--grey-3);
   cursor: pointer;
 }
-#escape .top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#escape .icon canvas {
-  width: 38px;
-  height: 18px;
-  display: block;
-}
 #escape .lbl {
-  flex: 1;
-  font-weight: 800;
-  font-size: 16px;
-  letter-spacing: 2.5px;
-  color: var(--hazard);
+  font-size: 14px;
+  color: var(--grey-1);
 }
 #escape .pct {
-  font-family: var(--lcd);
-  font-size: 36px;
-  line-height: 32px;
-  color: var(--text);
-}
-#escape .track {
-  position: relative;
-  height: 14px;
-  margin-top: 4px;
-  background: repeating-linear-gradient(90deg, #1d2620 0 10px, var(--screen) 10px 12px);
-}
-#escape .fill {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 0;
-  background: repeating-linear-gradient(90deg, var(--hazard) 0 10px, transparent 10px 12px);
-  transition: width 400ms ease-out;
+  right: 14px;
+  top: 8px;
+  font-family: var(--logo);
+  font-size: 30px;
+  line-height: 34px;
+  color: var(--grey-1);
+}
+#escape.ready .pct {
+  color: var(--good);
 }
 #escape .label {
-  margin-top: 6px;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 16px;
-  letter-spacing: 1px;
-  color: var(--label);
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--grey-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-#escape.blocked .pct,
-#escape.blocked .label {
-  color: var(--bad);
-}
-#escape.ready .fill {
-  animation: ready 900ms ease-in-out infinite;
+  max-width: 330px;
 }
 #escape.ready .label {
-  color: var(--hazard);
+  color: var(--white);
+}
+#escape.blocked .label {
+  color: var(--red);
+}
+#escape.hit {
+  animation: card-hit 300ms steps(5) 1;
 }
 #escape-tip {
   position: absolute;
-  left: 452px;
-  top: 222px;
-  width: 520px;
-  background: var(--screen);
-  border: 2px solid var(--hazard);
-  border-radius: 6px;
-  padding: 10px 16px;
-  font-family: var(--lcd);
-  font-size: 25px;
-  line-height: 27px;
+  left: 904px;
+  top: 290px;
+  width: 360px;
+  padding: 10px 14px;
+  font-family: var(--term);
+  font-size: 22px;
+  line-height: 24px;
+  color: var(--white);
+  background: #000;
+  border: 2px solid #fff;
   display: none;
   z-index: 20;
 }
@@ -1443,200 +954,135 @@ button:focus-visible {
 #escape-tip .row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
 }
-#escape-tip .row .v.neg {
-  color: var(--bad);
-}
-#escape-tip .row .v.pos {
+#escape-tip .v.pos {
   color: var(--good);
 }
-
+#escape-tip .v.neg {
+  color: var(--red);
+}
 #command {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 154px;
-  bottom: 12px;
-}
-/* FIGHT and ESCAPE: two big hardware buttons. */
-.order {
-  position: absolute;
   left: 0;
   right: 0;
-  height: 150px;
-  border-radius: 8px;
-  border: 3px solid var(--steel-lo);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.25),
-    0 5px 0 var(--steel-lo);
-  overflow: hidden;
-  transition:
-    filter 100ms linear,
-    translate 100ms ease-out;
-}
-.order.fight {
-  top: 0;
-  background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.12) 0 6px, transparent 6px 12px), linear-gradient(#d8252f, #a3121a);
-}
-.order.escape {
-  top: 164px;
-  background: repeating-linear-gradient(-45deg, var(--hazard) 0 18px, #16181b 18px 36px);
-}
-.order .word {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 34px;
-  text-align: center;
-  font-family: var(--display);
-  font-size: 46px;
-  line-height: 56px;
-  letter-spacing: 2px;
-  color: #fff;
-  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
-}
-.order.escape .word {
-  left: 26px;
-  right: 26px;
-  color: var(--hazard);
-  background: #16181b;
-  border-radius: 4px;
-  text-shadow: none;
-}
-.order .ico {
-  position: absolute;
-  left: 50%;
-  top: 12px;
-  translate: -50% 0;
-}
-.order .ico canvas {
-  display: block;
-}
-.order .sub {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 12px;
-  text-align: center;
-  font-weight: 800;
-  font-size: 16px;
-  letter-spacing: 2px;
-  color: #fff;
-}
-.order.escape .sub {
-  left: 26px;
-  right: 26px;
-  padding: 1px 0;
-  color: #16181b;
-  background: var(--hazard);
-  border-radius: 3px;
-}
-.order.off {
-  filter: brightness(0.5) saturate(0.55);
-}
-.order.sel {
-  translate: 0 -2px;
-  filter: brightness(1.12);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.25),
-    0 5px 0 var(--steel-lo),
-    0 0 0 3px #fff;
-}
-.order.disabled .word {
-  opacity: 0.45;
+  top: 70px;
+  bottom: 0;
 }
 
-/* Menus in the console. */
-.menu {
-  position: absolute;
-  inset: 0;
-  padding: 10px 12px;
-  background: var(--screen);
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 2px #050607;
+/* FIGHT / ESCAPE: the two words, in the SLASHCO logo's letters. */
+.order {
+  display: block;
+  width: 100%;
+  height: 190px;
+  padding: 0 0 0 58px;
+  text-align: left;
+  color: var(--grey-2);
 }
+.order .word {
+  display: block;
+  font-family: var(--logo);
+  font-size: 64px;
+  line-height: 70px;
+  text-shadow: 4px 4px 0 #000;
+}
+.order .sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 16px;
+  color: var(--grey-2);
+}
+.order.sel {
+  color: var(--white);
+}
+.order.sel .sub {
+  color: var(--grey-1);
+}
+.order.escape.disabled .sub {
+  color: var(--red);
+}
+.order.off {
+  color: #474747;
+  pointer-events: none;
+}
+
 .menu .who {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px dashed var(--screen-line);
-  font-weight: 800;
+  height: 50px;
+  padding: 14px 14px 0;
+  border-bottom: 2px solid var(--grey-3);
   font-size: 22px;
-  letter-spacing: 1px;
-  color: #fff;
+  white-space: nowrap;
 }
 .menu .who .res {
-  font-family: var(--lcd);
-  font-weight: normal;
-  font-size: 20px;
-  color: #8ff1e6;
-  white-space: nowrap;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--grey-1);
 }
 .menu .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px 0;
-  margin-top: 8px;
+  padding: 10px 4px 0;
 }
 .opt {
-  position: relative;
   text-align: left;
-  font-weight: 700;
-  font-size: 24px;
-  line-height: 38px;
-  letter-spacing: 0.5px;
-  padding-left: 40px;
-  color: #e6e9ec;
-  white-space: nowrap;
+  color: var(--grey-1);
 }
-.opt.disabled {
-  color: #59626a;
+.menu .opt {
+  height: 60px;
+  padding: 0 0 0 44px;
+  font-family: var(--logo);
+  font-size: 30px;
+  line-height: 60px;
+  text-shadow: 3px 3px 0 #000;
 }
 .opt.sel {
-  color: var(--hazard);
+  color: #fff;
+}
+.opt.disabled {
+  color: #4d4d4d;
 }
 .menu .hint {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 10px;
-  max-height: 104px;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  max-height: 120px;
   overflow: hidden;
-  font-weight: 600;
-  font-size: 17px;
-  line-height: 20px;
-  color: #b3bcc3;
+  font-family: var(--term);
+  font-size: 23px;
+  line-height: 24px;
+  color: var(--grey-1);
 }
-
 .menu .hint .d {
   display: block;
 }
 .menu .hint .k {
   display: block;
-  margin-top: 6px;
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 1.5px;
-  color: var(--hazard);
+  margin-top: 8px;
+  font-family: var(--pixel);
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--grey-2);
 }
 
-/* The knife cursor. */
+/* The menu cursor: a white arrowhead. */
 .cursor {
   position: absolute;
-  width: 44px;
-  height: 10px;
+  width: 0;
+  height: 0;
+  border-left: 20px solid #fff;
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  filter: drop-shadow(3px 3px 0 #000);
   pointer-events: none;
   z-index: 30;
-  animation: stab 700ms ease-in-out infinite;
+  animation: nudge 700ms ease-in-out infinite;
 }
-.cursor canvas {
-  width: 44px;
-  height: 10px;
-  display: block;
-}
-@keyframes stab {
+@keyframes nudge {
   50% {
     translate: 5px 0;
   }
@@ -1645,33 +1091,16 @@ button:focus-visible {
   rotate: 90deg;
 }
 
-/* Skills and items: a sheet on a clipboard, over the feed. */
+/* Skills and items. */
 #panel {
   position: absolute;
-  left: 70px;
-  top: 236px;
-  width: 852px;
-  height: 440px;
-  padding: 30px 26px 16px;
-  color: var(--ink);
-  background: linear-gradient(var(--badge), var(--badge-shade));
-  border: 2px solid var(--steel-lo);
-  border-radius: 6px;
-  box-shadow: 0 8px 0 var(--steel-lo);
+  left: 16px;
+  top: 214px;
+  width: 872px;
+  height: 486px;
+  background: #000;
+  border: 2px solid var(--line);
   display: none;
-  z-index: 10;
-}
-#panel::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: -14px;
-  width: 170px;
-  height: 30px;
-  translate: -50% 0;
-  background: linear-gradient(#b5bcc2, #6f777e);
-  border: 2px solid var(--steel-lo);
-  border-radius: 6px 6px 10px 10px;
 }
 #panel.show {
   display: block;
@@ -1680,525 +1109,542 @@ button:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-weight: 800;
+  height: 50px;
+  padding: 14px 16px 0;
+  border-bottom: 2px solid var(--grey-3);
   font-size: 20px;
-  letter-spacing: 2px;
-  border-bottom: 3px solid var(--ink);
-  padding-bottom: 4px;
-  margin-bottom: 6px;
 }
-#panel .title span:first-child {
-  color: var(--slash);
+#panel .title span + span {
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--grey-1);
 }
 #panel .list {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
-  height: 172px;
-  align-content: start;
+  gap: 0 10px;
+  padding: 8px 12px 0 4px;
 }
 #panel .list.one {
   grid-template-columns: 1fr;
 }
 #panel .opt {
-  font-size: 24px;
-  line-height: 34px;
-  padding-left: 52px;
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  color: var(--ink);
+  align-items: baseline;
+  gap: 12px;
+  height: 46px;
+  padding: 0 6px 0 44px;
+  font-family: var(--logo);
+  font-size: 24px;
+  line-height: 46px;
+  white-space: nowrap;
+  text-shadow: 2px 2px 0 #000;
 }
-#panel .opt.sel {
-  color: var(--ink);
-  background: linear-gradient(transparent 12%, rgba(242, 193, 46, 0.75) 12% 88%, transparent 88%);
-}
-#panel .opt.disabled {
-  color: #9b9e99;
+#panel .opt > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #panel .opt .cost {
-  font-family: var(--lcd);
-  font-weight: normal;
-  font-size: 24px;
-  color: #1d6f69;
+  font-family: var(--pixel);
+  font-size: 14px;
+  color: var(--grey-2);
+  text-shadow: none;
 }
-#panel .opt.disabled .cost {
-  color: #a8aba5;
+#panel .opt.sel .cost {
+  color: var(--grey-1);
 }
 #panel .desc {
   position: absolute;
-  left: 26px;
-  right: 26px;
-  bottom: 14px;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
   height: 184px;
-  border-top: 2px dashed #8e8878;
-  padding-top: 8px;
-  font-weight: 600;
-  font-size: 20px;
+  padding-top: 10px;
+  border-top: 2px solid var(--grey-3);
+  font-family: var(--term);
+  font-size: 23px;
   line-height: 23px;
+  color: var(--grey-1);
   overflow: hidden;
 }
 #panel .desc .full {
-  font-weight: 800;
-  color: var(--slash);
-  margin-bottom: 2px;
-}
-#panel .desc .doc {
-  color: #56504a;
-  font-style: italic;
+  font-family: var(--pixel);
+  font-size: 15px;
+  line-height: 20px;
+  color: #fff;
 }
 #panel .desc .rules {
   margin-top: 6px;
-  color: var(--ink);
+  color: var(--white);
 }
 #panel .desc .why {
   margin-top: 6px;
-  color: #b3151d;
+  color: var(--red);
 }
 
 /* ------------------------------------------------------------------ generator skill checks */
+/* Drawn after SlashCo VR's own: a balance arch with [Q] and [E] for fuel, bouncing clips and
+   "[SPACE] to clip terminals." for the battery. */
 #skillcheck {
   position: absolute;
-  left: 176px;
-  top: 262px;
-  width: 640px;
-  height: 380px;
-  padding: 0;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px), linear-gradient(var(--steel-hi), var(--steel));
-  border: 3px solid var(--steel-lo);
-  border-radius: 12px;
-  box-shadow: 0 8px 0 var(--steel-lo);
+  left: 16px;
+  top: 214px;
+  width: 872px;
+  height: 486px;
+  background: rgba(0, 0, 0, 0.94);
+  border: 2px solid var(--line);
   display: none;
-  z-index: 40;
-  text-align: center;
-  overflow: hidden;
+  z-index: 22;
+  cursor: pointer;
 }
 #skillcheck.show {
   display: block;
 }
-#skillcheck .gen {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: repeating-linear-gradient(-45deg, var(--hazard) 0 14px, #16181b 14px 28px);
-  border-bottom: 3px solid var(--steel-lo);
-}
-#skillcheck .gen span {
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: 3px;
-  padding: 0 12px;
-  color: var(--hazard);
-  background: #16181b;
-}
-#skillcheck .t {
-  margin-top: 10px;
-  font-family: var(--display);
-  font-size: 34px;
-  line-height: 38px;
-  letter-spacing: 2px;
+#skillcheck .sc-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 18px;
+  text-align: center;
+  font-size: 28px;
   color: #fff;
 }
-#skillcheck .s {
-  margin: 2px 30px 0;
-  font-weight: 600;
-  font-size: 19px;
-  line-height: 22px;
-  color: #c6ced4;
-}
-#skillcheck .s b {
-  color: var(--hazard);
-}
-/* Fuel: a dial whose needle wants to drift into the red. */
-#skillcheck .dial {
-  position: relative;
-  width: 300px;
-  height: 150px;
-  margin: 14px auto 0;
-  border-radius: 150px 150px 0 0;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 4px #050607;
-}
-#skillcheck .dial::after {
-  content: '';
+#skillcheck .sc-sub {
   position: absolute;
-  left: 50%;
-  bottom: -26px;
-  width: 52px;
-  height: 52px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: #16181b;
-  box-shadow: 0 0 0 4px #3a4249;
+  left: 0;
+  right: 0;
+  top: 56px;
+  text-align: center;
+  font-family: var(--term);
+  font-size: 25px;
+  color: var(--grey-1);
 }
-#skillcheck .needle {
+#skillcheck .sc-res {
   position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 6px;
-  height: 136px;
-  margin-left: -3px;
-  background: linear-gradient(#fff, #d8dde2);
-  border-radius: 3px 3px 0 0;
-  box-shadow: 0 0 0 2px #050607;
-  transform-origin: 50% 100%;
+  left: 0;
+  right: 0;
+  bottom: 58px;
+  text-align: center;
+  font-size: 28px;
+  color: var(--white);
 }
-/* Battery: bring the clamps onto the terminals. */
-#skillcheck .rail {
-  position: relative;
-  height: 100px;
-  margin: 26px 34px 0;
-  background: #0f1412;
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 2px #050607;
-}
-#skillcheck .terminals {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  border-radius: 4px;
-  background: repeating-linear-gradient(90deg, #3a4249 0 8px, #2a3035 8px 16px);
-  box-shadow:
-    inset 0 0 0 3px var(--hazard),
-    0 0 14px rgba(242, 193, 46, 0.35);
-}
-#skillcheck .terminals::before,
-#skillcheck .terminals::after {
-  position: absolute;
-  top: -12px;
-  font-family: var(--display);
-  font-size: 22px;
-  line-height: 22px;
-  color: var(--hazard);
-}
-#skillcheck .terminals::before {
-  content: '+';
-  left: 4px;
-}
-#skillcheck .terminals::after {
-  content: '−';
-  right: 6px;
-}
-#skillcheck .clamp {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 12px;
-  margin-left: -6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #ff4b4b, #b3151d);
-  box-shadow: 0 0 0 2px #050607;
-}
-#skillcheck .clamp::before,
-#skillcheck .clamp::after {
-  content: '';
-  position: absolute;
-  left: -8px;
-  right: -8px;
-  height: 10px;
-  background: #d8dde2;
-  border: 2px solid #050607;
-  border-radius: 3px;
-}
-#skillcheck .clamp::before {
-  top: -4px;
-}
-#skillcheck .clamp::after {
-  bottom: -4px;
-}
-#skillcheck .timer {
-  height: 8px;
-  margin: 18px 34px 0;
-  background: var(--hazard);
-  transform-origin: left;
-}
-#skillcheck .res {
-  margin-top: 8px;
-  font-family: var(--display);
-  font-size: 32px;
-  line-height: 36px;
-  letter-spacing: 3px;
-  min-height: 36px;
-  color: #fff;
-}
-#skillcheck .res.ok {
+#skillcheck .sc-res.ok {
   color: var(--good);
 }
-#skillcheck .res.no {
-  color: var(--bad);
+#skillcheck .sc-res.no {
+  color: var(--red);
 }
-#skillcheck .nudge {
+#skillcheck .sc-keys {
   position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--grey-2);
+}
+#skillcheck .sc-timer {
+  position: absolute;
+  left: 236px;
+  right: 236px;
   bottom: 18px;
-  width: 64px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 24px;
-  color: #16181b;
-  background: var(--hazard);
-  border-radius: 8px;
-  box-shadow: 0 4px 0 var(--steel-lo);
-}
-#skillcheck .nudge.l {
-  left: 26px;
-}
-#skillcheck .nudge.r {
-  right: 26px;
-}
-#skillcheck .nudge.on {
-  translate: 0 3px;
-  box-shadow: 0 1px 0 var(--steel-lo);
+  height: 4px;
+  background: var(--white);
+  transform-origin: left center;
 }
 
-/* ------------------------------------------------------------------ SlashCo paperwork (overlays) */
+/* FUEL: the arch. */
+.fuel {
+  position: absolute;
+  left: 216px;
+  top: 104px;
+  width: 440px;
+  height: 270px;
+}
+.fuel .arch {
+  position: absolute;
+  left: 60px;
+  top: 64px;
+  width: 320px;
+  height: 160px;
+  /* the red ends are set from the check's difficulty in ui.js */
+  background: conic-gradient(from 270deg at 50% 100%, #ff3b30 0deg, #fff 40deg 140deg, #ff3b30 180deg, transparent 180deg);
+  -webkit-mask: radial-gradient(
+    circle at 50% 100%,
+    transparent 0 104px,
+    #000 105px 116px,
+    transparent 117px 126px,
+    #000 127px 160px,
+    transparent 161px
+  );
+  mask: radial-gradient(circle at 50% 100%, transparent 0 104px, #000 105px 116px, transparent 117px 126px, #000 127px 160px, transparent 161px);
+}
+/* The ▽ marker rides the top of the arch; the pivot sits at the arch's centre. */
+.fuel .pivot {
+  position: absolute;
+  left: 220px;
+  top: 224px;
+  width: 0;
+  height: 0;
+}
+.fuel .marker {
+  position: absolute;
+  left: -19px;
+  top: -212px;
+  width: 38px;
+  height: 34px;
+}
+.fuel .marker svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.fuel .pump {
+  position: absolute;
+  left: 188px;
+  top: 150px;
+  width: 64px;
+  height: 72px;
+}
+.fuel .pump svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.fuel .x {
+  position: absolute;
+  top: 212px;
+  font-size: 22px;
+  color: var(--red);
+}
+.fuel .x.l {
+  left: 0;
+}
+.fuel .x.r {
+  right: 0;
+}
+.fuel .key {
+  position: absolute;
+  top: 262px;
+  width: 64px;
+  text-align: center;
+  font-size: 22px;
+  line-height: 24px;
+  color: #fff;
+}
+.fuel .key.l {
+  left: 22px;
+}
+.fuel .key.r {
+  right: 22px;
+}
+.fuel .key .arrow {
+  display: block;
+  height: 26px;
+  font-size: 24px;
+  color: #fff;
+}
+.fuel .key.on {
+  color: var(--good);
+}
+.fuel .key.on .arrow {
+  color: var(--good);
+}
+
+/* BATTERY: two terminals, two bouncing clips. */
+.battery {
+  position: absolute;
+  left: 196px;
+  top: 100px;
+  width: 480px;
+  height: 300px;
+}
+.battery svg.rig {
+  position: absolute;
+  inset: 0;
+  width: 480px;
+  height: 300px;
+}
+.battery .clip {
+  position: absolute;
+  width: 96px;
+  height: 44px;
+  margin-top: -22px;
+}
+.battery .clip svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.battery .clip.l {
+  left: 36px;
+}
+.battery .clip.r {
+  right: 36px;
+}
+.battery .clip.r svg {
+  transform: scaleX(-1);
+}
+
+/* ------------------------------------------------------------------ SLASHERBOY windows (overlays) */
 .overlay {
   position: absolute;
   inset: 0;
+  z-index: 40;
   display: none;
-  place-items: center;
-  background: rgba(10, 12, 14, 0.84);
-  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
 }
 .overlay.show {
-  display: grid;
+  display: flex;
 }
 .overlay .box {
   position: relative;
-  width: 900px;
-  padding: 0 38px 30px;
-  color: var(--ink);
+  width: 1040px;
+  max-height: 920px;
+  background: #000;
+  border: 2px solid var(--line);
   text-align: center;
-  background: linear-gradient(var(--badge), var(--badge-shade));
-  border: 2px solid var(--steel-lo);
-  border-radius: 8px;
-  box-shadow: 0 10px 0 var(--steel-lo);
-  overflow: hidden;
+  padding-bottom: 22px;
 }
-.doc-head {
+.overlay .win-bar {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin: 0 -38px 20px;
-  padding: 10px 22px;
-  background: var(--slash);
-  color: #fff;
-}
-.doc-head .brand {
-  font-size: 30px;
-  line-height: 34px;
-  padding: 0;
-  background: none;
-}
-.doc-head .kind {
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 3px;
-}
-.doc-head .ref {
-  font-family: var(--lcd);
-  font-size: 22px;
-  color: #ffd9dc;
-}
-.overlay h1 {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: normal;
-  font-size: 60px;
-  line-height: 64px;
-  letter-spacing: 3px;
-  color: var(--ink);
-  text-wrap: balance;
-}
-.overlay h2 {
-  margin: 4px 0 14px;
-  font-weight: 800;
-  font-size: 21px;
-  letter-spacing: 2px;
-  color: var(--ink-soft);
-  text-wrap: balance;
-}
-.overlay p {
-  margin: 8px auto;
-  max-width: 700px;
-  font-weight: 600;
-  font-size: 22px;
-  line-height: 26px;
-  color: #3a3f44;
-}
-.overlay .lineup {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 12px;
-  margin: 14px 0 10px;
-}
-.lineup figure {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.lineup canvas {
-  width: 120px;
-  height: 120px;
-  border: 3px solid var(--ink);
-}
-.lineup figcaption {
-  font-weight: 800;
+  height: 30px;
+  padding: 0 10px;
   font-size: 16px;
-  letter-spacing: 1.5px;
+  line-height: 30px;
+  color: #000;
+  background: var(--line);
 }
-.lineup .vs {
-  align-self: center;
-  font-family: var(--display);
-  font-size: 40px;
-  color: var(--slash);
-  padding: 0 8px 26px;
-}
-.lineup .foe canvas {
-  border-color: var(--foe);
-  box-shadow: 0 0 0 3px var(--ink);
-}
-.file-line {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 14px;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 2px;
-}
-.file-line .dlvl {
-  padding: 2px 8px;
-  background: #16181b;
-  border-radius: 3px;
+.overlay .win-bar b {
+  letter-spacing: 0.05em;
 }
 .overlay .go {
-  display: inline-block;
-  margin-top: 16px;
-  font-weight: 800;
+  min-width: 170px;
+  height: 56px;
+  margin: 0 6px;
+  padding: 0 24px;
+  font-family: var(--logo);
   font-size: 26px;
-  letter-spacing: 3px;
-  padding: 8px 26px 7px;
-  color: #fff;
-  background: #16181b;
-  border-radius: 6px;
-  box-shadow: 0 4px 0 #000;
-}
-.overlay .go + .go {
-  margin-left: 12px;
-}
-.overlay .go.primary {
-  background: var(--slash);
-  animation: ready 1200ms ease-in-out infinite;
-}
-.overlay .go.foe {
-  color: var(--hazard);
+  color: var(--grey-1);
+  background: #000;
+  border: 2px solid var(--grey-2);
 }
 .overlay .go.sel {
-  box-shadow:
-    0 4px 0 #000,
-    0 0 0 3px var(--hazard);
+  color: #000;
+  background: #fff;
+  border-color: #fff;
 }
 .overlay .keys {
-  margin-top: 16px;
-  font-weight: 600;
-  font-size: 17px;
-  letter-spacing: 1px;
-  color: var(--ink-soft);
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--grey-2);
 }
-.overlay .stats {
+
+/* Title screen: the SLASHCO logo, the squad (swap anyone for Purpl Lady), the slasher. */
+.logo {
+  position: relative;
+  margin: 18px auto 0;
+  height: 150px;
+}
+.logo svg {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 132px;
+  height: 66px;
+  translate: -50% 0;
+}
+.logo .word {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  font-family: var(--logo);
+  font-size: 104px;
+  line-height: 110px;
+  letter-spacing: 2px;
+  color: #d9d9d9;
+  text-shadow:
+    5px 5px 0 #000,
+    -2px -2px 0 #000;
+}
+.title .tagline {
+  font-size: 16px;
+  color: var(--grey-1);
+  letter-spacing: 0.2em;
+}
+.squad {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 24px 0 4px;
+}
+.member {
+  width: 150px;
+  padding: 8px 0 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.member canvas {
+  width: 128px;
+  height: 128px;
+  display: block;
+  margin: 0 auto;
+  border: 2px solid var(--grey-3);
+}
+.member .nm {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #fff;
+  white-space: nowrap;
+}
+.member .role {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--grey-2);
+}
+.member:hover,
+.member.sel {
+  border-color: #fff;
+}
+.member.bench canvas {
+  filter: grayscale(1) brightness(0.5);
+}
+.member.bench .nm {
+  color: var(--grey-2);
+}
+.squad .split {
+  align-self: stretch;
+  width: 2px;
+  margin: 0 6px;
+  background: var(--grey-3);
+}
+.title .swap-hint {
+  font-family: var(--term);
+  font-size: 22px;
+  color: var(--grey-1);
+}
+.versus {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  margin: 16px 0 20px;
+}
+.versus canvas {
+  width: 96px;
+  height: 96px;
+  border: 2px solid var(--grey-3);
+}
+.versus .vs {
+  font-family: var(--logo);
+  font-size: 40px;
+  color: var(--grey-2);
+}
+.versus .who {
+  text-align: left;
+}
+.versus .who b {
+  display: block;
+  font-weight: 400;
+  font-size: 26px;
+  color: #fff;
+}
+.versus .who span {
+  font-size: 14px;
+  color: var(--grey-1);
+}
+
+/* Help, end screen and the full log. */
+.help {
+  max-height: 700px;
+  overflow: auto;
+  padding: 16px 30px 6px;
+  text-align: left;
+  font-family: var(--term);
+  font-size: 25px;
+  line-height: 26px;
+  color: var(--grey-1);
+}
+.help p {
+  margin: 0 0 12px;
+}
+.help b {
+  font-weight: normal;
+  color: #fff;
+}
+.overlay h1 {
+  margin: 30px 0 6px;
+  font-family: var(--logo);
+  font-weight: normal;
+  font-size: 64px;
+  line-height: 70px;
+  color: #fff;
+}
+.overlay.win h1 {
+  color: var(--good);
+}
+.overlay.lose h1 {
+  color: var(--red);
+}
+.overlay h2 {
+  margin: 0 30px 18px;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--grey-1);
+}
+.stats {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 2px 30px;
-  margin: 14px auto 4px;
   width: 620px;
-  font-weight: 600;
-  font-size: 22px;
-  line-height: 30px;
+  margin: 0 auto 24px;
   text-align: left;
-}
-.overlay .stats span {
-  border-bottom: 1px dashed #b7b0a0;
-}
-.overlay .stats span:nth-child(even) {
-  text-align: right;
-  font-family: var(--lcd);
-  font-size: 26px;
-  color: var(--ink);
-}
-.overlay.win h1 {
-  color: #1f7a44;
-}
-.overlay.lose h1 {
-  color: var(--slash);
-}
-.help {
-  text-align: left;
-  font-weight: 600;
-  font-size: 20px;
-  line-height: 25px;
-  color: #33383d;
-  max-height: 600px;
-  overflow: auto;
-  padding-right: 8px;
-}
-.help p {
-  margin: 0 0 10px;
-  max-width: none;
-  font-size: 20px;
-  line-height: 25px;
-}
-.help b {
-  color: var(--slash);
-  font-weight: 800;
-}
-/* The radio log reads like the radio: a dark screen. */
-#history .box {
-  width: 1000px;
-  height: 820px;
-  display: flex;
-  flex-direction: column;
-  background: var(--steel);
-  color: var(--text);
-}
-#history .scroll {
-  flex: 1;
-  overflow-y: auto;
-  text-align: left;
-  padding: 10px 14px;
-  background: var(--screen);
-  border-radius: 6px;
-}
-#history .line {
-  opacity: 1;
+  font-family: var(--term);
   font-size: 27px;
-  line-height: 29px;
-  white-space: normal;
+  line-height: 32px;
+  color: var(--grey-1);
 }
-#history .go {
-  align-self: center;
+.stats span:nth-child(even) {
+  text-align: right;
+  color: #fff;
+}
+.overlay .scroll {
+  max-height: 700px;
+  overflow: auto;
+  padding: 12px 26px 10px;
+  text-align: left;
+}
+.overlay .scroll .line {
+  white-space: normal;
+  color: var(--grey-1);
+}
+.help + .go,
+.overlay .scroll + .go {
+  margin-top: 8px;
 }
 
 /* ------------------------------------------------------------------ calmer motion */
 @media (prefers-reduced-motion: reduce) {
   #stage.shake,
   #stage.shake-big,
-  .badge.hit,
+  .profile.hit,
   #enemy-wrap.hit,
   #stage[data-enemy='trollge'] #enemy-wrap.rage #enemy,
   .slash i,
-  .badge.tremble .photo canvas,
+  .profile.tremble .photo canvas,
+  .profile .intent,
+  #foe .state.run,
   .cursor,
-  .badge .intent,
-  #monitor .rec::before,
-  .readout.heli,
-  .overlay .go.primary {
+  #slasherboy .readout.heli {
     animation: none;
   }
   #flash.go {

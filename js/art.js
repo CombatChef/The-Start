@@ -1,6 +1,6 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, the HUD
+ * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, the effect
  * icons, and the portrait cards (backdrop + portrait + status effects).
  *
  * Coordinates are in art pixels; the page shows them at 2x (the hallway is 640x480
@@ -638,51 +638,8 @@
     b: hex('#6fb6ff'),
     B: hex('#2a64c8'),
   };
+  // Small overlays for the portrait effects.
   const ICONS = {
-    // The menu cursor: a SlashCo knife instead of a pointing hand.
-    knife: [
-      '.......kkkkkkkkkkk....',
-      'kkkkkk.kssssssssssskk.',
-      'kRrrRkkkgssssssssssssk',
-      'kRRRRkkkggggggggggggk.',
-      'kkkkkk.kkkkkkkkkkkk...',
-    ],
-    heli: [
-      'kkkkkkkkkkkkkkkkk..',
-      '.......kkk.........',
-      '...kkkkkkkkk.......',
-      '..kbbyyyyyyykkkkkkk',
-      '.kbbbyyyyyyyyyyyyyk',
-      '.kyyyyyyyyykkkkkkk.',
-      '..kkkkkkkkkk.......',
-      '...k.....k.........',
-      '.kkkkkkkkkkkk......',
-    ],
-    gascan: [
-      '......kkk..',
-      '.....krrk..',
-      '.kkkkkrrkk.',
-      'krrrrrrrrrk',
-      'krRRRRRRRrk',
-      'krRkRRRkRrk',
-      'krRRkRkRRrk',
-      'krRRRkRRRrk',
-      'krRRkRkRRrk',
-      'krRkRRRkRrk',
-      'krrrrrrrrrk',
-      '.kkkkkkkkk.',
-    ],
-    battery: [
-      '..kkk....kkk..',
-      '..kGk....kGk..',
-      'kkkkkkkkkkkkkk',
-      'kgggggggggyggk',
-      'kgRgggggggyyyk',
-      'kRRRggggggyggk',
-      'kgRgggggggggGk',
-      'kGGGGGGGGGGGGk',
-      'kkkkkkkkkkkkkk',
-    ],
     anger: [
       '.rr.....rr.',
       'rRr.....rRr',
@@ -704,24 +661,27 @@
   }
 
   // ------------------------------------------------------------------ portrait cards
-  // Backdrop colours behind a portrait, like OMORI's emotion colours.
+  // Backdrop behind a portrait. The HUD is black and white, so most moods are greys (the
+  // profile's tags say AFRAID, HAPPY and so on); CRITICAL goes red and the ghost violet.
+  const GREY = R(['#050505', '#1c1c1f', '#3a3a3f', '#5c5c63']);
+  const DARK = R(['#000000', '#0a0a0a', '#161616', '#222222']);
   const MOODS = {
-    neutral: R(['#050505', '#1c1c1f', '#3a3a3f', '#5c5c63']),
-    sated: R(['#1a1402', '#5c4508', '#b08a14', '#f0cf3a']),
-    happy: R(['#1a1402', '#6b5208', '#c79c12', '#ffe14a']), // OMORI's HAPPY is yellow
-    hurt: R(['#070506', '#1f1618', '#3a2a2c', '#5a4346']),
+    neutral: GREY,
+    sated: R(['#060606', '#222224', '#48484c', '#707076']),
+    happy: R(['#060606', '#222224', '#48484c', '#707076']),
+    hurt: R(['#040404', '#161618', '#2c2c30', '#44444a']),
     critical: R(['#0c0000', '#3a0305', '#7a0910', '#b3141b']),
-    afraid: R(['#01030c', '#0a1a4a', '#1a3c93', '#2f64d6']),
-    confused: R(['#06020c', '#2a0f4a', '#5a228f', '#9446d6']),
+    afraid: R(['#020203', '#101014', '#222228', '#34343c']),
+    confused: GREY,
     berserk: R(['#0c0100', '#4a0600', '#9a1400', '#e8420a']),
-    sleep: R(['#010208', '#0b1030', '#1a2460', '#2e3d8f']),
-    drained: R(['#040404', '#151515', '#262626', '#383838']),
+    sleep: R(['#020203', '#101014', '#222228', '#34343c']),
+    drained: DARK,
     ghost: R(['#05020a', '#1d0f33', '#3b2166', '#5f3d9a']),
-    dead: R(['#000000', '#0a0a0a', '#161616', '#222222']),
+    dead: DARK,
     slasher: R(['#000000', '#1c0000', '#420000', '#6e0303']),
     umbra: R(['#000000', '#12051c', '#2c0d42', '#4f1a6e']),
     furious: R(['#050000', '#3d0000', '#8c0000', '#d10a0a']),
-    frozen: R(['#00060c', '#0b2a40', '#1f5a80', '#4fa3cf']),
+    frozen: GREY,
   };
 
   function loadPix(src) {
@@ -774,24 +734,18 @@
     mel: { head: [63, 43], brow: [63, 42], cheek: [78, 69], top: [63, 3] },
     john: { head: [64, 44], brow: [66, 38], cheek: [79, 64], top: [63, 9] },
     mysti: { head: [64, 70], brow: [64, 58], cheek: [80, 84], top: [60, 6] },
-    purpl: { head: [62, 56], brow: [66, 45], cheek: [74, 68], top: [60, 4] },
+    purpl: { head: [72, 72], brow: [76, 60], cheek: [88, 92], top: [64, 6] },
     jim: { head: [64, 60], brow: [64, 52], cheek: [79, 82], top: [64, 6] },
     sid: { head: [60, 18], brow: [60, 18], cheek: [66, 30], top: [58, 4] },
     trollge: { head: [62, 60], brow: [58, 40], cheek: [84, 70], top: [60, 10] },
   };
 
-  // Full-frame portraits take on the mood's colour, the way OMORI colours a whole card.
+  // Full-frame portraits take on a colour only when it's urgent: red when CRITICAL or
+  // berserk. Everything else stays black and white.
   const TINT = {
-    happy: hex('#ffd84a'),
-    sated: hex('#ffe07a'),
-    afraid: hex('#7aa4ff'),
-    confused: hex('#c08cff'),
     critical: hex('#ff5a5a'),
     berserk: hex('#ff8a3a'),
     furious: hex('#ff5a5a'),
-    sleep: hex('#8a9cff'),
-    frozen: hex('#a6e0ff'),
-    ghost: hex('#c6a6ff'),
   };
 
   const BLOOD = R(['#3d0006', '#7a000c', '#c0101c']);

@@ -1,9 +1,10 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * ui.js — the HUD, set up like a SlashCo monitor room: the hallway camera feed, the field
- * radio (battle log), SLASHERBOY's threat file on the slasher, the employee ID badges, the
- * field console (orders and extraction odds), targeting, the generator skill checks, and
- * every animation.
+ * ui.js — the HUD, in the style of SlashCo VR's own: SLASHERBOY (the monitor-room computer)
+ * prints the battle log, the slasher's condition floats on the left, orders go through the
+ * menu on the right, and each worker's profile shows health the way the game does, as a
+ * coloured word under a heart. Also targeting, the generator skill checks (drawn after the
+ * in-game ones), the title screen with the squad swap, and every animation.
  * It implements the `io` the battle engine talks to (say / fx / skillCheck / refresh).
  */
 (function (root) {
@@ -25,14 +26,13 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // Party order = badge order along the bottom of the console. Must match .badge in the CSS.
-  const BADGE_XY = [
+  // Party order = profile order along the bottom. Must match .profile[data-slot] in the CSS.
+  const PROFILE_XY = [
     [16, 714],
     [330, 714],
     [644, 714],
     [958, 714],
   ];
-  const slotOf = (id) => SC.DATA.party.indexOf(id);
   // Where each slasher's sprite sits on the stage (it is drawn at 2x).
   const ENEMY_BOX = {
     sid: { left: 438, top: 252 },
@@ -41,22 +41,62 @@
   const SCALE = 2;
   // SlashCo's danger levels, colour-coded 1 (yellow) to 3 (red).
   const DANGER = { MODERATE: 1, CONSIDERABLE: 2, DEVASTATING: 3 };
-  // Colour of each health state's chip on a badge.
-  const STATE_COLOR = {
-    CRITICAL: '#c91c25',
-    HURT: '#d9621a',
-    SCATHED: '#b98a00',
-    STABLE: '#3f9b52',
-    OK: '#2f9e5d',
-    SATED: '#a8830b',
-    OVERSATED: '#c79500',
-    DEAD: '#16181b',
-    NONE: '#6b5a8f',
+  // Health words and their colours, as on SlashCo VR's HUD.
+  const HP_COLOR = {
+    OVERSATED: 'var(--hp-oversated)',
+    SATED: 'var(--hp-sated)',
+    OK: 'var(--hp-ok)',
+    STABLE: 'var(--hp-stable)',
+    SCATHED: 'var(--hp-scathed)',
+    HURT: 'var(--hp-hurt)',
+    CRITICAL: 'var(--hp-critical)',
+    DEAD: 'var(--hp-dead)',
+    NONE: 'var(--hp-none)',
+  };
+  // The slasher's condition, from its doc health ("Good", "Unhealthy") down to BARELY STANDING.
+  const FOE_COLOR = {
+    GOOD: 'var(--hp-ok)',
+    UNHEALTHY: 'var(--hp-stable)',
+    BRUISED: 'var(--hp-scathed)',
+    WOUNDED: 'var(--hp-hurt)',
+    WEAKENED: 'var(--hp-critical)',
+    'BARELY STANDING': 'var(--red)',
+  };
+
+  // Icons, drawn the way SlashCo VR's HUD draws them: flat white shapes.
+  const SVG = {
+    heart:
+      '<svg viewBox="0 0 32 30"><path d="M16 29C16 29 1 19.5 1 9.5 1 4.5 5 1 9.2 1c3.2 0 5.6 2 6.8 4.4C17.2 3 19.6 1 22.8 1 27 1 31 4.5 31 9.5 31 19.5 16 29 16 29Z"/></svg>',
+    // CRITICAL: the skull and crossbones.
+    skullBones:
+      '<svg viewBox="0 0 48 44"><g stroke="currentColor" stroke-width="5" stroke-linecap="round"><line x1="8" y1="9" x2="40" y2="37"/><line x1="40" y1="9" x2="8" y2="37"/></g><circle cx="5" cy="10" r="3.6"/><circle cx="9" cy="5.5" r="3.6"/><circle cx="43" cy="10" r="3.6"/><circle cx="39" cy="5.5" r="3.6"/><circle cx="5" cy="36" r="3.6"/><circle cx="9" cy="40.5" r="3.6"/><circle cx="43" cy="36" r="3.6"/><circle cx="39" cy="40.5" r="3.6"/><path d="M24 5c-9 0-13.5 6-13.5 12.8 0 4.4 2 7 4.8 8.6V32h17.4v-5.6c2.8-1.6 4.8-4.2 4.8-8.6C37.5 11 33 5 24 5Z"/><g fill="#000"><ellipse cx="18.6" cy="18.5" rx="3.8" ry="4.2"/><ellipse cx="29.4" cy="18.5" rx="3.8" ry="4.2"/><path d="M24 22.5l-2.4 4.4h4.8Z"/><rect x="20" y="28.5" width="1.8" height="3.5"/><rect x="26.2" y="28.5" width="1.8" height="3.5"/></g></svg>',
+    skull:
+      '<svg viewBox="0 0 48 44"><path d="M24 3c-10 0-15 6.8-15 14.4 0 5 2.2 8 5.4 9.8V34h19.2v-6.8c3.2-1.8 5.4-4.8 5.4-9.8C39 9.8 34 3 24 3Z"/><g fill="#000"><ellipse cx="18" cy="18" rx="4.2" ry="4.6"/><ellipse cx="30" cy="18" rx="4.2" ry="4.6"/><path d="M24 23l-2.6 4.6h5.2Z"/><rect x="19.5" y="29.5" width="2" height="4.5"/><rect x="26.5" y="29.5" width="2" height="4.5"/></g></svg>',
+    ghost:
+      '<svg viewBox="0 0 32 32"><path d="M16 2C8.5 2 4 7.8 4 14.8V30l4-3.6 4 3.6 4-3.6 4 3.6 4-3.6 4 3.6V14.8C28 7.8 23.5 2 16 2Z"/><g fill="#000"><ellipse cx="11.5" cy="14" rx="2.6" ry="3.4"/><ellipse cx="20.5" cy="14" rx="2.6" ry="3.4"/></g></svg>',
+    // The fuel check's ▽ marker.
+    marker: '<svg viewBox="0 0 38 34"><polygon points="4,4 34,4 19,30" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></svg>',
+    // A petrol pump that fills with white as the fuel goes in.
+    pump: '<svg viewBox="0 0 64 72"><defs><clipPath id="pump-shape"><path d="M8 6h30a4 4 0 0 1 4 4v52H4V10a4 4 0 0 1 4-4Z"/><rect x="0" y="62" width="46" height="8"/></clipPath><clipPath id="pump-fill"><rect id="pump-level" x="0" y="72" width="64" height="72"/></clipPath></defs><g clip-path="url(#pump-shape)"><rect width="64" height="72" fill="#5a5a5a"/><rect width="64" height="72" fill="#fff" clip-path="url(#pump-fill)"/></g><rect x="10" y="13" width="26" height="18" rx="2" fill="#000"/><path d="M42 20h8a4 4 0 0 1 4 4v22a3 3 0 0 0 6 0V16l-6-8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    // An alligator clip, jaws to the right.
+    clip: '<svg viewBox="0 0 96 44"><g stroke="#000" stroke-width="11" stroke-linecap="round"><line x1="44" y1="20" x2="7" y2="6"/><line x1="44" y1="24" x2="7" y2="38"/></g><g stroke="#fff" stroke-width="6" stroke-linecap="round"><line x1="44" y1="20" x2="7" y2="6"/><line x1="44" y1="24" x2="7" y2="38"/></g><rect x="44" y="13" width="48" height="18" rx="4" fill="#fff" stroke="#000" stroke-width="3"/><polyline points="52,22 56,17 60,22 64,17 68,22 72,17 76,22 80,17 84,22 88,17" fill="none" stroke="#000" stroke-width="2.5"/><circle cx="46" cy="22" r="7" fill="#fff" stroke="#000" stroke-width="3"/><circle cx="46" cy="22" r="2" fill="#000"/></svg>',
+    // The SLASHCO logo's saw blade.
+    saw: (() => {
+      let pts = '';
+      for (let i = 0; i < 32; i++) {
+        const a = (i / 32) * Math.PI * 2;
+        const r = i % 2 ? 50 : 62;
+        pts += `${(66 + Math.cos(a) * r).toFixed(1)},${(66 + Math.sin(a) * r).toFixed(1)} `;
+      }
+      return `<svg viewBox="0 0 132 66"><polygon points="${pts}" fill="#d9d9d9"/><circle cx="66" cy="66" r="14" fill="#000"/></svg>`;
+    })(),
   };
 
   const UI = {
     battle: null,
     enemy: SC.DATA.enemy, // the slasher picked on the title screen
+    party: SC.DATA.party.slice(), // the squad picked on the title screen
+    bench: SC.DATA.bench,
     fast: false,
     cards: {},
     frame: 0,
@@ -73,15 +113,15 @@
   let panel;
   let escapeEl;
   let cursor;
-  let clockStart = 0;
 
+  const slotOf = (id) => UI.party.indexOf(id);
   const enemyId = () => (UI.battle ? UI.battle.enemy.id : UI.enemy);
   const enemyDef = () => SC.DATA.slashers[enemyId()];
   const enemyPoints = () => (enemyId() === 'trollge' ? SC.Art.trollgePoints() : SC.Art.SID_POINTS);
 
   function cardCenter(id) {
-    const [x, y] = BADGE_XY[slotOf(id)];
-    return [x + 152, y + 104];
+    const [x, y] = PROFILE_XY[Math.max(0, slotOf(id))];
+    return [x + 153, y + 117];
   }
   function enemyPoint(name) {
     const pts = enemyPoints();
@@ -165,10 +205,11 @@
     if (h && h.key) h.key(k, e);
   }
 
-  // ------------------------------------------------------------------ field radio (battle log)
-  // Every worker's and slasher's name gets its own colour in the log.
+  // ------------------------------------------------------------------ SLASHERBOY (battle log)
+  // Names stand out in white; the slasher's name is red.
   const NAMES = {};
-  for (const [id, d] of Object.entries(SC.DATA.workers).concat(Object.entries(SC.DATA.slashers))) NAMES[d.name] = id;
+  for (const [id, d] of Object.entries(SC.DATA.workers)) NAMES[d.name] = '';
+  for (const [id, d] of Object.entries(SC.DATA.slashers)) NAMES[d.name] = 'foe';
   const NAME_RE = new RegExp(
     '\\b(' +
       Object.keys(NAMES)
@@ -178,7 +219,7 @@
     'g'
   );
   function colorize(text) {
-    return esc(text).replace(NAME_RE, (m) => `<b class="n-${NAMES[m]}">${m}</b>`);
+    return esc(text).replace(NAME_RE, (m) => (NAMES[m] ? `<b class="${NAMES[m]}">${m}</b>` : `<b>${m}</b>`));
   }
   const Log = {
     skip: false,
@@ -198,15 +239,12 @@
         await wait(120);
         return;
       }
-      const radio = $('#radio');
-      radio.classList.add('rx'); // the receive light flickers while a line comes in
       const chars = Array.from(text);
       for (let i = 2; i < chars.length + 2 && !this.skip; i += 2) {
         line.textContent = chars.slice(0, i).join('');
         if (i % 4 === 0) sfx('blip');
         await wait(16);
       }
-      radio.classList.remove('rx');
       line.innerHTML = html;
       this.skip = false;
       const box = $('#log');
@@ -218,47 +256,31 @@
     },
   };
 
-  // ------------------------------------------------------------------ employee ID badges
-  function iconCanvas(name, scale) {
-    const px = SC.Art.icon(name);
-    const c = px.toCanvas();
-    c.className = 'px';
-    c.style.width = px.w * scale + 'px';
-    c.style.height = px.h * scale + 'px';
-    return c;
-  }
-
+  // ------------------------------------------------------------------ worker profiles
   function buildCard(id) {
     const d = SC.DATA.workers[id];
-    const r = el('div', 'badge' + (d.ghost ? ' spirit' : ''));
+    const r = el('div', 'profile');
     r.dataset.slot = slotOf(id);
     r.id = 'card-' + id;
     r.innerHTML = `
-      <div class="strip"><span class="brand">SLASHCO</span><span class="emp">${esc(d.badge || '')}</span></div>
-      <div class="clip"></div>
+      <div class="name">[${esc(d.name.toUpperCase())}]</div>
       <div class="photo"><canvas class="px" width="128" height="128"></canvas></div>
-      <div class="ident">
-        <div class="name"></div>
-        <div class="role">${esc(d.role || '')}</div>
-        <div class="row"><span>HEALTH</span><span class="state"></span></div>
-        <div class="vital"><div class="fill"></div><div class="over"></div></div>
-        <div class="row"><span>${esc(d.resource.name)}</span></div>
-        <div class="batt"><div class="cell"><div class="fill"></div></div><span class="txt"></span></div>
+      <div class="vitals">
+        <div class="heart"></div>
+        <div class="state"></div>
+        <div class="res"></div>
       </div>
       <div class="tags"></div>
-      <div class="intent"></div>
-      <div class="stamp">DECEASED</div>`;
-    stage.insertBefore(r, $('#fx')); // above the console, below effects and menus
+      <div class="intent"></div>`;
+    stage.insertBefore(r, $('#fx')); // below effects and menus
     const c = {
       root: r,
-      name: $('.name', r),
       canvas: $('.photo canvas', r),
-      tags: $('.tags', r),
+      heart: $('.heart', r),
+      icon: '',
       state: $('.state', r),
-      vitalFill: $('.vital .fill', r),
-      vitalOver: $('.vital .over', r),
-      cellFill: $('.cell .fill', r),
-      resTxt: $('.batt .txt', r),
+      res: $('.res', r),
+      tags: $('.tags', r),
       intent: $('.intent', r),
       key: '',
     };
@@ -274,26 +296,28 @@
     return c;
   }
 
-  // SLASHERBOY's file on the slasher: its health and ANGER, class and danger level.
+  // One profile per worker in the squad, rebuilt whenever the squad changes.
+  function buildCards() {
+    stage.querySelectorAll('.profile').forEach((p) => p.remove());
+    UI.cards = {};
+    for (const id of UI.party) buildCard(id);
+  }
+
+  // The slasher's block on the left: name, class, danger level, condition, ANGER.
   function buildPlate() {
-    const r = $('#enemy-plate');
+    const r = $('#foe');
     UI.plate = {
       root: r,
       name: $('.name', r),
       cls: $('.facts .cls', r),
       danger: $('.facts .dlvl', r),
-      dangerTxt: $('.facts .dlvl b', r),
-      hpPill: $('.hp .pill', r),
-      angerPill: $('.anger .pill', r),
-      hpFill: $('.hp .fill', r),
-      hpTxt: $('.hp .txt', r),
-      angerFill: $('.anger .fill', r),
-      angerTxt: $('.anger .txt', r),
+      state: $('.state', r),
+      anger: $('.anger', r),
       tags: $('.tags', r),
     };
   }
 
-  // Put the chosen slasher on the feed and in SLASHERBOY's file.
+  // Put the chosen slasher in the hallway and on the left.
   function placeEnemy() {
     const id = enemyId();
     const S = enemyDef();
@@ -309,21 +333,11 @@
       height: pts.h * SCALE + 'px',
     });
     const P = UI.plate;
-    P.name.textContent = S.title;
+    P.name.textContent = `[${S.title}]`;
     P.cls.textContent = S.class;
     P.danger.dataset.level = DANGER[S.danger] || 1;
-    P.dangerTxt.textContent = S.danger;
-    P.root.querySelectorAll('.notch').forEach((n) => n.remove());
-    addNotch(P.hpPill, S.weakenedAt, 'Weakened: run!');
-    addNotch(P.angerPill, S.anger.overflow / S.anger.max, S.lines.overflowShort);
+    P.danger.textContent = S.danger;
     view().draw(performance.now(), true);
-  }
-
-  function addNotch(pill, pct, title) {
-    const n = el('div', 'notch');
-    n.style.left = `calc(${pct * 100}% - 1px)`;
-    n.title = title;
-    pill.appendChild(n);
   }
 
   function unique(list) {
@@ -413,8 +427,8 @@
   function workerTags(b, u) {
     const tags = [];
     if (u.dead) {
-      if (u.possessed) tags.push({ t: 'POSSESSED', c: 'info' });
-      else if (u.carriedBy) tags.push({ t: 'CARRIED BY ' + b.unit(u.carriedBy).name.toUpperCase(), c: 'info' });
+      if (u.possessed) tags.push({ t: 'POSSESSED', c: 'note' });
+      else if (u.carriedBy) tags.push({ t: 'CARRIED BY ' + b.unit(u.carriedBy).name.toUpperCase(), c: 'note' });
       else tags.push({ t: 'NEEDS CARRYING', c: 'bad' });
       return tags;
     }
@@ -423,21 +437,21 @@
     if (u.flags.guarding) tags.push({ t: u.flags.barrier ? 'BARRIER' : 'GUARD', c: 'good' });
     if (u.status.exposed) tags.push({ t: 'VULNERABLE', c: 'bad' });
     if (b.deathward) tags.push({ t: 'DEATHWARD', c: 'good' });
-    if (u.status.asleep) tags.push({ t: 'ASLEEP', c: 'info' });
-    if (u.status.phasing) tags.push({ t: 'PHASING', c: 'info' });
+    if (u.status.asleep) tags.push({ t: 'ASLEEP', c: 'note' });
+    if (u.status.phasing) tags.push({ t: 'PHASING', c: 'note' });
     if (u.status.afraid) tags.push({ t: 'AFRAID', c: 'bad' });
     if (u.status.confused) tags.push({ t: 'CONFUSED', c: 'bad' });
     if (u.status.poison) tags.push({ t: 'URANIUM', c: 'bad' });
     if (u.status.balkan) tags.push({ t: u.status.balkan.phase === 'pending' ? 'BALKAN...' : 'BALKAN!', c: 'good' });
     if (u.flags.glassesOff) tags.push({ t: 'NO GLASSES', c: 'bad' });
-    if (u.flags.lunch) tags.push({ t: 'LUNCH BOX...', c: 'info' });
+    if (u.flags.lunch) tags.push({ t: 'LUNCH BOX...', c: 'note' });
     if (u.status.trap) tags.push({ t: 'BEAR TRAP', c: 'good' });
     if (u.status.happy) tags.push({ t: 'HAPPY', c: 'good' });
-    if (u.flags.proxy) tags.push({ t: 'PROXY ON', c: 'info' });
-    for (const id of u.carrying) tags.push({ t: 'CARRYING ' + b.unit(id).name.toUpperCase(), c: 'info' });
+    if (u.flags.proxy) tags.push({ t: 'PROXY ON', c: 'note' });
+    for (const id of u.carrying) tags.push({ t: 'CARRYING ' + b.unit(id).name.toUpperCase(), c: 'note' });
     if (u.ghost && u.res <= 0 && !u.status.phasing) tags.push({ t: 'DRAINED', c: 'bad' });
-    if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'info' });
-    if (b.uniformBonus(u)) tags.push({ t: 'NEUTRAL', c: 'info' }); // BRAVO Team Uniform is on
+    if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'note' });
+    if (b.uniformBonus(u)) tags.push({ t: 'NEUTRAL', c: 'note' }); // BRAVO Team Uniform is on
     return tags.concat(buffTags(b, u)).slice(0, 6);
   }
 
@@ -453,8 +467,8 @@
     if (s.status.blind) tags.push({ t: 'BLIND', c: 'good' });
     if (s.status.vulnerable) tags.push({ t: 'VULNERABLE', c: 'good' });
     if (s.flags.deagleFocus) tags.push({ t: 'AIMING', c: 'bad' });
-    if (b.known()) tags.push({ t: 'INTEL', c: 'info' });
-    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 5);
+    if (b.known()) tags.push({ t: 'INTEL', c: 'note' });
+    return tags.concat(buffTags(b, s).map((t) => ({ t: t.t, c: t.c === 'good' ? 'bad' : 'good' }))).slice(0, 6);
   }
 
   function setTags(c, tags) {
@@ -474,26 +488,33 @@
     return null;
   }
 
+  // Heart for the living, skull and crossbones when CRITICAL, a skull when dead, a ghost for
+  // Purpl Lady (who has no health at all).
+  function vitalIcon(u, hs) {
+    if (u.ghost) return 'ghost';
+    if (hs === 'DEAD') return 'skull';
+    if (hs === 'CRITICAL') return 'skullBones';
+    return 'heart';
+  }
+
   function refresh() {
     const b = UI.battle;
     if (!b) return;
     for (const u of b.party) {
       const c = UI.cards[u.id];
-      c.name.textContent = u.name.toUpperCase();
-      c.name.classList.toggle('long', u.name.length > 9);
+      if (!c) continue;
       const hs = b.healthState(u).id;
-      c.state.textContent = hs;
-      c.state.style.background = STATE_COLOR[hs] || STATE_COLOR.OK;
-      if (u.ghost) {
-        c.vitalFill.style.width = '100%';
-        c.vitalOver.style.width = '0';
-      } else {
-        c.vitalFill.style.width = clamp(u.hp, 0, 100) + '%';
-        c.vitalOver.style.width = clamp(((u.hp - 100) / 50) * 100, 0, 100) + '%';
+      c.root.style.setProperty('--hc', HP_COLOR[hs] || HP_COLOR.OK);
+      const icon = vitalIcon(u, hs);
+      if (c.icon !== icon) {
+        c.icon = icon;
+        c.heart.innerHTML = SVG[icon];
       }
-      c.vitalFill.style.setProperty('--vc', STATE_COLOR[hs] || STATE_COLOR.OK);
-      c.cellFill.style.width = (u.res / u.resMax) * 100 + '%';
-      c.resTxt.textContent = `${Math.round(u.res)}/${u.resMax}`;
+      const word = `[${hs === 'NONE' ? 'GHOST' : hs}]`;
+      if (c.state.textContent !== word) c.state.textContent = word;
+      c.state.classList.toggle('long', word.length > 9);
+      const res = `${u.def.resource.short} ${Math.round(u.res)}/${u.resMax}`;
+      if (c.res.textContent !== res) c.res.textContent = res;
       c.root.classList.toggle('dead', u.dead);
       c.root.classList.toggle('critical', hs === 'CRITICAL');
       c.root.classList.toggle('away', !!u.status.phasing);
@@ -505,13 +526,19 @@
       drawPortrait(c, workerLook(b, u));
     }
     const s = b.enemy;
-    const plate = UI.plate;
-    plate.hpFill.style.width = (s.hp / s.maxHp) * 100 + '%';
-    plate.hpTxt.textContent = b.healthState(s).id + (b.known() ? ` ${s.hp}` : '');
-    plate.angerFill.style.width = (s.anger / b.enemyDef.anger.max) * 100 + '%';
-    plate.angerTxt.textContent = String(Math.round(s.anger));
-    setTags(plate, enemyTags(b));
-    plate.root.classList.toggle('armed', !!s.flags.overflow);
+    const P = UI.plate;
+    const fs = b.healthState(s).id;
+    P.state.style.setProperty('--hc', FOE_COLOR[fs] || 'var(--white)');
+    const hp = b.known() ? ` <small>${s.hp} HP</small>` : '';
+    const stateHtml = `[${esc(fs)}]${hp}`;
+    if (P.state.innerHTML !== stateHtml) P.state.innerHTML = stateHtml;
+    P.state.classList.toggle('run', !!s.flags.weakened);
+    const A = b.enemyDef.anger;
+    const anger = Math.round(s.anger);
+    P.anger.textContent = `ANGER ${anger}`;
+    P.anger.classList.toggle('max', anger >= A.overflow);
+    P.anger.classList.toggle('hot', anger < A.overflow && anger >= A.overflow - 20);
+    setTags(P, enemyTags(b));
     enemyWrap.classList.toggle('rage', !!s.flags.overflow && !s.status.chilled && !s.status.stunned);
     enemyWrap.classList.toggle('chilled', !!s.status.chilled);
     enemyWrap.classList.toggle('down', !!s.status.stunned);
@@ -519,22 +546,22 @@
     $('#credits-chip').textContent = b.credits + ' CR';
     const chopper = $('#chopper-chip');
     chopper.style.display = b.chopper && !b.outcome ? '' : 'none';
-    if (b.chopper) chopper.textContent = 'HELI ETA ' + b.chopper.turns;
+    chopper.classList.add('heli');
+    if (b.chopper) chopper.textContent = 'HELI ' + b.chopper.turns;
     updateEscape();
   }
 
-  // ------------------------------------------------------------------ extraction gauge
+  // ------------------------------------------------------------------ escape odds
   function updateEscape(flashReason) {
     const b = UI.battle;
     if (!b) return;
     const e = b.escapeChance();
     escapeEl.classList.toggle('blocked', e.blocked);
     escapeEl.classList.toggle('ready', !e.blocked && e.chance >= 50);
-    $('.fill', escapeEl).style.width = (e.blocked ? 0 : e.chance) + '%';
     $('.pct', escapeEl).textContent = e.blocked ? '--' : e.chance + '%';
-    let label = 'ODDS IF THE TEAM RUNS NOW';
+    let label = 'IF THE TEAM RUNS NOW';
     if (e.blocked) label = e.short || 'NO WAY OUT';
-    else if (b.enemy.flags.weakened) label = `${b.enemyDef.title} IS WEAKENED — RUN!`;
+    else if (b.enemy.flags.weakened) label = `${b.enemyDef.title} IS WEAKENED. RUN!`;
     else if (b.chopper) label = `HELI LANDS IN ${b.chopper.turns} TURN${b.chopper.turns === 1 ? '' : 'S'}`;
     $('.label', escapeEl).textContent = flashReason || label;
     const sub = $('#command .order.escape .sub');
@@ -553,7 +580,7 @@
       return;
     }
     tip.innerHTML =
-      '<div class="row"><span>How the extraction odds add up:</span><span></span></div>' +
+      '<div class="row"><span>How the odds add up:</span><span></span></div>' +
       e.parts
         .map(([k, v]) => {
           const r = Math.round(v);
@@ -677,7 +704,7 @@
     if (id === enemyId()) return enemyPoint('body');
     return cardCenter(id);
   }
-  // Three claw marks raked across a worker's badge.
+  // Three claw marks raked across a worker's profile.
   function slash(id, big) {
     const [x, y] = cardCenter(id);
     const s = el('div', 'slash' + (big ? ' big' : ''), '<i></i><i></i><i></i>');
@@ -686,7 +713,7 @@
     fxLayer.appendChild(s);
     setTimeout(() => s.remove(), 520);
   }
-  // Lean the slasher toward a badge for a moment.
+  // Lean the slasher toward a profile for a moment.
   async function lunge(id, ms, reach) {
     const [tx, ty] = cardCenter(id);
     const k = reach || 1;
@@ -752,7 +779,7 @@
         return T(320);
       case 'ward':
         refresh();
-        flash('#ffe9a8');
+        flash('#ffffff');
         for (const u of b.party) if (!u.dead && (e.all || u.id === e.target)) pulse(card(u.id), 'glow', 600);
         sfx('success');
         return T(e.all ? 520 : 320);
@@ -872,7 +899,7 @@
       }
       case 'credits': {
         refresh();
-        pop(560, 100, `+${e.amount} CREDITS`, 'status', 1000);
+        pop(560, 120, `+${e.amount} CREDITS`, 'status', 1000);
         sfx('coin');
         return T(260);
       }
@@ -964,59 +991,62 @@
   }
 
   // ------------------------------------------------------------------ generator skill checks
-  // The two checks SlashCo VR puts on a generator: FUEL (keep the needle out of the red while
-  // you pour) and BATTERY (connect when the clamps line up with the terminals).
+  // The two checks SlashCo VR puts on a generator, drawn the way the game draws them.
+  //  FUEL: the ▽ marker loses its balance and drifts toward the red ends of the arch; hold
+  //        [Q] or [E] to push it back until the pour is done.
+  //  BATTERY: two clips bounce up and down at random speeds and change direction at random;
+  //        press when both are level with the red terminals ("[SPACE] to clip terminals.").
+  // `UI.check` exposes the live state, which the browser tests read.
   function skillCheck(o) {
     return new Promise((resolve) => {
       const box = $('#skillcheck');
       const fuel = o.kind === 'fuel';
       const support = o.moralSupport ? ' Purpl Lady’s Moral Support makes it easier.' : '';
+      const duration = (fuel ? o.pourMs : o.clipMs) || o.timeLimitMs;
       box.innerHTML = `
-        <div class="gen"><span>GENERATOR · ${fuel ? 'FUEL' : 'BATTERY'}</span></div>
-        <div class="t">${esc(o.title)}</div>
-        <div class="s">${
-          fuel
-            ? `${esc(o.name)} is pouring fuel. Hold <b>Q / ←</b> or <b>E / →</b> (or press a side) to keep the needle out of the red.`
-            : `${esc(o.name)} is connecting the battery. Press <b>Z / SPACE</b> or tap when the clamps line up with the terminals.`
-        }${support}</div>
-        ${
-          fuel
-            ? '<div class="dial"><div class="needle"></div></div>'
-            : '<div class="rail"><div class="terminals"></div><div class="clamp"></div></div>'
-        }
-        <div class="timer"></div>
-        <div class="res">GET READY…</div>
-        ${fuel ? '<div class="nudge l">◀</div><div class="nudge r">▶</div>' : ''}`;
-      const timer = $('.timer', box);
-      const res = $('.res', box);
+        <div class="sc-title">[${fuel ? 'FUEL' : 'BATTERY'}]</div>
+        <div class="sc-sub">${fuel ? `${esc(o.name)} is pouring fuel. Keep the arrow out of the red.` : '[SPACE] to clip terminals.'}${support}</div>
+        ${fuel ? fuelHtml() : batteryHtml()}
+        <div class="sc-res">GET READY…</div>
+        <div class="sc-keys">${fuel ? 'HOLD Q / ← OR E / → (OR HOLD A SIDE OF THIS BOX)' : 'Z / SPACE / ENTER, OR TAP'}</div>
+        <div class="sc-timer"></div>`;
+      const timer = $('.sc-timer', box);
+      const res = $('.sc-res', box);
       box.classList.add('show');
+      stage.classList.add('covered');
       const lead = UI.fast ? 250 : 650;
       const t0 = performance.now() + lead;
       let done = false;
       let handler = null;
+      const state = { kind: o.kind, t: 0, done: false };
+      UI.check = state;
 
       function finish(ok, msg) {
         if (done) return;
         done = true;
+        state.done = true;
+        state.ok = ok;
         Input.remove(handler);
         box.removeEventListener('pointerdown', onPointer);
         doc.removeEventListener('keydown', onHold, true);
         doc.removeEventListener('keyup', onHold, true);
         root.removeEventListener('pointerup', release);
-        res.textContent = ok ? 'SUCCESS!' : msg;
-        res.className = 'res ' + (ok ? 'ok' : 'no');
+        res.textContent = ok ? msg || 'SUCCESS!' : msg;
+        res.className = 'sc-res ' + (ok ? 'ok' : 'no');
         sfx(ok ? 'success' : 'fail');
         setTimeout(
           () => {
             box.classList.remove('show');
+            stage.classList.remove('covered');
+            UI.check = null;
             resolve(ok);
           },
-          UI.fast ? 350 : 750
+          UI.fast ? 350 : 800
         );
       }
 
-      // ---- FUEL: the needle drifts one way, then another; hold a side to push it back
-      // before it touches the red.
+      // ---- FUEL. p is the marker's place on the arch: 0 = left end, 0.5 = top, 1 = right end.
+      // It drifts one way, then the other; holding a side pushes it back.
       const safe = clamp(0.38 + o.zone * 1.2, 0.45, 0.85);
       const red = (1 - safe) / 2;
       let p = 0.5;
@@ -1038,47 +1068,67 @@
         pointerSide = 0;
         showHeld();
       }
+      // In the game the bar over [Q] turns into an arrow while it's held.
       function showHeld() {
         const h = held();
-        const l = $('.nudge.l', box);
-        const r = $('.nudge.r', box);
-        if (l) l.classList.toggle('on', h < 0);
-        if (r) r.classList.toggle('on', h > 0);
+        const l = $('.key.l', box);
+        const r = $('.key.r', box);
+        if (!l || !r) return;
+        l.classList.toggle('on', h < 0);
+        r.classList.toggle('on', h > 0);
+        $('.arrow', l).textContent = h < 0 ? '<' : '|';
+        $('.arrow', r).textContent = h > 0 ? '>' : '|';
       }
-      // ---- BATTERY: the clamps sweep back and forth over the rail.
-      const start = 0.12 + Math.random() * Math.max(0, 0.88 - o.zone - 0.12);
-      const at = (t) => {
-        const ph = (Math.max(0, t) / o.sweepMs) % 2;
-        return ph < 1 ? ph : 2 - ph;
-      };
+
+      // ---- BATTERY. Clip heights run 0 (top) to 1 (bottom); the terminals cover [top, top + span].
+      const span = clamp(0.3 + o.zone * 1.4, 0.4, 0.8);
+      const top = 0.06;
+      const clips = [0, 1].map(() => ({ y: rand(0.2, 0.95), v: (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 1.25), turn: 0 }));
+      const inside = (c) => c.y >= top && c.y <= top + span;
       function press() {
         if (done || fuel) return;
-        const t = performance.now() - t0;
-        if (t < 0) return; // not started yet
-        const x = at(t);
-        finish(x >= start && x <= start + o.zone, 'ZAP!');
+        if (performance.now() - t0 < 0) return; // not started yet
+        if (clips.every(inside)) {
+          clipOn();
+          finish(true, 'CLIPPED!');
+        } else {
+          zap();
+          finish(false, 'ZAP!');
+        }
+      }
+      function clipOn() {
+        for (const c of clips) c.y = top + span;
+        drawClips();
+        $('.spark', box).setAttribute('fill', '#ffe45c');
+      }
+      function zap() {
+        $('.spark', box).style.display = 'none';
+        $('.warn', box).style.display = '';
+        flash('#fff6a8');
       }
 
       if (fuel) {
         const deg = red * 180;
-        $('.dial', box).style.background =
-          `conic-gradient(from -90deg at 50% 100%, #c91c25 0deg ${deg}deg, #2f9e5d ${deg}deg ${180 - deg}deg, #c91c25 ${
-            180 - deg
-          }deg 180deg, transparent 180deg)`;
+        $('.arch', box).style.background =
+          `conic-gradient(from 270deg at 50% 100%, #ff3b30 0deg, #ff8a80 ${deg * 0.6}deg, #fff ${deg}deg ${180 - deg}deg, #ff8a80 ${180 - deg * 0.6}deg, #ff3b30 180deg, transparent 180deg)`;
       } else {
-        const term = $('.terminals', box);
-        term.style.left = start * 100 + '%';
-        term.style.width = o.zone * 100 + '%';
+        layoutBattery(box, top, span);
+      }
+      function drawClips() {
+        const Y = (c) => 20 + c.y * 240;
+        $('.clip.l', box).style.top = Y(clips[0]) + 'px';
+        $('.clip.r', box).style.top = Y(clips[1]) + 'px';
       }
 
       function frame(now) {
         if (done) return;
         const t = now - t0;
+        state.t = t;
         if (t >= 0 && res.textContent === 'GET READY…') res.textContent = '';
-        timer.style.transform = `scaleX(${clamp(1 - t / o.timeLimitMs, 0, 1)})`;
+        timer.style.transform = `scaleX(${clamp(1 - t / duration, 0, 1)})`;
+        const dt = last == null ? 0 : Math.min(0.05, (now - last) / 1000);
+        last = now;
         if (fuel) {
-          const dt = last == null ? 0 : Math.min(0.05, (now - last) / 1000);
-          last = now;
           if (t >= 0) {
             if (!nextGoal) nextGoal = now + 1600 + Math.random() * 800;
             if (now > nextGoal) {
@@ -1086,15 +1136,41 @@
               nextGoal = now + 1600 + Math.random() * 800;
             }
             force += (goal - force) * Math.min(1, dt * 5);
-            const drift = 0.22 * (1 + (t / o.timeLimitMs) * 0.3); // it gets a little harder to hold
+            const drift = 0.22 * (1 + (t / duration) * 0.3); // it gets a little harder to hold
             p = clamp(p + (force * drift + held() * 0.45) * dt, 0, 1);
           }
-          $('.needle', box).style.transform = `rotate(${(p - 0.5) * 180}deg)`;
+          state.p = p;
+          state.red = red;
+          $('.pivot', box).style.transform = `rotate(${(p - 0.5) * 180}deg)`;
+          $('#pump-level', box).setAttribute('y', String(72 - 72 * clamp(t / duration, 0, 1)));
           if (p < red || p > 1 - red) return finish(false, 'SPILLED!');
-          if (t >= o.timeLimitMs) return finish(true);
+          if (t >= duration) return finish(true, 'SUCCESS!');
         } else {
-          $('.clamp', box).style.left = at(t) * 100 + '%';
-          if (t >= o.timeLimitMs) return finish(false, 'TOO SLOW…');
+          if (t >= 0) {
+            for (const c of clips) {
+              // Random speed, random turns, and a bounce off either end.
+              c.turn -= dt;
+              if (c.turn <= 0) {
+                c.v = (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 1.25);
+                c.turn = rand(0.35, 1.1);
+              }
+              c.y += c.v * dt;
+              if (c.y < 0) {
+                c.y = -c.y;
+                c.v = Math.abs(c.v);
+              } else if (c.y > 1) {
+                c.y = 2 - c.y;
+                c.v = -Math.abs(c.v);
+              }
+            }
+          }
+          state.clips = clips.map((c) => c.y);
+          state.zone = [top, top + span];
+          drawClips();
+          if (t >= duration) {
+            zap();
+            return finish(false, 'TOO SLOW…');
+          }
         }
         root.requestAnimationFrame(frame);
         return undefined;
@@ -1117,18 +1193,71 @@
         doc.addEventListener('keydown', onHold, true);
         doc.addEventListener('keyup', onHold, true);
         root.addEventListener('pointerup', release);
-      }
+      } else drawClips();
       root.requestAnimationFrame(frame);
     });
   }
 
+  function fuelHtml() {
+    return `
+      <div class="fuel">
+        <div class="arch"></div>
+        <div class="pump">${SVG.pump}</div>
+        <div class="pivot"><div class="marker">${SVG.marker}</div></div>
+        <div class="x l">-X-</div><div class="x r">-X-</div>
+        <div class="key l"><span class="arrow">|</span>[Q]</div>
+        <div class="key r"><span class="arrow">|</span>[E]</div>
+      </div>`;
+  }
+
+  // The terminals are two red posts with a ✱ at the foot; the ⚡ between them turns into a
+  // yellow ⚠ when the generator shocks you.
+  function batteryHtml() {
+    return `
+      <div class="battery">
+        <svg class="rig" viewBox="0 0 480 300"></svg>
+        <div class="clip l">${SVG.clip}</div>
+        <div class="clip r">${SVG.clip}</div>
+      </div>`;
+  }
+  function layoutBattery(box, top, span) {
+    const y0 = 20 + top * 240;
+    const y1 = 20 + (top + span) * 240;
+    const post = (x, y) => {
+      let s = '';
+      for (const a of [0, 45, 90, 135]) {
+        const dx = Math.cos((a * Math.PI) / 180) * 17;
+        const dy = Math.sin((a * Math.PI) / 180) * 17;
+        s += `<line x1="${x - dx}" y1="${y - dy}" x2="${x + dx}" y2="${y + dy}" stroke="#000" stroke-width="11" stroke-linecap="round"/>`;
+      }
+      for (const a of [0, 45, 90, 135]) {
+        const dx = Math.cos((a * Math.PI) / 180) * 17;
+        const dy = Math.sin((a * Math.PI) / 180) * 17;
+        s += `<line x1="${x - dx}" y1="${y - dy}" x2="${x + dx}" y2="${y + dy}" stroke="#fff" stroke-width="6" stroke-linecap="round"/>`;
+      }
+      return s;
+    };
+    const bar = (x) => {
+      const n = 3;
+      const gap = 6;
+      const seg = (y1 - y0 - gap * (n - 1)) / n;
+      let s = '';
+      for (let i = 0; i < n; i++)
+        s += `<rect x="${x - 7}" y="${(y0 + i * (seg + gap)).toFixed(1)}" width="14" height="${seg.toFixed(1)}" fill="#ff2a1f" stroke="#000" stroke-width="3"/>`;
+      return s;
+    };
+    const py = y1 + 24;
+    $('svg.rig', box).innerHTML =
+      bar(180) +
+      bar(300) +
+      post(180, py) +
+      post(300, py) +
+      `<polygon class="spark" points="248,${py - 22} 229,${py + 3} 240,${py + 3} 234,${py + 22} 253,${py - 5} 242,${py - 5} 250,${py - 22}" fill="#fff" stroke="#000" stroke-width="2"/>` +
+      `<g class="warn" style="display:none"><polygon points="240,${py - 22} 262,${py + 18} 218,${py + 18}" fill="#ffd400" stroke="#000" stroke-width="3" stroke-linejoin="round"/><rect x="237.5" y="${py - 9}" width="5" height="16" fill="#000"/><rect x="237.5" y="${py + 10}" width="5" height="5" fill="#000"/></g>`;
+  }
+
   // ------------------------------------------------------------------ menus
-  let cursorSrc = null;
   function showCursor(x, y, down) {
-    if (!cursorSrc) {
-      cursorSrc = iconCanvas('knife', 2);
-      cursor.appendChild(cursorSrc);
-    }
     cursor.style.display = 'block';
     cursor.classList.toggle('down', !!down);
     cursor.style.left = x + 'px';
@@ -1137,16 +1266,17 @@
   function hideCursor() {
     cursor.style.display = 'none';
   }
-  // Point the knife at an option: inside its left padding if it has room, otherwise
-  // just outside its left edge.
+  // Point the arrowhead at an option (at its big word, if it has one), inside its left padding.
   function cursorAt(elem) {
+    const word = elem.querySelector('.word') || elem;
     const r = stageRect(elem);
+    const w = stageRect(word);
     const pad = parseFloat(root.getComputedStyle(elem).paddingLeft) || 0;
-    showCursor(pad >= 40 ? r.x + pad - 46 : r.x - 52, r.y + r.h / 2 - 5);
+    showCursor(pad >= 40 ? r.x + pad - 34 : r.x - 30, w.y + w.h / 2 - 12);
   }
 
   // Keyboard + mouse selection over a list of option elements. Resolves the chosen
-  // index, or null on BACK.
+  // index, or null on BACK. `o.cancel()` is set so a caller can stop waiting.
   function choose(o) {
     return new Promise((resolve) => {
       const opts = o.opts;
@@ -1176,9 +1306,10 @@
           op.el.onclick = null;
           op.el.onmouseenter = null;
         });
-        hideCursor();
+        if (!o.noCursor) hideCursor();
         resolve(v);
       };
+      o.cancel = () => finish(undefined);
       const move = (d) => {
         let n = i + d;
         if (n < 0 || n >= opts.length) return;
@@ -1213,18 +1344,16 @@
     });
   }
 
-  // The two big buttons on the field console.
+  // FIGHT and ESCAPE.
   function drawRoot(idle) {
     const b = UI.battle;
     command.innerHTML = '';
-    const fight = el('button', 'order fight' + (idle ? ' off' : ''));
-    fight.innerHTML = `<span class="ico"></span><span class="word">FIGHT</span><span class="sub">${
-      b ? 'ENGAGE ' + esc(b.enemyDef.title) : 'ENGAGE THE SLASHER'
-    }</span>`;
-    $('.ico', fight).appendChild(iconCanvas('knife', 2));
-    const run = el('button', 'order escape' + (idle ? ' off' : ''));
-    run.innerHTML = '<span class="ico"></span><span class="word">ESCAPE</span><span class="sub"></span>';
-    $('.ico', run).appendChild(iconCanvas('heli', 2));
+    const fight = el(
+      'button',
+      'order fight' + (idle ? ' off' : ''),
+      `<span class="word">FIGHT</span><span class="sub">${b ? 'TAKE ON ' + esc(b.enemyDef.title) : 'TAKE ON THE SLASHER'}</span>`
+    );
+    const run = el('button', 'order escape' + (idle ? ' off' : ''), '<span class="word">ESCAPE</span><span class="sub"></span>');
     command.appendChild(fight);
     command.appendChild(run);
     updateEscape();
@@ -1241,11 +1370,6 @@
           { el: run, enabled: true },
         ],
         back: false,
-        noCursor: true,
-        onHighlight: (op, k) => {
-          fight.classList.toggle('off', k !== 0);
-          run.classList.toggle('off', k !== 1);
-        },
       });
       if (idx === 0) return 'fight';
       const e = b.escapeChance();
@@ -1261,14 +1385,14 @@
   const ACTION_HINTS = {
     attack: (b, u) => {
       const W = u.def.weapon;
-      if (u.ghost) return `HEX — ${W.name}: no damage, a random debuff on ${b.en}.`;
+      if (u.ghost) return `HEX: ${W.name}. No damage, a random debuff on ${b.en}.`;
       return `${W.name}: ${W.rules ? b.fill(W.rules) : `${W.hits} hits (the 2nd is less accurate).`}`;
     },
     skills: (b, u) => `Use a skill. Costs ${u.def.resource.name}.`,
     items: () => 'Use something from the team bag.',
     guard: (b, u) =>
       u.ghost
-        ? 'FOCUS — gather SPIRIT (+20). Keeps Freaky Doctor running.'
+        ? 'FOCUS: gather SPIRIT (+20). Keeps Freaky Doctor running.'
         : `Take half damage this turn, recover 20 STAMINA. Acts first.${b.enemy.id === 'trollge' ? ' Holds still: Trollge can’t catch you moving.' : ''}`,
     carry: () => 'Pick up a dead ally so the team can escape. Slows the carrier.',
     back: () => 'Go back.',
@@ -1277,7 +1401,7 @@
   async function actionMenu(b, u, first) {
     command.innerHTML = '';
     const menu = el('div', 'menu');
-    menu.innerHTML = `<div class="who"><span>${esc(u.name.toUpperCase())}</span><span class="res">${esc(u.def.resource.short)} ${Math.round(u.res)}/${
+    menu.innerHTML = `<div class="who"><span>[${esc(u.name.toUpperCase())}]</span><span class="res">${esc(u.def.resource.short)} ${Math.round(u.res)}/${
       u.resMax
     }</span></div><div class="grid"></div><div class="hint"></div>`;
     command.appendChild(menu);
@@ -1317,13 +1441,14 @@
         if (it.count != null) it.count = Math.max(0, left);
       }
     }
-    panel.innerHTML = `<div class="title"><span>${esc(kind === 'skills' ? u.name.toUpperCase() + ' — SKILLS' : 'TEAM BAG')}</span><span>${
-      kind === 'skills' ? esc(u.def.resource.name + ' ' + Math.round(u.res) + '/' + u.resMax) : b.credits + ' CREDITS'
+    panel.innerHTML = `<div class="title"><span>${esc(kind === 'skills' ? `[${u.name.toUpperCase()}] SKILLS` : '[TEAM BAG]')}</span><span>${
+      kind === 'skills' ? esc(u.def.resource.short + ' ' + Math.round(u.res) + '/' + u.resMax) : b.credits + ' CREDITS'
     }</span></div><div class="list"></div><div class="desc"></div>`;
     const list = $('.list', panel);
     const desc = $('.desc', panel);
     if (kind === 'skills' && entries.length <= 5) list.classList.add('one');
     panel.classList.add('show');
+    stage.classList.add('covered');
     const opts = entries.map((x) => {
       const right = kind === 'skills' ? `${x.cost} ${x.resource}` : x.count == null ? '' : 'x' + x.count;
       const e = el('button', 'opt' + (x.enabled ? '' : ' disabled'), `<span>${esc(x.short || x.name)}</span><span class="cost">${esc(right)}</span>`);
@@ -1340,6 +1465,7 @@
     };
     const idx = await choose({ opts, columns: kind === 'skills' && entries.length <= 5 ? 1 : 2, onHighlight: show, onDenied: show });
     panel.classList.remove('show');
+    stage.classList.remove('covered');
     return idx == null ? null : entries[idx];
   }
 
@@ -1358,10 +1484,10 @@
       if (kind === 'enemy') {
         const e = b.enemy;
         const hint = prompt(title || `TARGET: ${b.enemyDef.title}`);
-        hint.textContent = `${e.name} — ${b.healthState(e).id}, ANGER ${Math.round(e.anger)}.`;
+        hint.textContent = `${e.name}: ${b.healthState(e).id}, ANGER ${Math.round(e.anger)}.`;
         enemyWrap.classList.add('targeted');
         const [bx, by] = enemyPoint('body');
-        showCursor(bx - 170, by - 5);
+        showCursor(bx - 150, by - 12);
         const done = (v) => {
           Input.remove(handler);
           enemyWrap.classList.remove('targeted');
@@ -1397,9 +1523,9 @@
         i = (n + cands.length) % cands.length;
         cands.forEach((c, k) => UI.cards[c.id].root.classList.toggle('pick', k === i));
         const c = cands[i];
-        const [x, y] = BADGE_XY[slotOf(c.id)];
-        showCursor(x + 130, y - 44, true);
-        hint.textContent = c.dead ? `${c.name}’s body.` : `${c.name} — ${b.healthState(c).id}.`;
+        const [x, y] = PROFILE_XY[slotOf(c.id)];
+        showCursor(x + 143, y - 36, true);
+        hint.textContent = c.dead ? `${c.name}’s body.` : `${c.name}: ${b.healthState(c).id}.`;
       };
       const done = (v) => {
         Input.remove(handler);
@@ -1537,7 +1663,7 @@
     }
   }
 
-  // ------------------------------------------------------------------ SlashCo paperwork (overlays)
+  // ------------------------------------------------------------------ SLASHERBOY windows (overlays)
   function overlay(id, cls, html) {
     const o = $('#' + id);
     o.className = 'overlay show ' + (cls || '');
@@ -1549,58 +1675,40 @@
     o.className = 'overlay';
     o.innerHTML = '';
   }
-  function docHead(kind, ref) {
-    return `<div class="doc-head"><span class="brand">SLASHCO</span><span class="kind">${esc(kind)}</span><span class="ref">${esc(ref)}</span></div>`;
+  function winBar(left, right) {
+    return `<div class="win-bar"><b>${esc(left)}</b><span>${esc(right || '')}</span></div>`;
   }
-  function dangerHtml(S) {
-    return `<span class="dlvl" data-level="${DANGER[S.danger] || 1}"><i></i><i></i><i></i><b>${esc(S.danger)}</b></span>`;
-  }
-
-  function lineupHtml() {
-    const party = SC.DATA.party
-      .map((id) => `<figure><span data-p="${id}"></span><figcaption>${esc(SC.DATA.workers[id].name.toUpperCase())}</figcaption></figure>`)
-      .join('');
-    const S = enemyDef();
-    return `<div class="lineup">${party}<span class="vs">VS</span><figure class="foe"><span data-p="${enemyId()}" data-foe="1"></span><figcaption>${esc(
-      S.title
-    )}</figcaption></figure></div>`;
-  }
-  function fillLineup(o) {
-    o.querySelectorAll('[data-p]').forEach((s) => {
-      const id = s.dataset.p;
-      let look;
-      if (s.dataset.foe) look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: 'umbra', fx: [] };
-      else look = { id, mood: SC.DATA.workers[id].ghost ? 'ghost' : 'neutral', fx: [] };
-      const c = SC.Art.card(look).toCanvas();
-      c.className = 'px';
-      s.replaceWith(c);
-    });
+  function portraitCanvas(id, foe) {
+    let look;
+    if (foe) look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: 'umbra', fx: [] };
+    else look = { id, mood: SC.DATA.workers[id].ghost ? 'ghost' : 'neutral', fx: [] };
+    const c = SC.Art.card(look).toCanvas();
+    c.className = 'px';
+    return c;
   }
 
   // `scroll`: an element the up/down keys scroll instead.
   function waitChoice(o, buttons, initial, scroll) {
-    return new Promise((resolve) => {
-      const btns = buttons.map((sel) => $(sel, o));
-      const opts = btns.map((b) => ({ el: b, enabled: true }));
-      choose({ opts, columns: opts.length, back: false, initial, scroll, noCursor: true }).then((i) => resolve(i));
-    });
+    const btns = buttons.map((sel) => $(sel, o));
+    const opts = btns.map((b) => ({ el: b, enabled: true }));
+    return choose({ opts, columns: opts.length, back: false, initial, scroll, noCursor: true });
   }
 
-  // The field manual: the rules every fight shares, plus the chosen slasher's own.
+  // How to play: the rules every fight shares, plus the chosen slasher's own.
   const HELP_FOE = {
     trollge: `
-      <p><b>TROLLGE ONLY SEES WHAT MOVES.</b> When it stares at someone (<b>STARED AT</b>), anything but GUARD counts as moving: they become <b>SEEN</b> and it gets angrier. It can only <b>Scratch</b>, which hits very hard, someone who is SEEN. Its claws mostly miss whoever hasn't moved yet this turn, or is guarding, and every claw hit can leave you AFRAID.</p>
-      <p><b>ANGER</b> is on SLASHERBOY's file, top right. At <b>80</b>, <b>Slow Walker, Fast Runner</b>: its speed jumps from 12 to 77, it moves first <i>and</i> comes back around after everyone, it marks someone SEEN every turn, and it's much harder to outrun. Get out before that, or hold on.</p>
-      <p><b>READ ITS NEXT MOVE.</b> John's Hyperceptive flags the badge it goes for: <b>STARE</b>, <b>SCRATCH</b> or <b>TARGET</b>. Captain Jim's Confidential Documents say how hard. GUARD, heal first, or set a Bear Trap. Mysti's Tactical Stab is extremely effective against Trollge.</p>`,
+      <p><b>TROLLGE ONLY SEES WHAT MOVES.</b> When it stares at someone ([STARED AT]), anything but GUARD (FOCUS, for Purpl Lady) counts as moving: they become [SEEN] and it gets angrier. It can only <b>Scratch</b>, which hits very hard, someone who is SEEN. Its claws mostly miss whoever hasn't moved yet this turn, or is guarding, and every claw hit can leave you AFRAID.</p>
+      <p><b>ANGER</b> is on the left, under its condition. At <b>80</b>, <b>Slow Walker, Fast Runner</b>: its speed jumps from 12 to 77, it moves first <i>and</i> comes back around after everyone, it marks someone SEEN every turn, and it's much harder to outrun. Get out before that, or hold on.</p>
+      <p><b>READ ITS NEXT MOVE.</b> With John in the squad, his Hyperceptive flags the profile it goes for: <b>STARE</b>, <b>SCRATCH</b> or <b>TARGET</b>. Captain Jim's Confidential Documents say how hard. GUARD, heal first, or set a Bear Trap. Mysti's Tactical Stab is extremely effective against Trollge.</p>`,
     sid: `
-      <p><b>ANGER</b> is on SLASHERBOY's file, top right. It rises every turn and whenever Sid gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
-      <p><b>READ HIS NEXT MOVE.</b> John's Hyperceptive flags the badge Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
+      <p><b>ANGER</b> is on the left, under his condition. It rises every turn and whenever Sid gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
+      <p><b>READ HIS NEXT MOVE.</b> With John in the squad, his Hyperceptive flags the profile Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
   };
   function helpHtml() {
-    const has = (id) => SC.DATA.party.includes(id);
+    const has = (id) => UI.party.includes(id);
     return `
     <div class="help">
-      <p><b>ASSIGNMENT.</b> You can't kill a slasher. Weaken it until SLASHERBOY reads <b>WEAKENED</b>, then hit <b>ESCAPE</b> on the field console. The <b>EXTRACTION</b> gauge above it shows your odds of getting out (click it for the breakdown).</p>
+      <p><b>THE JOB.</b> You can't kill a slasher. Weaken it until its condition reads <b>[WEAKENED]</b>, then pick <b>ESCAPE</b>. The odds are at the top of the menu (click them for the breakdown).</p>
       <p><b>NOBODY GETS LEFT BEHIND.</b> If a worker dies, a living worker has to <b>CARRY</b> the body before anyone can run. Carrying slows the carrier and lowers the odds.${
         has('purpl')
           ? " Purpl Lady is a ghost: she can't carry anyone, but once the slasher is weakened she <b>POSSESSES</b> a body so it walks out on its own."
@@ -1612,10 +1720,15 @@
           ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Her <b>DEATHWARD</b> (in the bag) keeps the whole team from dying for 3 turns. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
           : ''
       }
-      <p><b>THE HELI.</b> Captain Jim's Helicopter Escape lands after 5 turns and gets everyone out, bodies included, as long as someone who can carry a body is still alive.</p>
-      <p><b>BADGES.</b> HEALTH is a condition, not a number: CRITICAL, HURT, SCATHED, STABLE, OK, SATED, OVERSATED (the gold stripe is health over 100%). The battery is STAMINA, which pays for skills.</p>
-      <p><b>GENERATOR CHECKS.</b> Mel's <b>Fuel</b> check: the needle drifts, so hold Q / ← or E / → (or press and hold a side of the panel) to keep it out of the red until the timer runs out. John's <b>Battery</b> check: press Z / Space, or tap, when the clamps line up with the terminals, or the generator shocks him.</p>
-      <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · L radio log · F fast text · M mute. Mouse and touch work everywhere.</p>
+      ${
+        has('jim')
+          ? "<p><b>THE HELI.</b> Captain Jim's Helicopter Escape lands after 5 turns and gets everyone out, bodies included, as long as someone who can carry a body is still alive.</p>"
+          : ''
+      }
+      <p><b>HEALTH</b> is a word, as in SlashCo VR: [OVERSATED], [SATED], [OK], [STABLE], [SCATHED], [HURT], [CRITICAL] (the heart turns into a skull and crossbones). STA is STAMINA, which pays for skills.</p>
+      <p><b>THE SQUAD.</b> On the title screen, click anyone to swap them with whoever is on the bench (Purpl Lady, to start with), or press SWAP.</p>
+      <p><b>GENERATOR CHECKS.</b> Mel's <b>fuel</b> check: the arrow loses its balance and drifts toward the red, so hold Q / ← or E / → (or hold a side of the box) to push it back until the pour is done. John's <b>battery</b> check: the clips bounce around; press Z / Space (or tap) when both are level with the red terminals, or the generator shocks him.</p>
+      <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · L battle log · F fast text · M mute. Mouse and touch work everywhere.</p>
     </div>`;
   }
 
@@ -1624,7 +1737,7 @@
       const o = overlay(
         'help',
         '',
-        `<div class="box">${docHead('FIELD MANUAL', 'REV. 3')}${helpHtml()}<button class="go primary" id="help-ok">GOT IT</button></div>`
+        `<div class="box">${winBar('SLASHERBOY', 'HOW TO PLAY')}${helpHtml()}<button class="go sel" id="help-ok">GOT IT</button></div>`
       );
       waitChoice(o, ['#help-ok'], 0, $('.help', o)).then(() => {
         closeOverlay('help');
@@ -1633,28 +1746,104 @@
     });
   }
 
+  // ------------------------------------------------------------------ the squad
+  // Four go in; the fifth waits on the bench. Clicking anyone on the team swaps them with the
+  // bench, so Purpl Lady can take anyone's place, and they can take hers back.
+  const ROSTER = SC.DATA.party.concat([SC.DATA.bench]);
+  function loadSquad() {
+    try {
+      const s = JSON.parse(root.localStorage.getItem('sc-squad') || 'null');
+      const all = s && s.party && s.party.concat([s.bench]);
+      if (all && all.length === ROSTER.length && ROSTER.every((id) => all.includes(id))) {
+        UI.party = s.party;
+        UI.bench = s.bench;
+      }
+    } catch (e) {
+      /* convenience only */
+    }
+  }
+  function saveSquad() {
+    try {
+      root.localStorage.setItem('sc-squad', JSON.stringify({ party: UI.party, bench: UI.bench }));
+    } catch (e) {
+      /* convenience only */
+    }
+  }
+  function swapWithBench(id) {
+    const i = UI.party.indexOf(id);
+    if (i < 0) return;
+    UI.party[i] = UI.bench;
+    UI.bench = id;
+    saveSquad();
+  }
+  // The SWAP button: Purpl Lady takes the next spot along, then goes back to the bench.
+  function cycleSwap() {
+    const ghost = SC.DATA.bench;
+    const at = UI.party.indexOf(ghost);
+    if (at < 0) {
+      swapWithBench(UI.party[0]);
+      return;
+    }
+    swapWithBench(ghost); // she goes back to the bench
+    if (at + 1 < UI.party.length) swapWithBench(UI.party[at + 1]);
+  }
+
+  function titleHtml() {
+    const S = enemyDef();
+    const member = (id, bench) => {
+      const d = SC.DATA.workers[id];
+      return `<button class="member${bench ? ' bench' : ''}" data-id="${id}"><span data-p="${id}"></span><span class="nm">${esc(d.name.toUpperCase())}</span><span class="role">${
+        bench ? 'ON THE BENCH' : esc(d.role || '')
+      }</span></button>`;
+    };
+    return `<div class="box">
+      ${winBar('SLASHERBOY', 'SLASHCO VR · TURN-BASED BATTLE')}
+      <div class="logo">${SVG.saw}<div class="word">SLASHCO</div></div>
+      <div class="tagline">WEAKEN IT. THEN RUN.</div>
+      <div class="squad">${UI.party.map((id) => member(id, false)).join('')}<span class="split"></span>${member(UI.bench, true)}</div>
+      <div class="swap-hint">Click anyone to swap them with the bench.</div>
+      <div class="versus"><span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span><span class="who"><b>[${esc(S.title)}]</b><span>${esc(
+        S.class
+      )} · <span style="color: var(--danger-${DANGER[S.danger] || 1})">${esc(S.danger)}</span></span></span></div>
+      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-help">HOW TO PLAY</button>
+      <div class="keys">Z / ENTER: CONFIRM · ARROWS: MOVE · F: FAST TEXT · M: MUTE</div>
+    </div>`;
+  }
+
   async function title() {
     UI.phase = 'title';
     let at = 0;
     for (;;) {
-      const S = enemyDef();
-      const o = overlay(
-        'screen',
-        'title',
-        `<div class="box">
-          ${docHead('ASSIGNMENT BRIEFING', 'SLASHCO VR · TURN-BASED BATTLE')}
-          <h1>WEAKEN IT. THEN RUN.</h1>
-          <h2>PERSONNEL ASSIGNED</h2>
-          ${lineupHtml()}
-          <div class="file-line"><span>SLASHER: ${esc(S.title)}</span><span>CLASS: ${esc(S.class)}</span>${dangerHtml(S)}</div>
-          <p>Weaken ${esc(S.name)}, then get out. Nobody gets left behind.</p>
-          <button class="go primary" id="t-start">DEPLOY</button><button class="go foe" id="t-foe">SLASHER ▸</button><button class="go" id="t-help">FIELD MANUAL</button>
-          <div class="keys">Z / Enter: confirm · X / Esc: back · Arrows: move · F: fast text · M: mute</div>
-        </div>`
-      );
-      fillLineup(o);
-      at = await waitChoice(o, ['#t-start', '#t-foe', '#t-help'], at);
+      const o = overlay('screen', 'title', titleHtml());
+      o.querySelectorAll('[data-p]').forEach((s) => s.replaceWith(portraitCanvas(s.dataset.p, !!s.dataset.foe)));
+      const ask = {
+        opts: ['#t-start', '#t-foe', '#t-swap', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
+        columns: 4,
+        back: false,
+        initial: at,
+        noCursor: true,
+      };
+      const res = await new Promise((resolve) => {
+        o.querySelectorAll('.member').forEach((m) => {
+          m.onclick = (ev) => {
+            ev.stopPropagation();
+            if (ask.cancel) ask.cancel();
+            resolve({ member: m.dataset.id });
+          };
+        });
+        choose(ask).then((i) => {
+          if (i !== undefined) resolve({ button: i });
+        });
+      });
       if (SC.Audio) SC.Audio.unlock();
+      if (res.member) {
+        if (UI.party.includes(res.member)) {
+          swapWithBench(res.member);
+          sfx('select');
+        } else sfx('denied'); // the bench: click someone on the team instead
+        continue;
+      }
+      at = res.button;
       if (at === 0) {
         closeOverlay('screen');
         return;
@@ -1671,6 +1860,10 @@
         placeEnemy();
         continue;
       }
+      if (at === 2) {
+        cycleSwap();
+        continue;
+      }
       closeOverlay('screen');
       await showHelp();
     }
@@ -1685,19 +1878,19 @@
       'screen',
       win ? 'win' : 'lose',
       `<div class="box">
-        ${docHead('EXTRACTION REPORT', 'TURN ' + b.turn)}
-        <h1>${win ? 'EXTRACTION SUCCESSFUL' : 'ASSIGNMENT FAILED'}</h1>
+        ${winBar('SLASHERBOY', 'TURN ' + b.turn)}
+        <h1>${win ? 'YOU ESCAPED' : 'ASSIGNMENT FAILED'}</h1>
         <h2>${win ? `A SUCCESSFUL ESCAPE! ${esc(b.partyNames().toUpperCase())} WIN!` : `${esc(b.enemyDef.title)} GOT EVERYONE WHO COULD CARRY A BODY.`}</h2>
         <div class="stats">
           <span>Turns</span><span>${b.turn}</span>
           <span>Credits earned</span><span>${b.credits}</span>
           ${win ? `<span>EXP earned${b.secrets ? ' (Hidden Documents: +50%)' : ''}</span><span>${b.exp}</span>` : ''}
           <span>Damage dealt to ${esc(b.en)}</span><span>${b.stats.damageDealt}</span>
-          <span>Personnel lost</span><span>${lost.length ? esc(lost.join(', ')) : 'None'}</span>
+          <span>Workers lost</span><span>${lost.length ? esc(lost.join(', ')) : 'None'}</span>
           <span>Escape attempts</span><span>${b.stats.runs}</span>
           <span>${esc(b.en)}'s ANGER at the end</span><span>${Math.round(b.enemy.anger)}</span>
         </div>
-        <button class="go primary" id="e-again">REDEPLOY</button><button class="go" id="e-log">RADIO LOG</button>
+        <button class="go" id="e-again">AGAIN</button><button class="go" id="e-log">BATTLE LOG</button>
       </div>`
     );
     for (;;) {
@@ -1713,9 +1906,9 @@
       const o = overlay(
         'history',
         '',
-        `<div class="box">${docHead('RADIO LOG', 'FIELD RADIO · CH 04')}<div class="scroll">${Log.history
+        `<div class="box">${winBar('SLASHERBOY', 'BATTLE LOG')}<div class="scroll">${Log.history
           .map((l) => `<div class="line ${esc(l.tone)}">${colorize(l.text)}</div>`)
-          .join('')}</div><button class="go primary" id="h-close">CLOSE</button></div>`
+          .join('')}</div><button class="go sel" id="h-close">CLOSE</button></div>`
       );
       const sc = $('.scroll', o);
       sc.scrollTop = sc.scrollHeight;
@@ -1751,15 +1944,6 @@
     }
   }
 
-  // The camera's clock: the middle of the night, counting up.
-  function tickClock(now) {
-    const s = 3 * 3600 + 13 * 60 + Math.floor((now - clockStart) / 1000);
-    const two = (n) => String(n).padStart(2, '0');
-    const text = `${two(Math.floor(s / 3600) % 24)}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`;
-    const c = $('#cam-clock');
-    if (c.textContent !== text) c.textContent = text;
-  }
-
   // ------------------------------------------------------------------ build
   function build() {
     stage = $('#stage');
@@ -1778,9 +1962,9 @@
     doc.addEventListener('keydown', onKey);
 
     SC.Art.hallway().toCanvas($('#bg'));
-    for (const id of SC.DATA.party) buildCard(id);
+    loadSquad();
+    buildCards();
     buildPlate();
-    $('#escape .icon').appendChild(iconCanvas('heli', 2));
     try {
       const saved = root.localStorage.getItem('sc-enemy');
       if (SC.DATA.enemies.includes(saved)) UI.enemy = saved;
@@ -1822,15 +2006,13 @@
     drawRoot(true);
 
     // Animation loop: the slasher (Sid's wandering eyes, Trollge's head), animated
-    // portraits, the camera clock, flickering lights.
+    // portraits, flickering lights.
     let last = 0;
-    clockStart = performance.now();
     const loop = (now) => {
       if (now - last > 110) {
         last = now;
         UI.frame++;
         view().draw(now);
-        tickClock(now);
         if (UI.battle && UI.frame % 2 === 0) refresh();
         if (Math.random() < 0.012) {
           $('#flicker').classList.add('on');
@@ -1847,7 +2029,7 @@
     Log.history = [];
     $('#log-lines').innerHTML = '';
     UI.lastAction = {};
-    clockStart = performance.now();
+    buildCards();
     placeEnemy();
     refresh();
   }

@@ -7,7 +7,7 @@
   const SC = root.SC;
 
   async function battle() {
-    const b = new SC.Battle({ io: SC.UI.io, enemy: SC.UI.enemy });
+    const b = new SC.Battle({ io: SC.UI.io, enemy: SC.UI.enemy, party: SC.UI.party.slice() });
     SC.UI.setBattle(b);
     SC.UI.resolving(true);
     await b.start();
@@ -29,9 +29,7 @@
     try {
       if (root.document.fonts && root.document.fonts.load) {
         await Promise.all(
-          ['30px VT323', '600 20px "Barlow Condensed"', '700 20px "Barlow Condensed"', '800 20px "Barlow Condensed"', '30px "Saira Stencil One"'].map((f) =>
-            root.document.fonts.load(f).catch(() => null)
-          )
+          ['30px VT323', '30px "Russo One"', '16px Silkscreen', '700 16px Silkscreen'].map((f) => root.document.fonts.load(f).catch(() => null))
         );
       }
     } catch (e) {

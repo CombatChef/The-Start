@@ -94,7 +94,8 @@
       this.rng = makeRng(this.seed);
 
       const D = this.D;
-      this.party = D.party.map((id) => {
+      // The squad picked on the title screen, or the default four.
+      this.party = (opts.party || D.party).map((id) => {
         const def = D.workers[id];
         const u = new Unit(id, def, 'party');
         u.hp = u.ghost ? 100 : D.health.start;
@@ -186,7 +187,7 @@
     isLost() {
       return this.corporeal().length === 0;
     }
-    // Exact numbers on the slasher's plate: Confidential Documents or Hidden Documents.
+    // Exact numbers on the slasher's condition: Confidential Documents or Hidden Documents.
     known() {
       return this.intel || this.secrets;
     }
@@ -891,6 +892,18 @@
       return this.rng.weighted(ts.map((u) => [u, this.targetWeight(u)]));
     }
 
+    // Who Trollge can stare at: anyone in sight. A stare needs no touch, so Purpl Lady's Ghost
+    // Body doesn't help her here (only while she's phased out).
+    watchTargets() {
+      return this.party.filter((u) => !u.dead && !u.status.phasing && !this.hidden(u));
+    }
+
+    pickWatchTarget(filter) {
+      const ts = this.watchTargets().filter((u) => !filter || filter(u));
+      if (!ts.length) return null;
+      return this.rng.weighted(ts.map((u) => [u, this.targetWeight(u)]));
+    }
+
     planEnemy() {
       if (this.enemy.status.stunned) return { kind: 'stunned' };
       return this.enemy.id === 'trollge' ? this.planTrollge() : this.planSid();
@@ -929,10 +942,9 @@
       const w = anySeen ? S.ai.seen : S.ai.unseen;
       const opts = [['claws', w.claws]];
       if (anySeen) opts.push(['scratch', w.scratch]);
-      if (this.lastEnemyKind !== 'stare' && this.enemyTargets().some(fresh)) opts.push(['stare', w.stare]);
+      if (this.lastEnemyKind !== 'stare' && this.watchTargets().some(fresh)) opts.push(['stare', w.stare]);
       const kind = this.rng.weighted(opts);
-      const filter = kind === 'scratch' ? seen : kind === 'stare' ? fresh : null;
-      const t = this.pickEnemyTarget(filter);
+      const t = kind === 'stare' ? this.pickWatchTarget(fresh) : this.pickEnemyTarget(kind === 'scratch' ? seen : null);
       return { kind, targetId: t && t.id };
     }
 
@@ -1081,7 +1093,7 @@
       delete u.status.stared;
       await this.fx({ type: 'enemyAttack', kind: 'caught', target: u.id });
       await this.say(`${u.name} moves… and ${this.en} sees it!`, { tone: 'danger' });
-      await this.markSeen(u);
+      if (!u.ghost) await this.markSeen(u); // its Scratch would pass straight through a ghost anyway
       await this.noise(u, this.D.skills.staticStare.angerUp);
     }
 
@@ -1376,6 +1388,8 @@
         zone,
         sweepMs: C.sweepMs,
         timeLimitMs: C.timeLimitMs,
+        pourMs: C.pourMs,
+        clipMs: C.clipMs,
         moralSupport: this.moralSupportActive(),
         rng: this.rng,
       });
@@ -2047,6 +2061,7 @@
         return;
       }
       const reachable = (u) => !!u && !u.dead && !u.ghost && !this.hidden(u);
+      const inSight = (u) => !!u && this.watchTargets().includes(u);
       const planned = this.unit(intent.targetId);
       let t = planned;
       // Scratch "can only hit SEEN enemies": if its mark is gone, it claws instead.
@@ -2055,8 +2070,8 @@
         if (other) t = other;
         else kind = 'claws';
       }
-      if (!reachable(t)) {
-        t = this.pickEnemyTarget(kind === 'stare' ? (u) => !u.status.stared : null) || this.pickEnemyTarget();
+      if (!(kind === 'stare' ? inSight(t) : reachable(t))) {
+        t = (kind === 'stare' && this.pickWatchTarget((u) => !u.status.stared)) || this.pickEnemyTarget();
         if (!t) {
           await this.say(`${this.en} looks around, but can’t find anyone!`, { tone: 'good' });
           this.lastEnemyKind = 'lost';

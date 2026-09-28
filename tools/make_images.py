@@ -9,9 +9,9 @@ PORTRAITS (128x128, assets/portraits/). Each worker keeps the background they we
 photographed against: nothing is cut out. The background is softened (blurred, and never
 brighter than light grey) so the face reads first, then everything is posterized into four
 tones, the black / grey / white look of the "Slasher Statistics" doc art. Red stays red
-(Captain Jim's goggles, Mysti's beret and jacket). The game fades each portrait's edges into
-an OMORI-style mood backdrop at runtime and draws the status effects on top, so only a few
-source edits live here:
+(Captain Jim's goggles, Mysti's beret and jacket) and violet stays violet (Purpl Lady's hair).
+The game fades each portrait's edges into a dark backdrop at runtime and draws the status
+effects on top, so only a few source edits live here:
 
     mel_noglasses   - Mel after Toss Glasses (glasses painted out)
     john_asleep     - John during Nap (eyes closed)
@@ -25,8 +25,7 @@ Everything is also embedded in js/images.js as data URIs, so the game can read t
 even when index.html is opened straight from disk (file://).
 
 Sources: lobby_npcs.webp (Mel and John), jim.png (Captain Jim), mysti.png (Bravo Team
-Mysti), purpl.png (Purpl Lady, art by @Shouyou97), sid_card.png (the doc's Sid art),
-trollge.webp (Trollge).
+Mysti), purpl.webp (Purpl Lady), sid_card.png (the doc's Sid art), trollge.webp (Trollge).
 """
 import base64
 import json
@@ -45,7 +44,7 @@ SIZE = 128
 GRAY = [(0, 0, 0), (78, 78, 82), (158, 158, 162), (255, 255, 255)]
 RED = [(0, 0, 0), (96, 0, 4), (228, 18, 24)]
 REDS = [(116, 13, 21), (210, 30, 39)]  # accent: dark red, red
-PURPLE = [(10, 4, 20), (62, 38, 96), (156, 128, 204), (248, 242, 255)]
+VIOLETS = [(84, 38, 140), (170, 96, 255)]  # accent: Purpl Lady's hair streaks and eye
 # Sid's card is a cut-out (the doc art is red on black); the game recolours this ring.
 RING = (255, 0, 255)
 
@@ -180,10 +179,22 @@ def mysti():
     save(poster(bgr, (315, 20, 675, 380), (30, 56, 82), (0.5, 0.55, 0.3, 0.42), clahe=2.0, accent=reds()), GRAY + REDS, 'mysti')
 
 
+def purples(min_s=120, min_v=110):
+    """Masks for the vivid violet in Purpl Lady's hair and eye, but not the navy shading."""
+
+    def masks(hsv):
+        h, s, v = hsv[..., 0].astype(int), hsv[..., 1].astype(int), hsv[..., 2].astype(int)
+        violet = (h >= 120) & (h <= 160) & (s > min_s) & (v > min_v)
+        return [violet & (v <= 190), violet & (v > 190)]
+
+    return masks
+
+
 def purpl():
-    # Not in the default party (Mysti took her place), but still playable from data.js.
-    bgr = load('purpl.png')
-    save(poster(bgr, (62, 50, 232, 220), (38, 62, 84), (0.5, 0.45, 0.32, 0.42), clahe=1.2), PURPLE, 'purpl')
+    # Purpl Lady: black hair with violet streaks, glasses, one violet eye. She sits on the bench
+    # by default and can swap in for anyone on the title screen.
+    bgr = load('purpl.webp')
+    save(poster(bgr, (190, 70, 510, 390), (28, 54, 80), (0.5, 0.52, 0.34, 0.44), clahe=1.4, accent=purples()), GRAY + VIOLETS, 'purpl')
 
 
 def sid():

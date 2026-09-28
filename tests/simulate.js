@@ -7,7 +7,8 @@
  *   SHOW_LOG=smart node tests/simulate.js -> also print one battle log per slasher
  *
  * Plays full battles with no screen: a "smart" policy (for balance numbers) and a
- * "random" policy that presses every button it can (to shake out crashes).
+ * "random" policy that presses every button it can (to shake out crashes), with the default
+ * squad and with every squad the title screen's swap can make.
  * Exits non-zero if any battle throws or breaks an invariant.
  */
 'use strict';
@@ -121,7 +122,7 @@ function smartPolicy(b, rng) {
     }
     // Trollge: hold still while it stares at you.
     if (u.status.stared && !e.status.stunned && rng() < 0.85) {
-      cmds[u.id] = { type: 'guard' };
+      cmds[u.id] = { type: u.ghost ? 'focus' : 'guard' };
       continue;
     }
     if (!u.ghost && threatened(u) && u.hp <= (it.kind === 'scratch' ? 80 : 55) && rng() < 0.7) {
@@ -199,8 +200,8 @@ function casualPolicy(b, rng) {
 }
 
 // ------------------------------------------------------------------ runner
-async function play(seed, policy, enemy) {
-  const b = new SC.Battle({ seed, io: null, enemy });
+async function play(seed, policy, enemy, party) {
+  const b = new SC.Battle({ seed, io: null, enemy, party });
   const prng = SC.makeRng(seed ^ 0x5eed);
   b.io = makeIo(prng);
   await b.start();
@@ -242,22 +243,35 @@ function summarize(name, rs) {
   const over = rs.filter((r) => r.overflowTurn != null);
   console.log(`\n== ${name} policy — ${n} battles`);
   console.log(`win ${((100 * count('win')) / n).toFixed(1)}%  lose ${((100 * count('lose')) / n).toFixed(1)}%  timeout ${count('timeout')}`);
-  console.log(`avg turns ${avg((r) => r.turns).toFixed(1)}  avg deaths ${avg((r) => r.deaths).toFixed(2)}  avg run tries ${avg((r) => r.runs).toFixed(2)}  avg credits ${avg((r) => r.credits).toFixed(1)}`);
-  console.log(`weakened in ${((100 * weak.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.weakenedTurn, weak).toFixed(1)}); 80+ ANGER in ${((100 * over.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.overflowTurn, over).toFixed(1)})`);
-  console.log(`avg damage taken ${avg((r) => r.taken).toFixed(0)}  avg lowest worker health ${avg((r) => r.lowest).toFixed(0)}  battles with a death ${((100 * rs.filter((r) => r.deaths > 0).length) / n).toFixed(0)}%  wins by chopper ${((100 * rs.filter((r) => r.chopper).length) / n).toFixed(0)}%`);
+  console.log(
+    `avg turns ${avg((r) => r.turns).toFixed(1)}  avg deaths ${avg((r) => r.deaths).toFixed(2)}  avg run tries ${avg((r) => r.runs).toFixed(2)}  avg credits ${avg((r) => r.credits).toFixed(1)}`
+  );
+  console.log(
+    `weakened in ${((100 * weak.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.weakenedTurn, weak).toFixed(1)}); 80+ ANGER in ${((100 * over.length) / n).toFixed(0)}% (avg turn ${avg((r) => r.overflowTurn, over).toFixed(1)})`
+  );
+  console.log(
+    `avg damage taken ${avg((r) => r.taken).toFixed(0)}  avg lowest worker health ${avg((r) => r.lowest).toFixed(0)}  battles with a death ${((100 * rs.filter((r) => r.deaths > 0).length) / n).toFixed(0)}%  wins by chopper ${((100 * rs.filter((r) => r.chopper).length) / n).toFixed(0)}%`
+  );
 }
 
 module.exports = { smartPolicy, casualPolicy, randomPolicy, makeIo, play };
 
+// Every squad the title screen can make by swapping Purpl Lady in for one of the default four.
+function swaps() {
+  const D = SC.DATA;
+  return D.party.map((out) => ({ out, party: D.party.map((id) => (id === out ? D.bench : id)) }));
+}
+
 async function main() {
   let failures = 0;
+  const POLICIES = [
+    ['smart', smartPolicy],
+    ['casual', casualPolicy],
+    ['random', randomPolicy],
+  ];
   for (const enemy of ENEMIES) {
     console.log(`\n######## vs ${SC.DATA.slashers[enemy].name.toUpperCase()}`);
-    for (const [name, policy] of [
-      ['smart', smartPolicy],
-      ['casual', casualPolicy],
-      ['random', randomPolicy],
-    ]) {
+    for (const [name, policy] of POLICIES) {
       const results = [];
       for (let i = 0; i < N; i++) {
         const seed = (i * 2654435761) >>> 0;
@@ -275,6 +289,27 @@ async function main() {
         console.log('\n--- sample battle log ---');
         for (const l of r.log) console.log(l.text);
       }
+    }
+    // The squad swaps: fewer battles each, still checked for crashes and broken states.
+    const M = Math.max(50, Math.round(N / 3));
+    console.log(`\n-- ${SC.DATA.workers[SC.DATA.bench].name} in for someone, ${M} battles each (win %: smart / casual / random)`);
+    for (const { out, party } of swaps()) {
+      const rates = [];
+      for (const [name, policy] of POLICIES) {
+        let wins = 0;
+        for (let i = 0; i < M; i++) {
+          const seed = (i * 2654435761 + 97) >>> 0;
+          try {
+            if ((await play(seed, policy, enemy, party)).outcome === 'win') wins++;
+          } catch (err) {
+            failures++;
+            console.error(`[${enemy} ${name} without ${out}] seed ${seed}:`, err && err.stack ? err.stack : err);
+            if (failures > 5) process.exit(1);
+          }
+        }
+        rates.push(((100 * wins) / M).toFixed(0) + '%');
+      }
+      console.log(`   instead of ${SC.DATA.workers[out].name.padEnd(12)} ${rates.join(' / ')}`);
     }
   }
   if (failures) {

@@ -29,7 +29,7 @@
       ],
     },
 
-    // Slashers never show a percent either; their bar reads the first row whose `upTo` their
+    // Slashers never show a percent either; their condition reads the first row whose `upTo` their
     // health fits under. Keep WEAKENED / BARELY STANDING in step with each slasher's
     // `weakenedAt` and `barelyStandingAt` below.
     slasherHealth: [
@@ -40,9 +40,10 @@
       { upTo: 1, id: null }, // their doc health: "Good" for Trollge, "Unhealthy" for Sid
     ],
 
-    // Party order = HUD corners: top-left, top-right, bottom-left, bottom-right.
-    // Purpl Lady ('purpl') still works here if you want her back in Mysti's place.
+    // The default squad, in profile order (left to right along the bottom), and who waits on
+    // the bench. The title screen swaps anyone on the squad with the bench.
     party: ['mel', 'john', 'mysti', 'jim'],
+    bench: 'purpl',
     enemy: 'trollge', // the default fight
     enemies: ['trollge', 'sid'], // picked on the title screen
 
@@ -53,8 +54,7 @@
       mel: {
         name: 'Mel',
         title: 'MEL SLASHCO',
-        role: 'FIELD WORKER', // on the SlashCo ID badge
-        badge: 'SC-0217',
+        role: 'FIELD WORKER', // shown under their name on the title screen
         stats: { atk: 87, def: 68, spd: 57, mag: 12, chm: 73, smt: 100, brv: 80 },
         health: 'Good',
         spiritualPower: 'Barely',
@@ -79,7 +79,6 @@
         name: 'John',
         title: 'JOHN SLASHCO',
         role: 'FIELD WORKER',
-        badge: 'SC-0218',
         stats: { atk: 98, def: 34, spd: 56, mag: 0, chm: 78, smt: 50, brv: 90 },
         health: 'OK',
         spiritualPower: 'None',
@@ -104,9 +103,8 @@
         name: 'Purpl Lady',
         title: 'PURPL LADY',
         role: 'GHOST',
-        badge: 'SC-0000',
         stats: { atk: 66, def: 85, spd: 109, mag: 92, chm: 210, smt: 100, brv: 10 },
-        health: 'None', // She is a ghost: no health bar, physical hits pass through her.
+        health: 'None', // She is a ghost: no health at all, physical hits pass through her.
         spiritualPower: 'Strong',
         morals: 'High',
         ghost: true,
@@ -130,7 +128,6 @@
         name: 'Captain Jim',
         title: 'CAPTAIN JIM',
         role: 'HELI PILOT',
-        badge: 'SC-0001',
         stats: { atk: 108, def: 66, spd: 41, mag: 0, chm: 80, smt: 75, brv: 145 },
         health: 'Questionable',
         spiritualPower: 'None',
@@ -159,7 +156,6 @@
         name: 'Mysti',
         title: 'BRAVO MYSTI', // doc: Bravo Team “Mysti”
         role: 'BRAVO TEAM',
-        badge: 'BRV-06',
         pronouns: { he: 'she', his: 'her', him: 'her' },
         stats: { atk: 190, def: 93, spd: 34, mag: 0, chm: 120, smt: 150, brv: 200 },
         health: 'Scarred',
@@ -332,7 +328,7 @@
         secret: 'EXTRA-SECRET: Sid can’t say no to a cookie. Below 80 ANGER he eats them to calm down… and anyone else eating one sets him off.',
         lines: {
           overflow: ['Sid has had enough, and draws his gun!'],
-          overflowShort: 'DESERT EAGLE', // tag on the plate from 80 ANGER
+          overflowShort: 'DESERT EAGLE', // tag under his ANGER from 80
           calm: 'Sid calms down and tucks the Desert Eagle away.',
           barelyStanding: 'Sid collapses to one knee!',
           dazed: 'Sid stares at {by} in confusion.',
@@ -498,7 +494,8 @@
         toggle: true,
         offName: 'Switch off Proxy Locator',
         doc: 'An obsolete piece of equipment used once by SlashCo Exterminator teams. At the start of a turn, has a small chance to gain a random item, but also makes NOISE, ANGERING enemies often.',
-        rules: 'Switch it on (free to switch off). While on, at the start of every turn: 20% chance to find an item, 60% chance of NOISE ({e} ANGER +6).',
+        rules:
+          'Switch it on (free to switch off). While on, at the start of every turn: 20% chance to find an item, 60% chance of NOISE ({e} ANGER +6).',
         findChance: 0.2,
         noiseChance: 0.6,
         noiseAnger: 6,
@@ -518,7 +515,8 @@
         target: 'none',
         oncePerBattle: true,
         doc: 'Collect information about the current enemy being fought. Once per battle, works on all enemies.',
-        rules: 'Once per battle. Shows {e}’s exact health and ANGER and how hard every planned attack will hit, for the rest of the battle. Knowing its weak spots: team crit chance +10%.',
+        rules:
+          'Once per battle. Shows {e}’s exact health and ANGER and how hard every planned attack will hit, for the rest of the battle. Knowing its weak spots: team crit chance +10%.',
         critUp: 0.1,
       },
       bearTrap: {
@@ -526,7 +524,8 @@
         cost: 20,
         target: 'ally',
         doc: 'Set a bear trap at the feet of any ally, if they are targeted by a physical attack, deals large damage to the enemy, and renders them momentarily vulnerable,',
-        rules: 'Lasts 4 turns. When {e} goes for that ally with a physical attack, the trap snaps first: large damage, the attack is stopped, and {e} is VULNERABLE (DEF -50%) for 2 turns.',
+        rules:
+          'Lasts 4 turns. When {e} goes for that ally with a physical attack, the trap snaps first: large damage, the attack is stopped, and {e} is VULNERABLE (DEF -50%) for 2 turns.',
         damage: [130, 170],
         vulnerable: 0.5,
         vulnerableTurns: 2,
@@ -538,7 +537,8 @@
         target: 'none',
         oncePerBattle: true,
         doc: 'The chopper is touchdown, let’s get out of here! Significantly increases all ally’s EVASION and DEFENSE,  and guarantees an escape from a fight in 5 turns.',
-        rules: 'Once per battle. Every ally: DEF +40% and EVASION +25% until the chopper lands. After 5 turns it touches down and everyone gets out, bodies included, as long as someone who can carry a body is still alive.',
+        rules:
+          'Once per battle. Every ally: DEF +40% and EVASION +25% until the chopper lands. After 5 turns it touches down and everyone gets out, bodies included, as long as someone who can carry a body is still alive.',
         defUp: 0.4,
         evaUp: 0.25,
         turns: 5,
@@ -562,7 +562,8 @@
         cost: 35,
         target: 'enemy',
         doc: 'Extremely effective against Trollge. Deals massive damage to the target, and causes bleeding, decreases defense, ignores defense, and deals damage equal to 5% of the enemy’s current health.',
-        rules: 'Massive damage that ignores DEF (x1.5 against Trollge), plus 5% of {e}’s current health. {e} BLEEDS, and its DEF drops 25% for 3 turns.',
+        rules:
+          'Massive damage that ignores DEF (x1.5 against Trollge), plus 5% of {e}’s current health. {e} BLEEDS, and its DEF drops 25% for 3 turns.',
         power: 1.0,
         strongVs: { trollge: 1.5 },
         currentHp: 0.05,
@@ -575,7 +576,8 @@
         cost: 35,
         target: 'enemy',
         doc: 'We’re not playing anymore games… Gulp. Has a very small chance to instantly eliminate an enemy, but leaves you vulnerable for an extra turn after.',
-        rules: 'A heavy strike with an 8% chance to drop {e} straight to BARELY STANDING (slashers can’t be killed). Mysti is VULNERABLE (takes +50% damage) this turn and next.',
+        rules:
+          'A heavy strike with an 8% chance to drop {e} straight to BARELY STANDING (slashers can’t be killed). Mysti is VULNERABLE (takes +50% damage) this turn and next.',
         power: 0.9,
         chance: 0.08,
         exposedTurns: 1,
@@ -588,7 +590,8 @@
         target: 'none',
         oncePerBattle: true,
         doc: 'Just a droplet of this will make you want to vanish. Massively increases EVASION for a good number of turns, and significantly increases SPEED for the rest of the game. (Used once per battle.)',
-        rules: 'Once per battle. Mysti: EVASION +45% for 4 turns, SPEED +40% for the rest of the battle, and {e} loses track of her (no longer SEEN).',
+        rules:
+          'Once per battle. Mysti: EVASION +45% for 4 turns, SPEED +40% for the rest of the battle, and {e} loses track of her (no longer SEEN).',
         evaUp: 0.45,
         evaTurns: 4,
         spdUp: 0.4,
@@ -599,7 +602,8 @@
         target: 'none',
         oncePerBattle: true,
         doc: 'Attempts to collect extra-secret information about the current enemy being fought. Once per battle, works on all enemies. Grants extra EXP and CREDITS after battle if done.',
-        rules: 'Works 85% of the time (try again if it doesn’t). Shows {e}’s exact health and ANGER, and one extra-secret weakness. After a win: +20 CREDITS and +50% EXP.',
+        rules:
+          'Works 85% of the time (try again if it doesn’t). Shows {e}’s exact health and ANGER, and one extra-secret weakness. After a win: +20 CREDITS and +50% EXP.',
         chance: 0.85,
         credits: 20,
         expBonus: 0.5,
@@ -704,7 +708,8 @@
       freakyDoctor: {
         name: 'Freaky Doctor',
         doc: 'Your strange machinations benefit the team, but hurt your own wellbeing. While active in team, grants minor damage resistance, extra healing, extra credit gain, increased attack, and a single use second-life mechanic.',
-        rules: 'While she is here and has SPIRIT: workers take -10% damage, heal +25%, earn +50% credits, ATK +10%, and the first worker to die comes back once. Costs her 3 SPIRIT a turn, and her SPIRIT only comes back when she FOCUSES.',
+        rules:
+          'While she is here and has SPIRIT: workers take -10% damage, heal +25%, earn +50% credits, ATK +10%, and the first worker to die comes back once. Costs her 3 SPIRIT a turn, and her SPIRIT only comes back when she FOCUSES.',
         damageTaken: 0.9,
         healing: 1.25,
         credits: 1.5,
@@ -782,7 +787,7 @@
     },
 
     // ------------------------------------------------------------------
-    // ITEMS  (shared team bag, like OMORI snacks)
+    // ITEMS  (one bag shared by the whole team)
     // ------------------------------------------------------------------
     items: {
       royalBurger: {
@@ -869,7 +874,8 @@
         price: 20,
         glassBottle: true,
         desc: 'An unlabeled glass bottle. The after effects are said to be crippling.',
-        inBattle: 'Kicks in next turn: all stats +60% for 3 turns, but the drinker can’t calm down and attacks on their own. Then all stats -25% for 2 turns. Leaves an Empty Bottle.',
+        inBattle:
+          'Kicks in next turn: all stats +60% for 3 turns, but the drinker can’t calm down and attacks on their own. Then all stats -25% for 2 turns. Leaves an Empty Bottle.',
         target: 'ally',
         boost: 0.6,
         boostTurns: 3,
@@ -963,7 +969,8 @@
       confusedSkip: 0.35,
       enemyConfusedFumble: 0.3,
       bleedPercent: 0.025, // of the slasher's max health per turn
-      skillCheck: { baseZone: 0.16, perSmarts: 0.0008, sweepMs: 950, timeLimitMs: 2800 },
+      // pourMs: how long Mel's fuel check lasts. clipMs: how long John has to clip the battery.
+      skillCheck: { baseZone: 0.16, perSmarts: 0.0008, sweepMs: 950, timeLimitMs: 2800, pourMs: 3600, clipMs: 4200 },
     },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

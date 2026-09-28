@@ -37,6 +37,7 @@
   const ENEMY_BOX = {
     sid: { left: 438, top: 252 },
     trollge: { left: 390, top: 256 },
+    dolphin: { left: 482, top: 262 },
   };
   const SCALE = 2;
   // SlashCo's danger levels, colour-coded 1 (yellow) to 3 (red).
@@ -56,6 +57,7 @@
   // The slasher's condition, from its doc health ("Good", "Unhealthy") down to BARELY STANDING.
   const FOE_COLOR = {
     GOOD: 'var(--hp-ok)',
+    OK: 'var(--hp-ok)',
     UNHEALTHY: 'var(--hp-stable)',
     BRUISED: 'var(--hp-scathed)',
     WOUNDED: 'var(--hp-hurt)',
@@ -117,7 +119,12 @@
   const slotOf = (id) => UI.party.indexOf(id);
   const enemyId = () => (UI.battle ? UI.battle.enemy.id : UI.enemy);
   const enemyDef = () => SC.DATA.slashers[enemyId()];
-  const enemyPoints = () => (enemyId() === 'trollge' ? SC.Art.trollgePoints() : SC.Art.SID_POINTS);
+  const enemyPoints = () => {
+    const id = enemyId();
+    if (id === 'trollge') return SC.Art.trollgePoints();
+    if (id === 'dolphin') return SC.Art.dolphinPoints();
+    return SC.Art.SID_POINTS;
+  };
 
   function cardCenter(id) {
     const [x, y] = PROFILE_XY[Math.max(0, slotOf(id))];
@@ -351,6 +358,7 @@
     let fx = [];
     let fade;
     if (u.id === 'mel' && u.flags.glassesOff) variant = 'mel_noglasses';
+    if (u.mood) variant = `${u.id}_${u.mood}`; // Purpl Lady's face: HAPPY, ANGRY or SAD
     if (u.ghost) {
       mood = 'ghost';
       if (u.status.phasing) fade = 0.28;
@@ -434,6 +442,7 @@
     }
     if (u.status.stared) tags.push({ t: 'STARED AT', c: 'bad' });
     if (u.status.seen) tags.push({ t: 'SEEN', c: 'bad' });
+    if (b.hunted() === u) tags.push({ t: 'HUNTED', c: 'bad' });
     if (u.flags.guarding) tags.push({ t: u.flags.barrier ? 'BARRIER' : 'GUARD', c: 'good' });
     if (u.status.exposed) tags.push({ t: 'VULNERABLE', c: 'bad' });
     if (b.deathward) tags.push({ t: 'DEATHWARD', c: 'good' });
@@ -449,6 +458,7 @@
     if (u.status.happy) tags.push({ t: 'HAPPY', c: 'good' });
     if (u.flags.proxy) tags.push({ t: 'PROXY ON', c: 'note' });
     for (const id of u.carrying) tags.push({ t: 'CARRYING ' + b.unit(id).name.toUpperCase(), c: 'note' });
+    if (u.mood && !u.status.phasing) tags.push({ t: u.mood.toUpperCase(), c: { happy: 'good', angry: 'bad', sad: 'note' }[u.mood] });
     if (u.ghost && u.res <= 0 && !u.status.phasing) tags.push({ t: 'DRAINED', c: 'bad' });
     if (u.ghost && b.foresightTurns > 0) tags.push({ t: 'FORESIGHT', c: 'note' });
     if (b.uniformBonus(u)) tags.push({ t: 'NEUTRAL', c: 'note' }); // BRAVO Team Uniform is on
@@ -459,7 +469,9 @@
     const s = b.enemy;
     const tags = [];
     if (s.status.stunned) tags.push({ t: 'CAN’T MOVE', c: 'good' });
+    if (s.status.fetal) tags.push({ t: 'FETAL POSITION', c: 'note' });
     if (s.flags.overflow) tags.push({ t: b.enemyDef.lines.overflowShort, c: 'bad' });
+    if (b.hunted()) tags.push({ t: 'HUNTING ' + b.hunted().name.toUpperCase(), c: 'bad' });
     if (s.status.bleed) tags.push({ t: 'BLEEDING', c: 'good' });
     if (s.status.shards) tags.push({ t: 'GLASS', c: 'good' });
     if (s.status.chilled) tags.push({ t: 'FREEZING', c: 'good' });
@@ -482,8 +494,8 @@
     const word = b.intentWord ? b.intentWord + '!' : null;
     if (k === 'stare' && b.intent.targetId === u.id) return 'STARE';
     if (k === 'scratch' && b.intent.targetId === u.id) return word || 'SCRATCH';
-    if ((k === 'melee' || k === 'gun' || k === 'claws') && b.intent.targetId === u.id) return word || 'TARGET';
-    if (k === 'magdump' && !u.dead && !u.status.phasing) return word || 'ALL';
+    if (['melee', 'gun', 'claws', 'hands', 'whip'].includes(k) && b.intent.targetId === u.id) return word || 'TARGET';
+    if ((k === 'magdump' || k === 'wail') && !u.dead && !u.status.phasing) return word || 'ALL';
     if (k === 'claims' && !u.dead && !u.status.phasing) return 'RAMBLE';
     return null;
   }
@@ -549,6 +561,16 @@
     chopper.classList.add('heli');
     if (b.chopper) chopper.textContent = 'HELI ' + b.chopper.turns;
     updateEscape();
+    if (SC.Audio) SC.Audio.music(musicFor(b));
+  }
+
+  // The chase music once the slasher is weakened ("Now is your time for escape!") or when the
+  // team is about to lose (one worker left standing, or everyone left is CRITICAL).
+  function musicFor(b) {
+    if (b.outcome) return null;
+    const alive = b.corporeal();
+    const dire = alive.length <= 1 || alive.every((u) => b.healthState(u).id === 'CRITICAL');
+    return b.enemy.flags.weakened || dire ? 'chase' : 'ambience';
   }
 
   // ------------------------------------------------------------------ escape odds
@@ -666,7 +688,31 @@
     },
   };
 
-  const view = () => (enemyId() === 'trollge' ? TrollgeView : SidView);
+  // Dolphin Man moves like Trollge (the head bobs on its neck) but jerkier. He screams with
+  // his mouth hanging open, and curls up on the floor in Fetal Position (and when he's down).
+  const DolphinView = {
+    override: null,
+    until: 0,
+    set(pose, ms) {
+      this.override = pose;
+      this.until = performance.now() + ms;
+      this.draw(performance.now(), true);
+    },
+    draw(now, force) {
+      const b = UI.battle;
+      const s = b && b.enemy;
+      let pose = 'idle';
+      if (s && s.status.stunned) pose = 'down';
+      else if (s && s.status.fetal) pose = 'fetal';
+      if (this.override && now < this.until) pose = this.override;
+      const eyes = s && s.flags.overflow ? 'sharp' : 'milky';
+      SC.Art.dolphin({ t: now, pose, eyes }).toCanvas(enemyCanvas);
+      if (force) enemyCanvas.dataset.pose = pose;
+    },
+  };
+
+  const VIEWS = { trollge: TrollgeView, dolphin: DolphinView };
+  const view = () => VIEWS[enemyId()] || SidView;
 
   // ------------------------------------------------------------------ effects
   function pop(x, y, text, cls, ms) {
@@ -731,17 +777,36 @@
         pulse(enemyWrap, 'hit', 280);
         pulse(enemyWrap, 'flash', 110);
         const [x, y] = enemyPoint('body');
-        pop(x + rand(-70, 70), y - 70 + rand(-50, 30), e.amount, e.crit ? 'crit' : e.kind === 'page' ? 'small' : '');
+        pop(x + rand(-70, 70), y - 70 + rand(-50, 30), e.amount, e.crit ? 'crit' : e.kind === 'page' || e.slipped ? 'small' : '');
         if (e.crit) pop(x, y - 190, 'CRITICAL', 'status', 800);
+        else if (e.slipped && !e.quick) pop(x, y - 190, 'SLIPS', 'status', 800);
         sfx(e.crit ? 'crit' : 'hit');
         return T(e.quick ? 110 : 320);
       }
       case 'hitWorker': {
         refresh();
-        pulse(card(e.target), 'hit', 400);
+        pulse(card(e.target), 'hit', e.quick ? 200 : 400);
         sfx('hurt');
         if (e.big) shake(false);
-        return T(e.big ? 450 : 320);
+        return T(e.big ? 450 : e.quick ? 150 : 320);
+      }
+      case 'healEnemy': {
+        refresh();
+        const [x, y] = enemyPoint('body');
+        pop(x, y - 110, '+' + e.amount, 'heal', 800);
+        sfx('heal');
+        return T(300);
+      }
+      case 'wailPulse': {
+        // Rings of sound out of his mouth, and the whole room shakes.
+        const [x, y] = enemyPoint('mouth');
+        const r = el('div', 'soundwave');
+        r.style.left = x + 'px';
+        r.style.top = y + 'px';
+        fxLayer.appendChild(r);
+        setTimeout(() => r.remove(), 700);
+        shake(e.n === 0);
+        return T(260);
       }
       case 'healWorker': {
         refresh();
@@ -843,6 +908,39 @@
         if (e.kind === 'magdump') {
           SidView.set('gun', 2600);
           return T(160);
+        }
+        if (e.kind === 'hands') {
+          DolphinView.set('lunge', 700);
+          sfx('growl');
+          await lunge(e.target, 220, 1.2);
+          return T(60);
+        }
+        if (e.kind === 'whip') {
+          // He spins around, and the tail cracks across the profile.
+          DolphinView.set('whip', 600);
+          pulse(enemyWrap, 'spin', 420);
+          sfx('whiff');
+          await T(200);
+          const hitting = lunge(e.target, 160, 1.3);
+          slash(e.target, true);
+          await hitting;
+          return T(60);
+        }
+        if (e.kind === 'wail') {
+          DolphinView.set('wail', 2400);
+          flash('#ffffff');
+          sfx('wail');
+          return T(420);
+        }
+        if (e.kind === 'fetal') {
+          DolphinView.set('twitch', 500);
+          sfx('whimper');
+          return T(520);
+        }
+        if (e.kind === 'curled') {
+          DolphinView.set('twitch', 600);
+          sfx('whimper');
+          return T(300);
         }
         if (e.kind === 'trapped') {
           const hitting = lunge(e.target, 150);
@@ -991,187 +1089,133 @@
   }
 
   // ------------------------------------------------------------------ generator skill checks
-  // The two checks SlashCo VR puts on a generator, drawn the way the game draws them.
-  //  FUEL: the ▽ marker loses its balance and drifts toward the red ends of the arch; hold
-  //        [Q] or [E] to push it back until the pour is done.
-  //  BATTERY: two clips bounce up and down at random speeds and change direction at random;
-  //        press when both are level with the red terminals ("[SPACE] to clip terminals.").
+  // The two checks SlashCo VR puts on a generator, drawn the way the game draws them. The
+  // rules live in js/checks.js; this draws them and feeds in the keys.
+  //  FUEL: the ▽ marker loses its balance; every press of [Q] or [E] makes it jump back.
+  //  BATTERY: "[SPACE] to clip terminals." Press when both clips are level with the middle.
   // `UI.check` exposes the live state, which the browser tests read.
   function skillCheck(o) {
     return new Promise((resolve) => {
       const box = $('#skillcheck');
       const fuel = o.kind === 'fuel';
-      const support = o.moralSupport ? ' Purpl Lady’s Moral Support makes it easier.' : '';
-      const duration = (fuel ? o.pourMs : o.clipMs) || o.timeLimitMs;
+      const s = fuel ? SC.Checks.fuel(o) : SC.Checks.battery(o);
+      const support = o.moralSupport ? ' Purpl Lady’s Moral Support slows it down.' : '';
       box.innerHTML = `
         <div class="sc-title">[${fuel ? 'FUEL' : 'BATTERY'}]</div>
         <div class="sc-sub">${fuel ? `${esc(o.name)} is pouring fuel. Keep the arrow out of the red.` : '[SPACE] to clip terminals.'}${support}</div>
         ${fuel ? fuelHtml() : batteryHtml()}
         <div class="sc-res">GET READY…</div>
-        <div class="sc-keys">${fuel ? 'HOLD Q / ← OR E / → (OR HOLD A SIDE OF THIS BOX)' : 'Z / SPACE / ENTER, OR TAP'}</div>
+        <div class="sc-keys">${fuel ? 'TAP Q / ← OR E / → (OR TAP A SIDE OF THIS BOX)' : 'SPACE / Z / ENTER, OR TAP'}</div>
         <div class="sc-timer"></div>`;
       const timer = $('.sc-timer', box);
       const res = $('.sc-res', box);
       box.classList.add('show');
       stage.classList.add('covered');
-      const lead = UI.fast ? 250 : 650;
-      const t0 = performance.now() + lead;
+      const t0 = performance.now() + (UI.fast ? 250 : 650);
+      let last = null;
       let done = false;
       let handler = null;
-      const state = { kind: o.kind, t: 0, done: false };
-      UI.check = state;
+      UI.check = s;
 
-      function finish(ok, msg) {
+      function finish() {
         if (done) return;
         done = true;
-        state.done = true;
-        state.ok = ok;
         Input.remove(handler);
         box.removeEventListener('pointerdown', onPointer);
-        doc.removeEventListener('keydown', onHold, true);
-        doc.removeEventListener('keyup', onHold, true);
-        root.removeEventListener('pointerup', release);
-        res.textContent = ok ? msg || 'SUCCESS!' : msg;
-        res.className = 'sc-res ' + (ok ? 'ok' : 'no');
-        sfx(ok ? 'success' : 'fail');
+        doc.removeEventListener('keydown', onTap, true);
+        const msg = s.ok ? (fuel ? 'SUCCESS!' : 'CLIPPED!') : fuel ? 'SPILLED!' : s.late ? 'TOO SLOW…' : 'ZAP!';
+        res.textContent = msg;
+        res.className = 'sc-res ' + (s.ok ? 'ok' : 'no');
+        if (!fuel) {
+          if (s.ok) {
+            for (const c of s.clips) c.y = 0.5;
+            drawBattery();
+            $('.spark', box).setAttribute('fill', '#ffe45c');
+          } else {
+            $('.spark', box).style.display = 'none';
+            $('.warn', box).style.display = '';
+            flash('#fff6a8');
+          }
+        }
+        sfx(s.ok ? 'success' : fuel ? 'fail' : 'zap');
         setTimeout(
           () => {
             box.classList.remove('show');
             stage.classList.remove('covered');
             UI.check = null;
-            resolve(ok);
+            resolve(s.ok);
           },
           UI.fast ? 350 : 800
         );
       }
 
-      // ---- FUEL. p is the marker's place on the arch: 0 = left end, 0.5 = top, 1 = right end.
-      // It drifts one way, then the other; holding a side pushes it back.
-      const safe = clamp(0.38 + o.zone * 1.2, 0.45, 0.85);
-      const red = (1 - safe) / 2;
-      let p = 0.5;
-      let force = (Math.random() < 0.5 ? -1 : 1) * rand(0.85, 1);
-      let goal = force;
-      let nextGoal = 0;
-      let last = null;
-      const keysDown = { l: false, r: false };
-      let pointerSide = 0;
-      const held = () => (keysDown.r || pointerSide > 0 ? 1 : 0) - (keysDown.l || pointerSide < 0 ? 1 : 0);
-      const SIDE = { ArrowLeft: 'l', a: 'l', q: 'l', ArrowRight: 'r', d: 'r', e: 'r' };
-      function onHold(ev) {
-        const side = SIDE[ev.key] || SIDE[ev.key && ev.key.toLowerCase()];
-        if (!side) return;
-        keysDown[side] = ev.type === 'keydown';
-        showHeld();
+      // ---- FUEL: one press, one jump. Holding a key down doesn't repeat.
+      const SIDE = { ArrowLeft: -1, a: -1, q: -1, ArrowRight: 1, d: 1, e: 1 };
+      function tap(dir) {
+        if (done || performance.now() < t0) return;
+        s.tap(dir);
+        sfx('tick');
+        // In the game the bar over [Q] turns into an arrow when it's pressed.
+        const key = $(dir < 0 ? '.key.l' : '.key.r', box);
+        $('.arrow', key).textContent = dir < 0 ? '<' : '>';
+        pulse(key, 'on', 140);
+        setTimeout(() => {
+          if (!key.classList.contains('on')) $('.arrow', key).textContent = '|';
+        }, 150);
+        drawFuel();
+        if (s.done) finish();
       }
-      function release() {
-        pointerSide = 0;
-        showHeld();
+      function onTap(ev) {
+        const dir = SIDE[ev.key] || SIDE[ev.key && ev.key.toLowerCase()];
+        if (!dir) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!ev.repeat) tap(dir);
       }
-      // In the game the bar over [Q] turns into an arrow while it's held.
-      function showHeld() {
-        const h = held();
-        const l = $('.key.l', box);
-        const r = $('.key.r', box);
-        if (!l || !r) return;
-        l.classList.toggle('on', h < 0);
-        r.classList.toggle('on', h > 0);
-        $('.arrow', l).textContent = h < 0 ? '<' : '|';
-        $('.arrow', r).textContent = h > 0 ? '>' : '|';
+      function drawFuel() {
+        $('.pivot', box).style.transform = `rotate(${(s.p - 0.5) * 180}deg)`;
+        $('#pump-level', box).setAttribute('y', String(72 - 72 * clamp(s.t / s.ms, 0, 1)));
       }
 
-      // ---- BATTERY. Clip heights run 0 (top) to 1 (bottom); the terminals cover [top, top + span].
-      const span = clamp(0.3 + o.zone * 1.4, 0.4, 0.8);
-      const top = 0.06;
-      const clips = [0, 1].map(() => ({ y: rand(0.2, 0.95), v: (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 1.25), turn: 0 }));
-      const inside = (c) => c.y >= top && c.y <= top + span;
+      // ---- BATTERY
+      function drawBattery() {
+        const Y = (c) => 20 + c.y * 240;
+        $('.clip.l', box).style.top = Y(s.clips[0]) + 'px';
+        $('.clip.r', box).style.top = Y(s.clips[1]) + 'px';
+      }
       function press() {
-        if (done || fuel) return;
-        if (performance.now() - t0 < 0) return; // not started yet
-        if (clips.every(inside)) {
-          clipOn();
-          finish(true, 'CLIPPED!');
-        } else {
-          zap();
-          finish(false, 'ZAP!');
-        }
-      }
-      function clipOn() {
-        for (const c of clips) c.y = top + span;
-        drawClips();
-        $('.spark', box).setAttribute('fill', '#ffe45c');
-      }
-      function zap() {
-        $('.spark', box).style.display = 'none';
-        $('.warn', box).style.display = '';
-        flash('#fff6a8');
+        if (done || fuel || performance.now() < t0) return;
+        s.press();
+        finish();
       }
 
       if (fuel) {
-        const deg = red * 180;
+        const deg = s.red * 180;
         $('.arch', box).style.background =
           `conic-gradient(from 270deg at 50% 100%, #ff3b30 0deg, #ff8a80 ${deg * 0.6}deg, #fff ${deg}deg ${180 - deg}deg, #ff8a80 ${180 - deg * 0.6}deg, #ff3b30 180deg, transparent 180deg)`;
+        drawFuel();
       } else {
-        layoutBattery(box, top, span);
-      }
-      function drawClips() {
-        const Y = (c) => 20 + c.y * 240;
-        $('.clip.l', box).style.top = Y(clips[0]) + 'px';
-        $('.clip.r', box).style.top = Y(clips[1]) + 'px';
+        layoutBattery(box, s.tol);
+        drawBattery();
       }
 
       function frame(now) {
         if (done) return;
         const t = now - t0;
-        state.t = t;
-        if (t >= 0 && res.textContent === 'GET READY…') res.textContent = '';
-        timer.style.transform = `scaleX(${clamp(1 - t / duration, 0, 1)})`;
-        const dt = last == null ? 0 : Math.min(0.05, (now - last) / 1000);
-        last = now;
-        if (fuel) {
-          if (t >= 0) {
-            if (!nextGoal) nextGoal = now + 1600 + Math.random() * 800;
-            if (now > nextGoal) {
-              goal = (Math.random() < 0.5 ? -1 : 1) * rand(0.85, 1);
-              nextGoal = now + 1600 + Math.random() * 800;
-            }
-            force += (goal - force) * Math.min(1, dt * 5);
-            const drift = 0.22 * (1 + (t / duration) * 0.3); // it gets a little harder to hold
-            p = clamp(p + (force * drift + held() * 0.45) * dt, 0, 1);
+        if (t >= 0) {
+          if (res.textContent === 'GET READY…') res.textContent = '';
+          // Small fixed steps keep the physics the same at any frame rate.
+          let dt = last == null ? 0 : Math.min(0.1, (now - last) / 1000);
+          while (dt > 0 && !s.done) {
+            s.step(Math.min(dt, 1 / 120));
+            dt -= 1 / 120;
           }
-          state.p = p;
-          state.red = red;
-          $('.pivot', box).style.transform = `rotate(${(p - 0.5) * 180}deg)`;
-          $('#pump-level', box).setAttribute('y', String(72 - 72 * clamp(t / duration, 0, 1)));
-          if (p < red || p > 1 - red) return finish(false, 'SPILLED!');
-          if (t >= duration) return finish(true, 'SUCCESS!');
-        } else {
-          if (t >= 0) {
-            for (const c of clips) {
-              // Random speed, random turns, and a bounce off either end.
-              c.turn -= dt;
-              if (c.turn <= 0) {
-                c.v = (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 1.25);
-                c.turn = rand(0.35, 1.1);
-              }
-              c.y += c.v * dt;
-              if (c.y < 0) {
-                c.y = -c.y;
-                c.v = Math.abs(c.v);
-              } else if (c.y > 1) {
-                c.y = 2 - c.y;
-                c.v = -Math.abs(c.v);
-              }
-            }
-          }
-          state.clips = clips.map((c) => c.y);
-          state.zone = [top, top + span];
-          drawClips();
-          if (t >= duration) {
-            zap();
-            return finish(false, 'TOO SLOW…');
-          }
+          last = now;
         }
+        timer.style.transform = `scaleX(${clamp(1 - s.t / s.ms, 0, 1)})`;
+        if (fuel) drawFuel();
+        else drawBattery();
+        if (s.done) return finish();
         root.requestAnimationFrame(frame);
         return undefined;
       }
@@ -1180,8 +1224,7 @@
         ev.stopPropagation();
         if (!fuel) return press();
         const r = box.getBoundingClientRect();
-        pointerSide = ev.clientX < r.left + r.width / 2 ? -1 : 1;
-        return showHeld();
+        return tap(ev.clientX < r.left + r.width / 2 ? -1 : 1);
       }
       handler = Input.push({
         key(k) {
@@ -1189,11 +1232,7 @@
         },
       });
       box.addEventListener('pointerdown', onPointer);
-      if (fuel) {
-        doc.addEventListener('keydown', onHold, true);
-        doc.addEventListener('keyup', onHold, true);
-        root.addEventListener('pointerup', release);
-      } else drawClips();
+      if (fuel) doc.addEventListener('keydown', onTap, true);
       root.requestAnimationFrame(frame);
     });
   }
@@ -1210,8 +1249,8 @@
       </div>`;
   }
 
-  // The terminals are two red posts with a ✱ at the foot; the ⚡ between them turns into a
-  // yellow ⚠ when the generator shocks you.
+  // The terminals are two red posts with a ✱ in the middle, where the clips have to meet; the
+  // ⚡ between them turns into a yellow ⚠ when the generator shocks you.
   function batteryHtml() {
     return `
       <div class="battery">
@@ -1220,40 +1259,39 @@
         <div class="clip r">${SVG.clip}</div>
       </div>`;
   }
-  function layoutBattery(box, top, span) {
-    const y0 = 20 + top * 240;
-    const y1 = 20 + (top + span) * 240;
+  function layoutBattery(box, tol) {
+    const Y = (y) => 20 + y * 240;
+    const mid = Y(0.5);
     const post = (x, y) => {
       let s = '';
-      for (const a of [0, 45, 90, 135]) {
-        const dx = Math.cos((a * Math.PI) / 180) * 17;
-        const dy = Math.sin((a * Math.PI) / 180) * 17;
-        s += `<line x1="${x - dx}" y1="${y - dy}" x2="${x + dx}" y2="${y + dy}" stroke="#000" stroke-width="11" stroke-linecap="round"/>`;
-      }
-      for (const a of [0, 45, 90, 135]) {
-        const dx = Math.cos((a * Math.PI) / 180) * 17;
-        const dy = Math.sin((a * Math.PI) / 180) * 17;
-        s += `<line x1="${x - dx}" y1="${y - dy}" x2="${x + dx}" y2="${y + dy}" stroke="#fff" stroke-width="6" stroke-linecap="round"/>`;
+      for (const [w, color] of [
+        [11, '#000'],
+        [6, '#fff'],
+      ]) {
+        for (const a of [0, 45, 90, 135]) {
+          const dx = Math.cos((a * Math.PI) / 180) * 17;
+          const dy = Math.sin((a * Math.PI) / 180) * 17;
+          s += `<line x1="${x - dx}" y1="${y - dy}" x2="${x + dx}" y2="${y + dy}" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;
+        }
       }
       return s;
     };
+    // Red posts above and below the ✱, with white marks where "lined up" starts and ends.
     const bar = (x) => {
-      const n = 3;
-      const gap = 6;
-      const seg = (y1 - y0 - gap * (n - 1)) / n;
-      let s = '';
-      for (let i = 0; i < n; i++)
-        s += `<rect x="${x - 7}" y="${(y0 + i * (seg + gap)).toFixed(1)}" width="14" height="${seg.toFixed(1)}" fill="#ff2a1f" stroke="#000" stroke-width="3"/>`;
-      return s;
+      const seg = (a, b) =>
+        `<rect x="${x - 7}" y="${a.toFixed(1)}" width="14" height="${(b - a).toFixed(1)}" fill="#ff2a1f" stroke="#000" stroke-width="3"/>`;
+      const band = (y) => `<rect x="${x - 15}" y="${(y - 2).toFixed(1)}" width="30" height="4" fill="#fff"/>`;
+      return seg(Y(0), mid - 26) + seg(mid + 26, Y(1)) + band(Y(0.5 - tol)) + band(Y(0.5 + tol));
     };
-    const py = y1 + 24;
     $('svg.rig', box).innerHTML =
       bar(180) +
       bar(300) +
-      post(180, py) +
-      post(300, py) +
-      `<polygon class="spark" points="248,${py - 22} 229,${py + 3} 240,${py + 3} 234,${py + 22} 253,${py - 5} 242,${py - 5} 250,${py - 22}" fill="#fff" stroke="#000" stroke-width="2"/>` +
-      `<g class="warn" style="display:none"><polygon points="240,${py - 22} 262,${py + 18} 218,${py + 18}" fill="#ffd400" stroke="#000" stroke-width="3" stroke-linejoin="round"/><rect x="237.5" y="${py - 9}" width="5" height="16" fill="#000"/><rect x="237.5" y="${py + 10}" width="5" height="5" fill="#000"/></g>`;
+      post(180, mid) +
+      post(300, mid) +
+      `<polygon class="spark" points="248,${mid - 22} 229,${mid + 3} 240,${mid + 3} 234,${mid + 22} 253,${mid - 5} 242,${mid - 5} 250,${mid - 22}" fill="#fff" stroke="#000" stroke-width="2"/>` +
+      `<g class="warn" style="display:none"><polygon points="240,${mid - 22} 262,${mid + 18} 218,${mid + 18}" fill="#ffd400" stroke="#000" stroke-width="3" stroke-linejoin="round"/><rect x="237.5" y="${
+        mid - 9
+      }" width="5" height="16" fill="#000"/><rect x="237.5" y="${mid + 10}" width="5" height="5" fill="#000"/></g>`;
   }
 
   // ------------------------------------------------------------------ menus
@@ -1382,10 +1420,18 @@
     }
   }
 
+  function guardNote(b, u) {
+    if (b.enemy.id === 'trollge') return ' Holds still: Trollge can’t catch you moving.';
+    if (b.enemy.id !== 'dolphin') return '';
+    return u.has('grouchBehavior') ? ' He yells about his locker, and Dolphin Man hears it.' : ' Quiet: Dolphin Man hears nothing.';
+  }
   const ACTION_HINTS = {
     attack: (b, u) => {
       const W = u.def.weapon;
-      if (u.ghost) return `HEX: ${W.name}. No damage, a random debuff on ${b.en}.`;
+      if (u.ghost) {
+        const M = W.moods && u.mood && W.moods[u.mood];
+        return M ? `HEX (${u.mood.toUpperCase()}): ${b.fill(M.rules)}` : `HEX: ${W.name}. No damage, a random debuff on ${b.en}.`;
+      }
       return `${W.name}: ${W.rules ? b.fill(W.rules) : `${W.hits} hits (the 2nd is less accurate).`}`;
     },
     skills: (b, u) => `Use a skill. Costs ${u.def.resource.name}.`,
@@ -1393,7 +1439,7 @@
     guard: (b, u) =>
       u.ghost
         ? 'FOCUS: gather SPIRIT (+20). Keeps Freaky Doctor running.'
-        : `Take half damage this turn, recover 20 STAMINA. Acts first.${b.enemy.id === 'trollge' ? ' Holds still: Trollge can’t catch you moving.' : ''}`,
+        : `Take half damage this turn, recover 20 STAMINA. Acts first.${guardNote(b, u)}`,
     carry: () => 'Pick up a dead ally so the team can escape. Slows the carrier.',
     back: () => 'Go back.',
   };
@@ -1680,7 +1726,8 @@
   }
   function portraitCanvas(id, foe) {
     let look;
-    if (foe) look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: 'umbra', fx: [] };
+    if (foe)
+      look = id === 'sid' ? { id, variant: 'sid_armed', mood: 'slasher', fx: [] } : { id, mood: id === 'dolphin' ? 'cryptid' : 'umbra', fx: [] };
     else look = { id, mood: SC.DATA.workers[id].ghost ? 'ghost' : 'neutral', fx: [] };
     const c = SC.Art.card(look).toCanvas();
     c.className = 'px';
@@ -1703,6 +1750,10 @@
     sid: `
       <p><b>ANGER</b> is on the left, under his condition. It rises every turn and whenever Sid gets hurt. From <b>60</b> he follows up with a second attack every turn. At <b>80</b> he draws his Desert Eagle, can't eat cookies to calm down anymore, and hits much harder. Anyone eating a <b>Cookie</b> makes him angrier (METH Addict).</p>
       <p><b>READ HIS NEXT MOVE.</b> With John in the squad, his Hyperceptive flags the profile Sid will hit first (<b>TARGET</b>). Captain Jim's Confidential Documents say how hard. GUARD the target, heal them first, or have Captain Jim put a Bear Trap at their feet.</p>`,
+    dolphin: `
+      <p><b>DOLPHIN MAN CAN BARELY SEE.</b> At low ANGER his slaps and Tail Whip miss most of the time (<b>Eyes of the Angry</b>). The angrier he gets the better he sees, and at <b>80</b> he sees everything. His slaps hit 5 times and heal him a little. His <b>Loud Wail</b> hits everyone three times (harder the angrier he is) and lowers SPEED and SMARTS, which also makes the generator checks harder. His slime makes punches, slaps and stabs slip off now and then; magic, shocks and blasts don't slip.</p>
+      <p><b>HE HUNTS BY SOUND.</b> A battery going in, glass breaking, a ringing phone, a blast: loud things make him angrier (more so the angrier he is) and he goes after whoever made them for 2 turns, seeing them better (<b>HUNTED</b>), camouflage or not. GUARD and FOCUS are quiet, unless you're Captain Jim yelling about his locker.</p>
+      <p><b>FETAL POSITION.</b> Now and then he curls up on the floor for a turn: he can't attack and his defense shoots up, but every noise angers him twice as much, and every hit is a noise. Use the time to heal, guard and buff, or run for it.</p>`,
   };
   function helpHtml() {
     const has = (id) => UI.party.includes(id);
@@ -1716,6 +1767,11 @@
       }</p>
       ${HELP_FOE[enemyId()] || ''}
       ${
+        has('purpl')
+          ? "<p><b>PURPL LADY'S MOODS.</b> Every turn she feels <b>HAPPY</b>, <b>ANGRY</b> or <b>SAD</b>, and her face shows it. Her <b>HEX</b> changes with it: HAPPY calms the slasher down and heals everyone a little, ANGRY does real magic damage and lowers its DEF, SAD lowers its ATK and SPD.</p>"
+          : ''
+      }
+      ${
         has('mysti')
           ? '<p><b>MYSTI.</b> <b>First Responder</b> patches up each teammate the first time they drop to CRITICAL. Her <b>DEATHWARD</b> (in the bag) keeps the whole team from dying for 3 turns. Her uniform gives her +10% to everything while she is <b>NEUTRAL</b> (not AFRAID, CONFUSED or HAPPY).</p>'
           : ''
@@ -1727,7 +1783,9 @@
       }
       <p><b>HEALTH</b> is a word, as in SlashCo VR: [OVERSATED], [SATED], [OK], [STABLE], [SCATHED], [HURT], [CRITICAL] (the heart turns into a skull and crossbones). STA is STAMINA, which pays for skills.</p>
       <p><b>THE SQUAD.</b> On the title screen, click anyone to swap them with whoever is on the bench (Purpl Lady, to start with), or press SWAP.</p>
-      <p><b>GENERATOR CHECKS.</b> Mel's <b>fuel</b> check: the arrow loses its balance and drifts toward the red, so hold Q / ← or E / → (or hold a side of the box) to push it back until the pour is done. John's <b>battery</b> check: the clips bounce around; press Z / Space (or tap) when both are level with the red terminals, or the generator shocks him.</p>
+      <p><b>GENERATOR CHECKS.</b> Mel's <b>fuel</b> check: the arrow loses its balance and falls toward the red, faster and faster. Every tap of Q / ← or E / → (or of a side of the box) makes it jump back a little; keep it out of the red until the pour is done. John's <b>battery</b> check: the clips bounce around at random speeds; press Z / Space (or tap) when both are level with the middle of the terminals, or the generator shocks him.${
+        has('purpl') ? " Purpl Lady's Moral Support slows both down." : ''
+      }</p>
       <p><b>CONTROLS.</b> Arrows / WASD move · Z, Enter, Space confirm · X, Esc back · L battle log · F fast text · M mute. Mouse and touch work everywhere.</p>
     </div>`;
   }
@@ -1812,6 +1870,7 @@
 
   async function title() {
     UI.phase = 'title';
+    if (SC.Audio) SC.Audio.music('ambience');
     let at = 0;
     for (;;) {
       const o = overlay('screen', 'title', titleHtml());

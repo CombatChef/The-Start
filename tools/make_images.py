@@ -15,6 +15,7 @@ effects on top, so only a few source edits live here:
 
     mel_noglasses   - Mel after Toss Glasses (glasses painted out)
     john_asleep     - John during Nap (eyes closed)
+    purpl_happy / purpl_sad / purpl_angry - Purpl Lady's three moods (mouth and brows redrawn)
     sid / sid_armed - Sid's card from the doc, with and without the Desert Eagle
     trollge         - Trollge's head, for the title screen
 
@@ -192,9 +193,62 @@ def purples(min_s=120, min_v=110):
 
 def purpl():
     # Purpl Lady: black hair with violet streaks, glasses, one violet eye. She sits on the bench
-    # by default and can swap in for anyone on the title screen.
+    # by default and can swap in for anyone on the title screen. Every turn she feels HAPPY,
+    # ANGRY or SAD, and her face changes with it: the edits below redraw her mouth and brows on
+    # the source, then everything is posterized with exactly the same shading as the original.
     bgr = load('purpl.webp')
-    save(poster(bgr, (190, 70, 510, 390), (28, 54, 80), (0.5, 0.52, 0.34, 0.44), clahe=1.4, accent=purples()), GRAY + VIOLETS, 'purpl')
+    crop, pcts, focus = (190, 70, 510, 390), (28, 54, 80), (0.5, 0.52, 0.34, 0.44)
+    palette = GRAY + VIOLETS
+    save(poster(bgr, crop, pcts, focus, clahe=1.4, accent=purples()), palette, 'purpl')
+    cuts = poster.last_cuts
+
+    ink = (58, 34, 44)  # the art's dark violet-grey line work (BGR)
+
+    def clean(img, boxes):
+        m = np.zeros(img.shape[:2], np.uint8)
+        for x0, y0, x1, y1 in boxes:
+            cv2.rectangle(m, (x0, y0), (x1, y1), 255, -1)
+        return cv2.inpaint(img, m, 6, cv2.INPAINT_TELEA)
+
+    def line(img, pts, t):
+        cv2.polylines(img, [np.array(pts, np.int32)], False, ink, t, cv2.LINE_AA)
+
+    def arc(img, x0, x1, y, depth, t):
+        """From (x0, y) to (x1, y), bowing down by `depth` pixels in the middle (up if negative)."""
+        xs = np.linspace(x0, x1, 24)
+        ys = y + depth * (1 - ((xs - (x0 + x1) / 2) / ((x1 - x0) / 2)) ** 2)
+        line(img, list(zip(xs.astype(int), ys.astype(int))), t)
+
+    mouth, sweat = (314, 312, 370, 334), (386, 312, 404, 332)
+
+    # HAPPY: a big open smile, and a relaxed brow over the eye.
+    img = clean(bgr.copy(), [mouth, sweat])
+    smile = np.array([(318, 318), (366, 318), (360, 330), (342, 338), (324, 330)], np.int32)
+    cv2.fillPoly(img, [smile], (70, 40, 60))
+    cv2.polylines(img, [smile], True, ink, 4, cv2.LINE_AA)
+    cv2.ellipse(img, (342, 332), (9, 4), 0, 0, 360, (150, 120, 210), -1)
+    arc(img, 396, 452, 214, -6, 7)
+    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_happy')
+
+    # SAD: a frown, the brow lifted at the inner end, and a tear.
+    img = clean(bgr.copy(), [mouth])
+    arc(img, 322, 362, 330, -9, 6)
+    line(img, [(398, 204), (425, 209), (452, 218)], 7)
+    cv2.ellipse(img, (438, 270), (5, 8), 0, 0, 360, (255, 245, 235), -1)
+    cv2.ellipse(img, (438, 270), (5, 8), 0, 0, 360, ink, 2, cv2.LINE_AA)
+    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_sad')
+
+    # ANGRY: gritted teeth, and both brows furrowed down toward the nose.
+    img = clean(bgr.copy(), [mouth, sweat])
+    x0, y0, x1, y1 = 318, 318, 366, 331
+    cv2.rectangle(img, (x0, y0), (x1, y1), (250, 250, 252), -1)
+    cv2.rectangle(img, (x0, y0), (x1, y1), ink, 4)
+    for x in (330, 342, 354):
+        cv2.line(img, (x, y0), (x, y1), ink, 2)
+    cv2.line(img, (x0, (y0 + y1) // 2), (x1, (y0 + y1) // 2), ink, 2)
+    line(img, [(396, 224), (424, 214), (454, 206)], 8)
+    line(img, [(284, 222), (310, 228), (334, 236)], 8)
+    save(poster(img, crop, pcts, focus, clahe=1.4, accent=purples(), cuts=cuts), palette, 'purpl_angry')
 
 
 def sid():
@@ -268,8 +322,9 @@ def dither(rgb, pal):
     return pick.reshape(H, W)
 
 
-def shrink(rgba, s, box):
+def shrink(rgba, s, box, pal=None):
     """Area-average (alpha-premultiplied) down by `s`, then map onto the palette."""
+    pal = TROLL if pal is None else pal
     x0, y0, x1, y1 = box
     src = rgba[y0:y1, x0:x1]
     w, h = int(round((x1 - x0) * s)), int(round((y1 - y0) * s))
@@ -277,19 +332,21 @@ def shrink(rgba, s, box):
     col = cv2.resize(src[..., :3].astype(float) * a[..., None], (w, h), interpolation=cv2.INTER_AREA)
     a = cv2.resize(a, (w, h), interpolation=cv2.INTER_AREA)
     col /= np.maximum(a[..., None], 1e-4)
-    return np.where(a > 0.33, dither(col, TROLL), -1)
+    return np.where(a > 0.33, dither(col, pal), -1)
 
 
-def outlined(idx):
+def outlined(idx, pal=None, line=None):
     """Palette indexes -> RGBA with a 1px margin holding a dark outline."""
+    pal = TROLL if pal is None else pal
+    line = TROLL_OUTLINE if line is None else line
     H, W = idx.shape
     full = np.full((H + 2, W + 2), -1, int)
     full[1:-1, 1:-1] = idx
     solid = full >= 0
     out = np.zeros((H + 2, W + 2, 4), np.uint8)
-    out[solid, :3] = TROLL[full[solid]].astype(np.uint8)
+    out[solid, :3] = pal[full[solid]].astype(np.uint8)
     out[solid, 3] = 255
-    out[(cv2.dilate(solid.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0) & ~solid] = TROLL_OUTLINE
+    out[(cv2.dilate(solid.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0) & ~solid] = line
     return out
 
 
@@ -364,12 +421,238 @@ def trollge():
     return meta
 
 
+# Dolphin Man: blue-grey dolphin skin from near-black to pale, the white of his belly, and the
+# reds of his open mouth.
+DOLPH = hexes(['#05070a', '#10141b', '#1b212b', '#272e3b', '#343c4b', '#444d5e', '#586274', '#707a8c', '#8e97a7',
+               '#b1b8c4', '#d3d8df', '#eef1f4', '#ffffff', '#3a0a0e', '#6e1419', '#a3272c', '#d0585a'])
+DOLPH_OUTLINE = (2, 3, 5, 255)
+# His skin, dark to light, for the parts that are drawn (sampled from his arms).
+DOLPH_SKIN = np.array([(6, 8, 11), (16, 20, 27), (30, 35, 45), (48, 55, 68), (74, 82, 98)], float)
+DOLPH_BELLY = np.array([(96, 100, 108), (160, 165, 174), (212, 216, 224)], float)
+
+
+def dolphin():
+    """Dolphin Man, from two small screenshots: dolphin.webp (standing, cut off at the thighs)
+    and dolphin_wail.webp (his mouth wide open). His head, torso and arms are cut out of the
+    first; the second gives the wailing head. His legs and his fetal position aren't in either
+    picture, so they are drawn here in his colours and dithered the same way."""
+    S = 4  # work at 4x the screenshots' size
+    cv2.setRNGSeed(7)
+    rng = np.random.default_rng(3)
+    Hs, Ws = load('dolphin.webp').shape[:2]
+    big_bgr = cv2.resize(load('dolphin.webp'), (Ws * S, Hs * S), interpolation=cv2.INTER_CUBIC)
+    big = big_bgr[..., ::-1].astype(float)
+
+    def at(pts):
+        return np.array([(x * S, y * S) for x, y in pts], np.int32)
+
+    # ---- cut him out: a rough outline, refined by GrabCut, then minus the olive-grey wall
+    outline = [(172, 70), (182, 72), (190, 82), (192, 96), (191, 110), (186, 117), (196, 121), (208, 126), (214, 134), (216, 148),
+               (220, 162), (224, 178), (226, 195), (227, 210), (224, 218), (218, 220), (212, 212), (210, 196), (207, 180), (203, 165),
+               (200, 172), (199, 195), (199, 221), (150, 221), (149, 195), (148, 172), (145, 165), (141, 180), (137, 196), (133, 210),
+               (126, 218), (116, 216), (114, 205), (118, 190), (124, 172), (128, 155), (132, 140), (137, 128), (147, 122), (159, 118),
+               (155, 110), (153, 96), (156, 82), (163, 73)]
+    gc = np.full(big.shape[:2], cv2.GC_BGD, np.uint8)
+    cv2.fillPoly(gc, [at(outline)], cv2.GC_PR_FGD)
+    gc[cv2.erode((gc == cv2.GC_PR_FGD).astype(np.uint8), np.ones((31, 31), np.uint8)) > 0] = cv2.GC_FGD
+    cv2.grabCut(big_bgr, gc, None, np.zeros((1, 65)), np.zeros((1, 65)), 6, cv2.GC_INIT_WITH_MASK)
+    fig = (gc == cv2.GC_FGD) | (gc == cv2.GC_PR_FGD)
+    r, g, b = big[..., 0], big[..., 1], big[..., 2]
+    wall = (g - b > 2) & (0.3 * r + 0.59 * g + 0.11 * b < 185)
+    wall = cv2.morphologyEx(wall.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)) > 0
+    fig = (fig & ~wall).astype(np.uint8)
+    fig = cv2.morphologyEx(fig, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+    fig = cv2.morphologyEx(fig, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    _, lab, st, _ = cv2.connectedComponentsWithStats(fig)
+    fig = lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])
+    _, lab, st, _ = cv2.connectedComponentsWithStats((~fig).astype(np.uint8))
+    for k in range(1, len(st)):
+        x, y, w, h, area = st[k]
+        if x > 0 and y > 0 and x + w < fig.shape[1] and y + h < fig.shape[0] and area < 4000:
+            fig[lab == k] = True  # fill small holes
+
+    # ---- a limb painter: rounded shading from the distance to the edge, lit from the front-left
+    def ramp(t, tones):
+        t = np.clip(t, 0, 1) * (len(tones) - 1)
+        i = np.floor(t).astype(int)
+        f = (t - i)[..., None]
+        return tones[i] * (1 - f) + tones[np.minimum(i + 1, len(tones) - 1)] * f
+
+    def painter(canvas, alpha):
+        yy, xx = np.mgrid[0:canvas.shape[0], 0:canvas.shape[1]]
+
+        def paint(mask, lift=0.0, tones=DOLPH_SKIN, per_row=False, gain=0.45):
+            mask = mask > 0
+            if not mask.any():
+                return
+            d = cv2.distanceTransform(mask.astype(np.uint8), cv2.DIST_L2, 5)
+            if per_row:  # legs: thin shins shade like thick thighs
+                t = (d / np.maximum(1, d.max(axis=1, keepdims=True))) ** 0.55 * 0.8 + 0.08
+            else:
+                ys, xs = np.where(mask)
+                t = np.clip(d / max(1.0, np.percentile(d[mask], 97)), 0, 1) ** 0.5 * 0.75 + 0.1
+                t = t + (-0.3 * (xx - xs.mean()) - 0.6 * (yy - ys.mean())) / max(np.ptp(ys), np.ptp(xs), 1) * gain
+            t = t + lift + cv2.GaussianBlur(rng.normal(0, 1, t.shape), (0, 0), 2.0) * 0.07
+            canvas[mask] = ramp(t, tones)[mask]
+            alpha[mask] = 255
+
+        return paint
+
+    def chain(shape, pts, radii):
+        m = np.zeros(shape, np.uint8)
+        for (p0, p1), (r0, r1) in zip(zip(pts[:-1], pts[1:]), zip(radii[:-1], radii[1:])):
+            for k in range(17):
+                f = k / 16
+                c = (int((p0[0] + (p1[0] - p0[0]) * f) * S), int((p0[1] + (p1[1] - p0[1]) * f) * S))
+                cv2.circle(m, c, int((r0 + (r1 - r0) * f) * S), 1, -1)
+        return m
+
+    def ellipse(shape, c, axes, angle):
+        m = np.zeros(shape, np.uint8)
+        cv2.ellipse(m, (int(c[0] * S), int(c[1] * S)), (int(axes[0] * S), int(axes[1] * S)), angle, 0, 360, 1, -1)
+        return m
+
+    # ---- standing: the cut-out over drawn legs
+    ext = 120 * S
+    canvas = np.zeros((big.shape[0] + ext, big.shape[1], 3), float)
+    alpha = np.zeros(canvas.shape[:2], np.uint8)
+    paint = painter(canvas, alpha)
+    legs = [
+        [(152, 204), (175, 204), (175, 222), (172, 240), (166, 265), (164, 285), (162, 300), (160, 318), (151, 318), (150, 305), (147, 285),
+         (149, 265), (147, 255), (145, 230), (148, 216)],
+        [(175, 204), (198, 204), (202, 216), (205, 230), (203, 255), (201, 265), (203, 285), (200, 305), (199, 318), (190, 318), (188, 300),
+         (186, 285), (184, 265), (178, 240), (175, 222)],
+    ]
+    for pts, lift in zip(legs, (0, -0.04)):
+        m = np.zeros(canvas.shape[:2], np.uint8)
+        cv2.fillPoly(m, [at(pts)], 1)
+        paint(cv2.GaussianBlur(m.astype(float), (0, 0), 1.2) > 0.5, lift, per_row=True)
+    for cx, ang in ((155, -6), (195, 6)):
+        paint(ellipse(canvas.shape[:2], (cx, 320), (8, 4), ang), -0.05)
+    top = fig.copy()
+    top[218 * S:, :] = False  # soften the cut-out's flat bottom into his hips
+    soft = np.clip(cv2.GaussianBlur(top.astype(float), (0, 0), 3), 0, 1)
+    H0 = big.shape[0]
+    canvas[:H0] = canvas[:H0] * (1 - soft[..., None]) + big * soft[..., None]
+    alpha[:H0] = np.maximum(alpha[:H0], np.where(soft > 0.5, 255, 0).astype(np.uint8))
+    stand = np.dstack([np.clip(canvas, 0, 255).astype(np.uint8), alpha])
+
+    ys, xs = np.where(alpha > 20)
+    X0, Y0, X1, Y1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+    scale = 196 / (Y1 - Y0)  # 196 art pixels tall (392 on screen)
+    yy, xx = np.mgrid[0:alpha.shape[0], 0:alpha.shape[1]]
+    head = (alpha > 20) & (yy < 117 * S) & (xx > 148 * S) & (xx < 198 * S)
+    body = stand.copy()
+    body[head, 3] = 0
+    B = outlined(shrink(body, scale, (X0, Y0, X1, Y1), DOLPH), DOLPH, DOLPH_OUTLINE)
+    hy, hx = np.where(head)
+    HX, HY = hx.min(), hy.min()
+    Hd = outlined(shrink(stand * head[..., None], scale, (HX, HY, hx.max() + 1, hy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
+
+    def on_body(p):
+        return [int(v) + 1 for v in np.round((np.array(p, float) * S - [X0, Y0]) * scale)]
+
+    def on_head(p):
+        return [int(v) + 1 for v in np.round((np.array(p, float) * S - [HX, HY]) * scale)]
+
+    # ---- the wailing head, from the open-mouth picture: the head and the red of the mouth
+    bgr18 = load('dolphin_wail.webp')
+    h18, w18 = bgr18.shape[:2]
+    big18 = cv2.resize(bgr18, (w18 * S, h18 * S), interpolation=cv2.INTER_CUBIC)[..., ::-1].astype(int)
+    m = np.zeros(big18.shape[:2], np.uint8)
+    cv2.fillPoly(m, [at([(226, 13), (240, 15), (252, 25), (258, 44), (257, 64), (255, 76), (203, 76), (200, 62), (200, 40), (206, 24)])], 1)
+    jaw = np.zeros_like(m)
+    cv2.fillPoly(jaw, [at([(202, 70), (257, 70), (250, 100), (243, 126), (238, 146), (220, 146), (214, 126), (207, 100)])], 1)
+    red = (big18[..., 0] > big18[..., 1] + 12) & (big18[..., 0] > big18[..., 2] + 8)
+    teeth = (big18.sum(-1) > 480) & (jaw > 0)
+    teeth[125 * S:, :] = False  # the upper teeth only
+    mouth = cv2.morphologyEx(((red | teeth) & (jaw > 0)).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    m = cv2.dilate(((m > 0) | (mouth > 0)).astype(np.uint8), np.ones((5, 5), np.uint8))
+    _, lab, st, _ = cv2.connectedComponentsWithStats(m)
+    m = cv2.GaussianBlur((lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(float), (0, 0), 2) > 0.5
+    skin = ~((red & (jaw > 0)) | (big18.sum(-1) > 600))  # darker, bluer skin to match; the mouth and eyes stay
+    col = np.where(skin[..., None], big18 * np.array([0.52, 0.55, 0.68]), big18)
+    wail = np.dstack([np.clip(col, 0, 255), m * 255]).astype(np.uint8)
+    wy, wx = np.where(m)
+    ratio = 1.2 * (hx.max() - HX) / (wx.max() - wx.min())  # a little bigger than his normal head: he opens right up
+    Wl = outlined(shrink(wail, scale * ratio, (wx.min(), wy.min(), wx.max() + 1, wy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
+
+    # ---- fetal position: lying on his side facing us, curled up, head on the left
+    fc = np.zeros((100 * S, 200 * S, 3), float)
+    fa = np.zeros(fc.shape[:2], np.uint8)
+    fpaint = painter(fc, fa)
+    torso = chain(fa.shape, [(64, 62), (92, 52), (124, 50), (150, 60), (164, 76)], [15, 19, 20, 19, 17])
+    fpaint(torso)
+    fpaint(chain(fa.shape, [(70, 66), (96, 62), (126, 62), (148, 70)], [5, 7, 7, 6]) & torso, 0.05, DOLPH_BELLY, gain=0.25)
+    fpaint(chain(fa.shape, [(160, 74), (112, 66)], [12, 10]), -0.2)  # far thigh
+    fpaint(chain(fa.shape, [(112, 66), (148, 84)], [9, 7]), -0.22)  # far shin
+    turned = cv2.rotate(stand[70 * S:118 * S, 150 * S:198 * S].copy(), cv2.ROTATE_90_COUNTERCLOCKWISE)
+    on = turned[..., 3] > 127
+    oy, ox = 44 * S, 18 * S
+    fc[oy:oy + turned.shape[0], ox:ox + turned.shape[1]][on] = turned[..., :3][on]
+    fa[oy:oy + turned.shape[0], ox:ox + turned.shape[1]][on] = 255
+    fpaint(chain(fa.shape, [(164, 80), (104, 74)], [14, 11]))  # near thigh, up to his chest
+    fpaint(chain(fa.shape, [(104, 76), (150, 88)], [10, 7]))  # near shin, folded back
+    fpaint(ellipse(fa.shape, (158, 89), (10, 4.5), -6), -0.05)  # foot
+    fpaint(chain(fa.shape, [(80, 62), (76, 82)], [8, 7]), 0.05)  # arm, wrapped round his shins
+    fpaint(chain(fa.shape, [(76, 82), (118, 84)], [7, 6]), 0.08)
+    fpaint(ellipse(fa.shape, (122, 84), (6, 5), 0), 0.1)  # hand
+    fa[95 * S:, :] = 0  # flat on the floor
+    fetal = np.dstack([np.clip(fc, 0, 255).astype(np.uint8), fa])
+    fy, fx = np.where(fa > 20)
+    fscale = scale * 1.15
+    F = outlined(shrink(fetal, fscale, (fx.min(), fy.min(), fx.max() + 1, fy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
+
+    # ---- one canvas every pose fits in: standing in the middle, the fetal pose on the same floor
+    pad = 8  # room above his head for the wailing jaw and the wobble
+    Wc = max(B.shape[1], F.shape[1]) + 4
+    Hc = B.shape[0] + pad
+    body_at = [(Wc - B.shape[1]) // 2, pad]
+    head_at = [body_at[0] + int(round((HX - X0) * scale)), body_at[1] + int(round((HY - Y0) * scale))]
+    fetal_at = [(Wc - F.shape[1]) // 2, Hc - F.shape[0]]
+
+    def pt(p):
+        q = on_body(p)
+        return [body_at[0] + q[0], body_at[1] + q[1]]
+
+    os.makedirs(SPRITES, exist_ok=True)
+    for name, img in (('body', B), ('head', Hd), ('wail', Wl), ('fetal', F)):
+        Image.fromarray(img).save(os.path.join(SPRITES, f'dolphin_{name}.png'))
+        print(f'wrote sprites/dolphin_{name}.png', img.shape[1], 'x', img.shape[0])
+
+    # Title-screen card: the wailing head, as big as it goes.
+    s = 118 / max(wx.max() + 1 - wx.min(), wy.max() + 1 - wy.min())
+    card = outlined(shrink(wail, s, (wx.min(), wy.min(), wx.max() + 1, wy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
+    out = np.zeros((SIZE, SIZE, 4), np.uint8)
+    ch, cw = card.shape[:2]
+    out[(SIZE - ch) // 2:(SIZE - ch) // 2 + ch, (SIZE - cw) // 2:(SIZE - cw) // 2 + cw] = card
+    Image.fromarray(out).save(os.path.join(OUT, 'dolphin.png'))
+    print('wrote portraits/dolphin.png')
+    return {
+        'size': [Wc, Hc],
+        'bodyAt': body_at,
+        'headAt': head_at,  # where head.png's top-left goes
+        'wailAt': [head_at[0] + (Hd.shape[1] - Wl.shape[1]) // 2, head_at[1] - 4],  # ...and wail.png's
+        'fetalAt': fetal_at,
+        'pivot': pt((174, 119)),  # his head wobbles around his neck
+        'eyes': [on_head((164, 95)), on_head((182, 95))],  # on head.png
+        'mouth': pt((173, 110)),
+        'chest': pt((174, 160)),
+        'feet': pt((175, 322)),
+        'handL': pt((118, 208)),
+        'handR': pt((224, 212)),
+        # his face when curled up, on the canvas
+        'fetalFace': [fetal_at[0] + int(round((30 * S - fx.min()) * fscale)), fetal_at[1] + int(round((60 * S - fy.min()) * fscale))],
+    }
+
+
 def uri(path):
     with open(path, 'rb') as f:
         return 'data:image/png;base64,' + base64.b64encode(f.read()).decode('ascii')
 
 
-def bundle(troll_meta):
+def bundle(sprites):
+    """sprites: {name: {'layers': {key: file in assets/sprites}, 'meta': {...}}}"""
     lines = [
         '/* Generated by tools/make_images.py — do not edit by hand. */',
         '(function (root) {',
@@ -380,12 +663,15 @@ def bundle(troll_meta):
     for name in sorted(os.listdir(OUT)):
         if name.endswith('.png'):
             lines.append(f"    {name[:-4]}: '{uri(os.path.join(OUT, name))}',")
-    lines += ['  };', '  SC.SPRITES = {', '    trollge: {']
-    lines.append(f"      body: '{uri(os.path.join(SPRITES, 'trollge_body.png'))}',")
-    lines.append(f"      head: '{uri(os.path.join(SPRITES, 'trollge_head.png'))}',")
-    for k, v in troll_meta.items():
-        lines.append(f'      {k}: {json.dumps(v)},')
-    lines += ['    },', '  };', "})(typeof window !== 'undefined' ? window : globalThis);", '']
+    lines += ['  };', '  SC.SPRITES = {']
+    for name, sp in sprites.items():
+        lines.append(f'    {name}: {{')
+        for key, file in sp['layers'].items():
+            lines.append(f"      {key}: '{uri(os.path.join(SPRITES, file))}',")
+        for k, v in sp['meta'].items():
+            lines.append(f'      {k}: {json.dumps(v)},')
+        lines.append('    },')
+    lines += ['  };', "})(typeof window !== 'undefined' ? window : globalThis);", '']
     with open(os.path.join(ROOT, 'js', 'images.js'), 'w') as f:
         f.write('\n'.join(lines))
     print('wrote js/images.js')
@@ -398,4 +684,7 @@ if __name__ == '__main__':
     mysti()
     purpl()
     sid()
-    bundle(trollge())
+    bundle({
+        'trollge': {'layers': {'body': 'trollge_body.png', 'head': 'trollge_head.png'}, 'meta': trollge()},
+        'dolphin': {'layers': {'body': 'dolphin_body.png', 'head': 'dolphin_head.png', 'wail': 'dolphin_wail.png', 'fetal': 'dolphin_fetal.png'}, 'meta': dolphin()},
+    })

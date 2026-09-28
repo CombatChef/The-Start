@@ -41,6 +41,9 @@
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  // Hits a worker lands with their body or a thrown/held object (hitEnemy's `kind`): the ones
+  // Dolphin Man's Mucus Layer can make slip. Magic, shocks, blasts, traps and bleeding can't.
+  const PHYSICAL = new Set(['hit', 'stab', 'page']);
 
   function joinNames(names) {
     if (names.length <= 1) return names.join('');
@@ -238,6 +241,8 @@
         if (key === 'spd' && u.carrying.length) v *= Math.pow(D.escape.carrySpeed, u.carrying.length);
       } else if (key === 'atk') {
         v *= 1 + u.anger * this.enemyDef.anger.atkBonusPerPoint;
+      } else if (key === 'def' && u.status.fetal) {
+        v *= 1 + D.skills.fetalPosition.defUp; // Fetal Position: "significantly increases defense"
       }
       return v;
     }
@@ -281,8 +286,56 @@
       return u && u.has('fullBloodAussie') ? this.D.passives.fullBloodAussie.angerCaused : 1;
     }
 
-    async noise(u, amount) {
-      await this.addAnger(Math.max(1, Math.round(amount * this.angerFactor(u))));
+    // NOISE: ANGER a worker causes by being loud. Dolphin Man hunts by sound: the angrier he is
+    // the more he hears, curled up he hears it twice over, and he goes after whoever made it.
+    // `o.sound` names the sound for his log line ('ring', 'clang', ...).
+    async noise(u, amount, o) {
+      o = o || {};
+      const H = this.enemyDef.hearing;
+      const e = this.enemy;
+      let n = amount * this.angerFactor(u);
+      if (H) {
+        if (o.sound && H.lines[o.sound]) await this.say(this.fill(H.lines[o.sound]), { tone: 'anger' });
+        n *= 1 + e.anger * H.perAnger;
+        if (e.status.fetal) n *= this.D.skills.fetalPosition.noiseMult;
+      }
+      await this.addAnger(Math.max(1, Math.round(n)), { quiet: o.quiet });
+      if (H) await this.hunt(u);
+    }
+
+    // Sounds only Dolphin Man reacts to (a battery going in, glass breaking, an explosion).
+    async sound(u, key) {
+      const H = this.enemyDef.hearing;
+      if (!H || !H.sounds[key] || this.outcome) return;
+      await this.noise(u, H.sounds[key], { sound: key });
+    }
+
+    // [Hunt] state: he goes after whoever made the noise, and sees them better.
+    async hunt(u) {
+      const e = this.enemy;
+      if (!u || u.dead || u.ghost || this.outcome) return;
+      const was = e.status.hunt;
+      e.status.hunt = { target: u.id, turns: this.enemyDef.hearing.huntTurns, fresh: true };
+      if (was && was.target === u.id) return;
+      await this.fx({ type: 'status', target: u.id, text: 'HUNTED' });
+      await this.say(`${this.en} is HUNTING ${u.name}!`, { tone: 'danger' });
+      this.refresh();
+    }
+
+    hunted() {
+      const h = this.enemy.status.hunt;
+      return h ? this.unit(h.target) : null;
+    }
+
+    // Eyes of the Angry: "eyesight will begin extremely bad... But as ANGER increases, so does
+    // eyesight." A multiplier on his physical attacks' HIT RATE; better on whoever he hunts.
+    eyesight(t) {
+      const e = this.enemy;
+      if (!e.has('eyesOfTheAngry')) return 1;
+      const P = this.D.passives.eyesOfTheAngry;
+      let m = P.hitAt0 + ((P.hitAt100 - P.hitAt0) * e.anger) / this.enemyDef.anger.max;
+      if (t && this.hunted() === t) m += this.enemyDef.hearing.huntEyes;
+      return m;
     }
 
     hitChance(att, def, hitMult) {
@@ -299,6 +352,7 @@
       hit -= this.mod(def, 'eva');
       const faster = this.stat(def, 'spd') - this.stat(att, 'spd');
       if (faster > 0) hit -= faster * B.evasionPerSpd;
+      if (att.side === 'enemy') hit *= this.eyesight(def);
       return clamp(hit * (hitMult || 1), 0.05, 0.99);
     }
 
@@ -309,7 +363,7 @@
     physical(att, def, power, o) {
       o = o || {};
       const B = this.D.balance;
-      const key = o.magic ? 'mag' : 'atk';
+      const key = o.stat || (o.magic ? 'mag' : 'atk'); // Tail Whip hits with DEF
       const offense = this.stat(att, key);
       const defense = o.ignoreDef ? 0 : this.stat(def, 'def') * (1 - (o.defIgnore || 0));
       let dmg = (offense * power * 100) / (100 + defense);
@@ -353,6 +407,10 @@
       o = o || {};
       const e = this.enemy;
       const A = this.enemyDef.anger;
+      const armor = this.enemyDef.armor;
+      // Mucus Layer: "causes many attacks to slip over the skin… Physical ones."
+      const slipped = !!armor.slipChance && PHYSICAL.has(o.kind || 'hit') && this.rng.chance(armor.slipChance);
+      if (slipped) amount *= armor.slipDamage;
       const before = e.hp;
       let after = before - Math.max(1, Math.round(amount));
       let refused = false;
@@ -364,8 +422,9 @@
       e.hp = after;
       this.stats.damageDealt += dealt;
       if (attacker) attacker.aggro += dealt;
-      await this.fx({ type: 'hitEnemy', amount: dealt, crit: !!o.crit, kind: o.kind || 'hit', quick: !!o.quick });
-      if (o.crit && !o.quietCrit) await this.say('It hits a weak point!', { tone: 'crit' });
+      await this.fx({ type: 'hitEnemy', amount: dealt, crit: !!o.crit, kind: o.kind || 'hit', quick: !!o.quick, slipped });
+      if (slipped && !o.quick) await this.say(`It slips right off ${this.en}’s slimy skin!`);
+      if (o.crit && !o.quietCrit && !slipped) await this.say('It hits a weak point!', { tone: 'crit' });
       this.refresh();
 
       if (attacker) {
@@ -381,6 +440,14 @@
         e.flags.refusedThisTurn = true;
         await this.say(`${this.en} refuses to go down!`);
       }
+      // Curled up in Fetal Position he hears every blow, and every blow makes him angrier.
+      if (e.status.fetal && attacker && !this.outcome) {
+        if (!e.flags.echoSaid) {
+          e.flags.echoSaid = true;
+          await this.say(`Every blow echoes down the hallway… ${this.en} twitches at the sound!`, { tone: 'anger' });
+        }
+        await this.noise(attacker, this.D.skills.fetalPosition.hitNoise, { quiet: true });
+      }
       await this.checkWeakened(attacker);
       return dealt;
     }
@@ -393,6 +460,7 @@
         e.flags.weakened = true;
         e.flags.downed = true;
         e.status.stunned = { slots: S.weakenedStun, by: attacker ? attacker.name : null };
+        delete e.status.fetal; // knocked flat: no more Fetal Position DEF
         if (!this.enemyActed) this.intent = { kind: 'stunned' }; // whatever it planned, it can't do it now
         await this.fx({ type: 'enemyPose' });
         await this.say(`${this.en} is weakened! Now is your time for escape!`, { tone: 'good' });
@@ -403,6 +471,7 @@
         e.flags.downed = true;
         const slots = e.status.stunned ? e.status.stunned.slots : 0;
         e.status.stunned = { slots: Math.max(1, slots), by: attacker ? attacker.name : null };
+        delete e.status.fetal;
         if (!this.enemyActed) this.intent = { kind: 'stunned' };
         await this.fx({ type: 'enemyPose' });
         await this.say(S.lines.barelyStanding, { tone: 'good' });
@@ -428,7 +497,7 @@
       let dmg = amount;
       if (!o.raw) {
         if (t.flags.guarding) dmg *= D.balance.guard;
-        const fromEnemy = o.source === 'enemy' || o.source === 'gun' || o.source === 'magdump';
+        const fromEnemy = o.source === 'enemy' || o.source === 'gun' || o.source === 'magdump' || o.source === 'wail';
         if (fromEnemy && t.flags.braced) dmg *= 1 - D.skills.foresight.braced;
         if (t.status.exposed) dmg *= 1 + D.skills.exterminate.exposedDamage;
         if (this.freakyActive()) dmg *= D.passives.freakyDoctor.damageTaken;
@@ -462,7 +531,7 @@
         return before;
       }
       t.hp = before - dmg;
-      await this.fx({ type: 'hitWorker', target: t.id, amount: dmg });
+      await this.fx({ type: 'hitWorker', target: t.id, amount: dmg, quick: !!o.quick });
       this.refresh();
       if (!o.silent) await this.announce(t);
       await this.firstResponder(t);
@@ -520,6 +589,7 @@
       t.hp = 0;
       t.buffs = [];
       t.status = {};
+      if (this.hunted() === t) delete this.enemy.status.hunt;
       t.flags = { deathSource: source };
       this.stats.deaths++;
       await this.fx({ type: 'death', target: t.id });
@@ -601,6 +671,7 @@
       add(e.status.chilled, `${n} is freezing`, E.chilled);
       add(e.status.confused, `${n} is confused`, E.confused);
       add(e.status.blind, `${n} can’t see`, E.blind);
+      add(e.status.fetal, `${n} is curled up`, E.curledUp);
       add(e.flags.overflow && S.escapeOverflow, S.escapeOverflow && S.escapeOverflow.label, S.escapeOverflow && S.escapeOverflow.value);
       const avg = runners.reduce((s, u) => s + this.stat(u, 'spd'), 0) / runners.length;
       const spd = clamp((avg - this.stat(e, 'spd')) * E.speedPerPoint, E.speedMin, E.speedMax);
@@ -638,6 +709,7 @@
       this.enemyActed = false;
       this.intentWord = null;
       e.flags.refusedThisTurn = false;
+      e.flags.echoSaid = false;
       for (const u of this.party) {
         u.flags.guarding = false;
         u.flags.barrier = false;
@@ -669,6 +741,7 @@
         await this.addAnger(this.enemyDef.getsUpAnger, { quiet: true });
       }
 
+      for (const u of this.party) await this.moodSwing(u);
       for (const u of this.party) {
         if (this.outcome) return;
         await this.startOfTurnFor(u);
@@ -692,6 +765,16 @@
       for (const u of this.party) await this.lunchBoxTick(u);
       await this.checkPossession();
       this.refresh();
+    }
+
+    // Mood Swings: every turn Purpl Lady feels HAPPY, ANGRY or SAD (her face shows it, and her
+    // Hex changes with it).
+    async moodSwing(u) {
+      if (!u.has('moodSwings') || u.dead || u.status.phasing) return;
+      u.mood = this.rng.pick(this.D.passives.moodSwings.moods);
+      const line = { happy: 'feels HAPPY!', angry: 'is ANGRY!', sad: 'feels SAD…' }[u.mood];
+      await this.fx({ type: 'status', target: u.id, text: u.mood.toUpperCase() });
+      await this.say(`${u.name} ${line}`, { tone: 'status' });
     }
 
     // Trollface: "a permanent grin on its face definitely is unsettling…"
@@ -766,7 +849,7 @@
         }
         if (this.rng.chance(sk.noiseChance)) {
           await this.say('The Proxy Locator screeches! It’s making NOISE!', { tone: 'anger' });
-          await this.noise(u, sk.noiseAnger);
+          await this.noise(u, sk.noiseAnger, { sound: 'screech' });
         }
       }
     }
@@ -809,6 +892,16 @@
           return `${n} will attack everyone next!`;
         case 'claims':
           return `${n} will target everyone next!`;
+        case 'hands':
+          return this.rng.chance(0.5) ? `${n} will slap at ${t.name} next!` : `${n} will grab at ${t.name} next!`;
+        case 'whip':
+          return `${n} will whip ${t.name} with ${this.pr.his} tail next!`;
+        case 'wail':
+          return `${n} will wail at everyone next!`;
+        case 'fetal':
+          return `${n} is about to curl up into a ball!`;
+        case 'curled':
+          return `${n} is curled up and won’t attack!`;
         case 'stunned':
           return `${n} can’t move!`;
         default:
@@ -829,6 +922,26 @@
       const S = this.enemyDef;
       const e = this.enemy;
       if (!intent) return null;
+      // Dolphin Man's moves: his poor eyesight is part of how hard they land.
+      if (intent.kind === 'hands' || intent.kind === 'whip') {
+        const t = this.unit(intent.targetId);
+        if (!t || t.dead) return null;
+        const W = S.weapon;
+        const sk = this.D.skills.tailWhip;
+        const exp =
+          intent.kind === 'hands'
+            ? W.hits * this.hitChance(e, t) * this.physical(e, t, W.power, { flat: true })
+            : this.hitChance(e, t, sk.hitMult) * this.physical(e, t, sk.power, { flat: true, stat: 'def' });
+        return this.powerWord(exp / Math.max(1, t.hp));
+      }
+      if (intent.kind === 'wail') {
+        const targets = this.corporeal();
+        if (!targets.length) return null;
+        const weakest = targets.reduce((a, b) => (a.hp <= b.hp ? a : b));
+        const W = this.D.skills.loudWail;
+        const exp = W.pulses * ((W.damage[0] + W.damage[1]) / 2) * (1 + e.anger * W.perAnger);
+        return this.powerWord(exp / Math.max(1, weakest.hp));
+      }
       if (['melee', 'gun', 'claws', 'scratch'].includes(intent.kind)) {
         const t = this.unit(intent.targetId);
         if (!t || t.dead) return null;
@@ -876,9 +989,10 @@
       return this.party.filter((u) => !u.dead && !u.ghost);
     }
 
-    // Who the slasher can single out right now: Stealth Camo hides a guarding Captain Jim.
+    // Who the slasher can single out right now: Stealth Camo hides a guarding Captain Jim, but
+    // not from Dolphin Man once he's hunting him by sound.
     hidden(u) {
-      return u.has('stealthCamo') && u.flags.guarding;
+      return u.has('stealthCamo') && u.flags.guarding && !(this.enemyDef.hearing && this.hunted() === u);
     }
 
     targetWeight(u) {
@@ -906,7 +1020,8 @@
 
     planEnemy() {
       if (this.enemy.status.stunned) return { kind: 'stunned' };
-      return this.enemy.id === 'trollge' ? this.planTrollge() : this.planSid();
+      const plan = { trollge: this.planTrollge, dolphin: this.planDolphin }[this.enemy.id] || this.planSid;
+      return plan.call(this);
     }
 
     planSid() {
@@ -946,6 +1061,28 @@
       const kind = this.rng.weighted(opts);
       const t = kind === 'stare' ? this.pickWatchTarget(fresh) : this.pickEnemyTarget(kind === 'scratch' ? seen : null);
       return { kind, targetId: t && t.id };
+    }
+
+    // Dolphin Man slaps and whips whoever he hunts (or anyone), wails more once he's angry, and
+    // curls up now and then, more often once he's hurt.
+    planDolphin() {
+      const S = this.enemyDef;
+      const e = this.enemy;
+      if (e.status.fetal) return { kind: 'curled' };
+      const prey = this.hunted();
+      const t = prey && !this.hidden(prey) ? prey : this.pickEnemyTarget();
+      if (!t) return { kind: 'idle' };
+      const w = e.anger >= S.ai.angryAt ? S.ai.angry : S.ai.calm;
+      const opts = [
+        ['hands', w.hands],
+        ['whip', w.whip],
+      ];
+      if (this.lastEnemyKind !== 'wail') opts.push(['wail', w.wail]);
+      if (this.lastEnemyKind !== 'curled' && this.lastEnemyKind !== 'fetal') {
+        opts.push(['fetal', w.fetal + (e.hp < e.maxHp * 0.6 ? S.ai.hurtFetal : 0)]);
+      }
+      const kind = this.rng.weighted(opts);
+      return kind === 'hands' || kind === 'whip' ? { kind, targetId: t.id } : { kind };
     }
 
     // ------------------------------------------------------------ resolution
@@ -1124,7 +1261,7 @@
       if (W.noiseChance && !this.outcome && this.rng.chance(W.noiseChance)) {
         await this.fx({ type: 'status', target: u.id, text: 'RING RING' });
         await this.say(`${u.name}’s ${W.name} starts blaring its ringtone!`, { tone: 'anger' });
-        await this.noise(u, W.noiseAnger);
+        await this.noise(u, W.noiseAnger, { sound: 'ring' });
       }
     }
 
@@ -1166,6 +1303,7 @@
       if (u.has('grouchBehavior')) {
         await this.say(`${u.name} squeezes into a locker. “THIS IS MY LOCKER, IT WAS MADE FOR ME!!!”`);
         await this.heal(u, D.passives.grouchBehavior.heal);
+        await this.sound(u, 'shout'); // yelling, with Dolphin Man around
       }
       if (u.has('stealthCamo') && !u.flags.camoShown) {
         u.flags.camoShown = true;
@@ -1201,7 +1339,9 @@
     async hex(u) {
       const e = this.enemy;
       const n = this.en;
+      const M = u.def.weapon.moods && u.mood && u.def.weapon.moods[u.mood];
       await this.fx({ type: 'cast', from: u.id, kind: 'hex' });
+      if (M) return this.moodHex(u, M);
       await this.say(`${u.name} ${u.def.weapon.verb} ${n} with her Magic Book…`);
       const pick = this.rng.pick(['atk', 'def', 'spd', 'confused', 'calm', 'blind']);
       switch (pick) {
@@ -1228,6 +1368,34 @@
         default:
           e.status.blind = { amount: 0.25, turns: 1 };
           await this.say(`${n} can’t see!`, { tone: 'status' });
+      }
+      await this.fx({ type: 'status', target: e.id, text: 'HEX' });
+      this.refresh();
+      return undefined;
+    }
+
+    // Her Hex, by mood: HAPPY soothes, ANGRY hurts, SAD weighs the slasher down.
+    async moodHex(u, M) {
+      const e = this.enemy;
+      const n = this.en;
+      if (u.mood === 'happy') {
+        await this.say(`${u.name} giggles and hexes ${n} with her Magic Book…`);
+        await this.addAnger(-M.angerDown);
+        await this.say(`${n} calms down a little.`, { tone: 'status' });
+        for (const w of this.corporeal()) await this.heal(w, M.heal);
+        await this.say('Everyone feels a little better.', { tone: 'good' });
+      } else if (u.mood === 'angry') {
+        await this.say(`${u.name} slams her Magic Book into ${n}!`);
+        const crit = this.rng.chance(this.critChance(u));
+        await this.hitEnemy(u, this.physical(u, e, M.power, { magic: true, crit }), { crit, kind: 'hex' });
+        if (this.outcome) return;
+        this.addBuff(e, 'def', -M.defDown, M.turns, 'hexDef');
+        await this.say(`${n}’s defense decreases!`, { tone: 'debuff' });
+      } else {
+        await this.say(`${u.name} sighs and hexes ${n} with her Magic Book…`);
+        this.addBuff(e, 'atk', -M.atkDown, M.turns, 'hexAtk');
+        this.addBuff(e, 'spd', -M.spdDown, M.turns, 'hexSpd');
+        await this.say(`${n} feels heavy: attack and speed decrease!`, { tone: 'debuff' });
       }
       await this.fx({ type: 'status', target: e.id, text: 'HEX' });
       this.refresh();
@@ -1317,6 +1485,7 @@
           await this.fx({ type: 'explosion' });
           await this.say('KABOOM!', { tone: 'danger' });
           await this.hitEnemy(u, this.rng.range(it.damage), { kind: 'explosion' });
+          await this.sound(u, 'boom');
           if (!this.outcome) await this.damageWorker(u, this.rng.range(it.selfDamage), { source: 'self' });
           break;
         }
@@ -1372,25 +1541,24 @@
 
     skillZone(u) {
       const C = this.D.balance.skillCheck;
-      let zone = C.baseZone + this.stat(u, 'smt') * C.perSmarts;
-      if (this.moralSupportActive()) zone *= this.D.passives.moralSupport.zoneScale;
+      const zone = C.baseZone + this.stat(u, 'smt') * C.perSmarts;
       return clamp(zone, 0.05, 0.8);
     }
 
     async skillCheck(u, kind) {
       const C = this.D.balance.skillCheck;
-      const zone = this.skillZone(u);
+      const M = this.D.passives.moralSupport;
+      const support = this.moralSupportActive();
+      const fuel = kind === 'fuel';
       const res = await this.io.skillCheck({
         who: u.id,
         name: u.name,
         kind,
-        title: kind === 'fuel' ? 'FUEL SKILL CHECK' : 'BATTERY SKILL CHECK',
-        zone,
-        sweepMs: C.sweepMs,
-        timeLimitMs: C.timeLimitMs,
-        pourMs: C.pourMs,
-        clipMs: C.clipMs,
-        moralSupport: this.moralSupportActive(),
+        title: fuel ? 'FUEL SKILL CHECK' : 'BATTERY SKILL CHECK',
+        zone: this.skillZone(u),
+        ms: fuel ? C.pourMs : C.clipMs,
+        slow: support ? (fuel ? M.fuelSlow : M.clipSlow) : 1, // Moral Support slows the check down
+        moralSupport: support,
         rng: this.rng,
       });
       return !!res;
@@ -1434,7 +1602,7 @@
           } else {
             await this.say(`The fuel canister falls on ${u.name}’s foot!`, { tone: 'bad' });
             await this.damageWorker(u, this.rng.range(sk.failDamage), { source: 'self' });
-            if (!this.outcome) await this.addAnger(sk.failAnger);
+            if (!this.outcome) await this.noise(u, sk.failAnger, { sound: 'clang' });
           }
           break;
         }
@@ -1462,6 +1630,7 @@
           e.status.shards = { turns: sk.shardsTurns };
           await this.say(`Glass falls around ${n}’s feet!`, { tone: 'status' });
           await this.say(`${u.name} can’t see as well…`, { tone: 'debuff' });
+          await this.sound(u, 'glass');
           break;
         }
         case 'melsPages': {
@@ -1494,6 +1663,7 @@
           await this.fx({ type: 'explosion' });
           await this.say('KABOOM!', { tone: 'danger' });
           await this.hitEnemy(u, e.maxHp * sk.percent, { kind: 'explosion' });
+          await this.sound(u, 'boom');
           for (const w of this.party) {
             if (this.outcome) break;
             if (w.dead || w.status.phasing) continue;
@@ -1553,6 +1723,7 @@
             await this.say(`Missed… ${u.name} is shocked!`, { tone: 'bad' });
             await this.damageWorker(u, this.rng.range(sk.failDamage), { source: 'self' });
           }
+          if (!u.dead) await this.sound(u, 'battery'); // "installing a battery will trigger the Dolphinman"
           break;
         }
 
@@ -1714,9 +1885,10 @@
           this.addBuff(u, 'spd', sk.spdUp, 99, 'cloneSpd');
           await this.say(`${u.name} flickers! ${cap(u.pr.his)} evasion massively increases!`, { tone: 'buff' });
           await this.say(`${u.name}’s speed significantly increases for the rest of the battle!`, { tone: 'buff' });
-          if (u.status.seen || u.status.stared) {
+          if (u.status.seen || u.status.stared || this.hunted() === u) {
             delete u.status.seen;
             delete u.status.stared;
+            if (this.hunted() === u) delete e.status.hunt;
             await this.say(`${n} loses track of ${u.name}!`, { tone: 'good' });
           }
           break;
@@ -1784,13 +1956,13 @@
         return;
       }
 
-      if (e.status.shards) {
+      if (e.status.shards && !e.status.fetal) {
         await this.say(`${this.en} steps on the glass shards!`);
         await this.hitEnemy(null, this.rng.range(D.skills.tossGlasses.shardsDamage), { kind: 'shards' });
         if (e.status.stunned) return; // the shards knocked it down
       }
 
-      if (e.status.confused && this.rng.chance(B.enemyConfusedFumble)) {
+      if (e.status.confused && !e.status.fetal && this.rng.chance(B.enemyConfusedFumble)) {
         this.lastEnemyKind = 'confused';
         if (this.rng.chance(0.5)) {
           await this.say(`${this.en} is confused… and smacks ${this.pr.him}self in the face!`, { tone: 'good' });
@@ -1801,8 +1973,8 @@
         return;
       }
 
-      if (e.id === 'trollge') await this.actTrollge(intent);
-      else await this.actSid(intent);
+      const act = { trollge: this.actTrollge, dolphin: this.actDolphin }[e.id] || this.actSid;
+      await act.call(this, intent);
       this.refresh();
     }
 
@@ -2147,6 +2319,176 @@
       await this.say(`${t.name} is AFRAID!`, { tone: 'debuff' });
     }
 
+    // ---------------- DOLPHIN MAN
+    async actDolphin(intent) {
+      const S = this.enemyDef;
+      const e = this.enemy;
+      let kind = intent.kind;
+      if (e.status.fetal && kind !== 'fetal') kind = 'curled';
+      if (kind === 'curled') {
+        await this.fx({ type: 'enemyAttack', kind: 'curled' });
+        await this.say(`${this.en} stays curled up on the floor, twitching at every sound…`);
+        this.lastEnemyKind = 'curled';
+        return;
+      }
+      if (kind === 'fetal') {
+        await this.dolphinCurl();
+        this.lastEnemyKind = 'fetal';
+        return;
+      }
+      if (kind === 'wail') {
+        await this.dolphinWail();
+        this.lastEnemyKind = 'wail';
+        return;
+      }
+      if (kind !== 'hands' && kind !== 'whip') {
+        await this.say(`${this.en} sniffs the air…`);
+        this.lastEnemyKind = 'idle';
+        return;
+      }
+      const reachable = (u) => !!u && !u.dead && !u.ghost && !this.hidden(u);
+      const planned = this.unit(intent.targetId);
+      let t = planned;
+      // [Hunt]: "Dolphinman will chase towards the sound created." A noise made since he
+      // planned his move turns him toward whoever made it.
+      const prey = this.hunted();
+      if (reachable(prey) && prey !== t) {
+        t = prey;
+        await this.say(`${this.en} turns toward the sound… and lunges at ${t.name}!`, { tone: 'danger' });
+      }
+      if (!reachable(t)) {
+        t = this.pickEnemyTarget();
+        if (!t) {
+          await this.say(`${this.en} gropes around, but can’t find anyone!`, { tone: 'good' });
+          this.lastEnemyKind = 'lost';
+          return;
+        }
+        if (planned && this.hidden(planned)) {
+          await this.say(`${this.en} loses track of ${planned.name}, and turns on ${t.name} instead!`, { tone: 'warn' });
+        }
+      }
+      if (e.anger >= S.anger.wildAt && this.rng.chance(S.anger.wildChance)) {
+        const wild = this.rng.pick(this.enemyTargets().filter((u) => !this.hidden(u)));
+        if (wild && wild !== t) {
+          t = wild;
+          await this.say(`${this.en} is losing control!`, { tone: 'danger' });
+        }
+      }
+      if (kind === 'hands') await this.dolphinHands(t);
+      else await this.dolphinWhip(t);
+      this.lastEnemyKind = kind;
+    }
+
+    // Dolphin Hands: "Basic attacks hit 5 times and heal slightly based on damage."
+    async dolphinHands(t) {
+      const S = this.enemyDef;
+      const W = S.weapon;
+      const e = this.enemy;
+      t.timesTargeted++;
+      if (await this.trapSnaps(t)) return;
+      await this.fx({ type: 'enemyAttack', kind: 'hands', target: t.id });
+      await this.say(this.rng.pick(S.hands).replace('{t}', t.name));
+      if (await this.parried(t)) return;
+      if (t.flags.barrier) {
+        await this.fx({ type: 'block', target: t.id });
+        await this.say('The barrier absorbs every slap!', { tone: 'good' });
+        return;
+      }
+      // Roll every slap first, so the log can say how many land before anyone goes down.
+      const rolls = [];
+      for (let i = 0; i < W.hits; i++) rolls.push(this.rollHit(e, t));
+      const landed = rolls.filter(Boolean).length;
+      if (!landed) {
+        for (let i = 0; i < 2; i++) await this.fx({ type: 'miss', target: t.id, quick: true });
+        await this.say(e.anger < 50 ? `${this.en} can’t see a thing… every slap misses!` : `${t.name} dodges every slap!`, { tone: 'good' });
+        return;
+      }
+      await this.say(`${landed} of ${W.hits} slaps hit ${t.name}!`);
+      let dealt = 0;
+      for (const hit of rolls) {
+        if (t.dead || this.outcome) break;
+        if (!hit) {
+          await this.fx({ type: 'miss', target: t.id, quick: true });
+          continue;
+        }
+        const crit = this.rng.chance(this.critChance(e));
+        dealt += await this.damageWorker(t, this.physical(e, t, W.power, { crit }), { source: 'enemy', silent: true, quick: true });
+      }
+      if (!t.dead) await this.announce(t);
+      if (this.outcome || !dealt) return;
+      const heal = Math.min(e.maxHp - e.hp, Math.round(dealt * W.lifesteal));
+      if (heal <= 0) return;
+      e.hp += heal;
+      await this.fx({ type: 'healEnemy', amount: heal });
+      await this.say(`${this.en} licks ${this.pr.his} hands… and recovers a little health.`, { tone: 'bad' });
+    }
+
+    // Tail Whip: "A little inaccurate... Deals damage based on current defense, and slightly
+    // increases ANGER."
+    async dolphinWhip(t) {
+      const S = this.enemyDef;
+      const sk = this.D.skills.tailWhip;
+      const e = this.enemy;
+      t.timesTargeted++;
+      if (await this.trapSnaps(t)) return;
+      await this.fx({ type: 'enemyAttack', kind: 'whip', target: t.id });
+      await this.say(this.rng.pick(S.whip).replace('{t}', t.name));
+      if (await this.parried(t)) return;
+      if (!this.rollHit(e, t, sk.hitMult)) {
+        await this.fx({ type: 'miss', target: t.id });
+        await this.say(`The tail whips right past ${t.name}!`, { tone: 'good' });
+      } else {
+        const crit = this.rng.chance(this.critChance(e) + sk.crit);
+        const dmg = this.physical(e, t, sk.power, { crit, stat: 'def' });
+        if (crit) await this.say(`It cracks ${t.name} right across the face!`, { tone: 'crit' });
+        await this.damageWorker(t, dmg, { source: 'enemy' });
+      }
+      if (!this.outcome) await this.addAnger(sk.angerUp, { quiet: true });
+    }
+
+    // Loud Wail: "dealing repeated damage to all enemies, decreasing their speed and smarts.
+    // (Damage increases with ANGER.)" It's sound: DEF doesn't help, GUARD does, and a ghost
+    // hears it too (no damage, but the slowdown).
+    async dolphinWail() {
+      const sk = this.D.skills.loudWail;
+      const e = this.enemy;
+      const mult = 1 + e.anger * sk.perAnger;
+      await this.fx({ type: 'enemyAttack', kind: 'wail' });
+      await this.say(`${this.en} lets out a loud, screeching wail!`, { tone: 'danger' });
+      const hurt = new Set();
+      for (let i = 0; i < sk.pulses; i++) {
+        if (this.outcome) return;
+        await this.fx({ type: 'wailPulse', n: i });
+        for (const u of this.party) {
+          if (this.outcome) return;
+          if (u.dead || u.ghost || u.status.phasing || u.flags.barrier) continue;
+          hurt.add(u);
+          await this.damageWorker(u, this.rng.range(sk.damage) * mult, { source: 'wail', silent: true, quick: true });
+        }
+      }
+      const ears = this.party.filter((u) => !u.dead && !u.status.phasing);
+      for (const u of ears) {
+        this.addBuff(u, 'spd', -sk.spdDown, sk.turns, 'wail');
+        this.addBuff(u, 'smt', -sk.smtDown, sk.turns, 'wail');
+      }
+      for (const u of ears) if (u.flags.barrier) await this.say(`${u.name}’s barrier muffles the wail!`, { tone: 'good' });
+      if (ears.length) await this.say('Everyone’s ears are ringing! Speed and smarts decrease!', { tone: 'debuff' });
+      for (const u of hurt) if (!u.dead) await this.announce(u);
+    }
+
+    // Fetal Position: "unable to attack; but ... increases ANGER from most sources of sound.
+    // Also significantly increases defense."
+    async dolphinCurl() {
+      const sk = this.D.skills.fetalPosition;
+      const e = this.enemy;
+      e.status.fetal = { turns: sk.turns };
+      await this.fx({ type: 'enemyAttack', kind: 'fetal' });
+      await this.say(`${this.en} curls up into a ball on the floor…`);
+      await this.fx({ type: 'status', target: e.id, text: 'FETAL POSITION' });
+      await this.say(`${this.en}’s defense drastically increases! Every sound makes ${this.pr.him} angrier…`, { tone: 'danger' });
+      this.refresh();
+    }
+
     // ------------------------------------------------------------ end of turn
     async endTurn() {
       const D = this.D;
@@ -2186,6 +2528,13 @@
       await expire(e, 'blind', `${n} can see again.`);
       await expire(e, 'chilled', `${n} warms back up.`);
       await expire(e, 'vulnerable', `${n} pulls ${this.pr.him}self together.`);
+      const prey = this.hunted();
+      await expire(e, 'hunt', prey && `${n} loses track of ${prey.name}.`);
+      if (e.status.fetal && --e.status.fetal.turns <= 0) {
+        delete e.status.fetal;
+        await this.fx({ type: 'enemyPose' });
+        await this.say(`${n} uncurls and flops back onto ${this.pr.his} feet…`, { tone: 'danger' });
+      }
       for (const u of this.party) {
         await expire(u, 'afraid', `${u.name} isn’t afraid anymore.`);
         await expire(u, 'confused', `${u.name} snaps out of it.`);

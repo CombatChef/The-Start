@@ -270,6 +270,19 @@ button:focus-visible {
     translate: 6px 0;
   }
 }
+/* Dolphin Man spins round for his Tail Whip. */
+#enemy-wrap.spin #enemy {
+  animation: spin 420ms steps(6) 1;
+}
+@keyframes spin {
+  0%,
+  100% {
+    scale: 1 1;
+  }
+  50% {
+    scale: -1 1;
+  }
+}
 /* Static Stare: the hallway goes dark around it. */
 #stage.staring #bg {
   filter: brightness(0.35) saturate(0.6);
@@ -628,6 +641,31 @@ button:focus-visible {
     left 260ms ease-in,
     top 260ms ease-in,
     rotate 260ms linear;
+}
+/* Loud Wail: rings of sound out of Dolphin Man's mouth. */
+.soundwave {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  translate: -50% -50%;
+  border: 6px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px #000,
+    inset 0 0 0 3px #000;
+  animation: soundwave 650ms ease-out forwards;
+}
+@keyframes soundwave {
+  0% {
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+  }
+  100% {
+    width: 1100px;
+    height: 820px;
+    opacity: 0;
+  }
 }
 /* Claw marks raked across a profile. */
 .slash {
@@ -1639,6 +1677,8 @@ button:focus-visible {
   .profile.hit,
   #enemy-wrap.hit,
   #stage[data-enemy='trollge'] #enemy-wrap.rage #enemy,
+  #enemy-wrap.spin #enemy,
+  .soundwave,
   .slash i,
   .profile.tremble .photo canvas,
   .profile .intent,

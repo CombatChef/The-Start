@@ -26,8 +26,9 @@ function makeIo(rng) {
     say: async () => {},
     fx: async () => {},
     refresh: () => {},
-    // A player hits the zone most of the time when it is wide.
-    skillCheck: async (o) => rng() < Math.min(0.95, Math.max(0.2, o.zone * 2.5)),
+    // A player passes more often with more SMARTS (zone), and more still when Moral Support
+    // slows the check down (slow < 1).
+    skillCheck: async (o) => rng() < Math.min(0.95, Math.max(0.2, o.zone * 2.5 * (o.slow < 1 ? 1.35 : 1))),
   };
 }
 
@@ -103,7 +104,10 @@ function smartPolicy(b, rng) {
   const cmds = {};
   const bodies = b.bodiesToCarry();
   const it = b.intent || {};
-  const single = ['melee', 'gun', 'claws', 'scratch'].includes(it.kind);
+  const single = ['melee', 'gun', 'claws', 'scratch', 'hands', 'whip'].includes(it.kind);
+  // Dolphin Man: hitting him while he's curled up only makes him angrier, and he hunts by sound.
+  const curled = !!e.status.fetal;
+  const hears = !!b.enemyDef.hearing;
   const threatened = (u) => b.intentKnown && single && it.targetId === u.id;
   const healItem = () => ['mayonnaise', 'royalBurger', 'orangeJello'].find((k) => b.bag[k] > 0);
   const mustCarry = bodies.length && e.hp / e.maxHp <= 0.5;
@@ -129,17 +133,25 @@ function smartPolicy(b, rng) {
       cmds[u.id] = { type: 'guard' };
       continue;
     }
+    if (curled) {
+      if (!u.ghost && u.hp <= 60 && healItem()) cmds[u.id] = { type: 'item', item: healItem(), target: u.id };
+      else if (can('lunchBox')) cmds[u.id] = { type: 'skill', skill: 'lunchBox', target: (b.corporeal().find((w) => w !== u && w.hp <= 70) || u).id };
+      else if (can('matthewsAid')) cmds[u.id] = { type: 'skill', skill: 'matthewsAid' };
+      else if (can('seriousChills') && !e.status.chilled) cmds[u.id] = { type: 'skill', skill: 'seriousChills', target: e.id };
+      else cmds[u.id] = { type: u.ghost ? 'focus' : 'guard' };
+      continue;
+    }
     if (u.id === 'mel') {
       if (u.flags.glassesOff && rng() < 0.6) cmds[u.id] = { type: 'skill', skill: 'tossGlasses' };
       else if (can('melsPages') && rng() < 0.45) cmds[u.id] = { type: 'skill', skill: 'melsPages' };
-      else if (can('tossGlasses') && !e.status.shards && rng() < 0.3) cmds[u.id] = { type: 'skill', skill: 'tossGlasses' };
+      else if (can('tossGlasses') && !e.status.shards && !hears && rng() < 0.3) cmds[u.id] = { type: 'skill', skill: 'tossGlasses' };
       else if (b.bag.pocketSand > 0 && rng() < 0.15) cmds[u.id] = { type: 'item', item: 'pocketSand', target: e.id };
       else cmds[u.id] = { type: 'attack' };
     } else if (u.id === 'john') {
       const hurt = b.corporeal().filter((w) => w !== u && w.hp <= 60);
       if (can('lunchBox') && (u.hp <= 70 || hurt.length)) {
         cmds[u.id] = { type: 'skill', skill: 'lunchBox', target: (hurt[0] || b.corporeal().find((w) => w !== u) || u).id };
-      } else if (can('batteryCheck') && rng() < 0.35) cmds[u.id] = { type: 'skill', skill: 'batteryCheck' };
+      } else if (can('batteryCheck') && rng() < (hears ? 0.15 : 0.35)) cmds[u.id] = { type: 'skill', skill: 'batteryCheck' };
       else cmds[u.id] = { type: 'attack' };
     } else if (u.id === 'jim') {
       const target = it.targetId && b.unit(it.targetId);
@@ -157,7 +169,9 @@ function smartPolicy(b, rng) {
       else if (can('tacticalStab')) cmds[u.id] = { type: 'skill', skill: 'tacticalStab', target: e.id };
       else cmds[u.id] = { type: 'attack' };
     } else {
-      if (can('seriousChills') && !e.status.chilled) cmds[u.id] = { type: 'skill', skill: 'seriousChills', target: e.id };
+      // Purpl Lady: an ANGRY Hex hurts, and a HAPPY one calms an angry slasher down.
+      if (u.mood === 'angry' || (u.mood === 'happy' && e.anger >= 50)) cmds[u.id] = { type: 'attack' };
+      else if (can('seriousChills') && !e.status.chilled) cmds[u.id] = { type: 'skill', skill: 'seriousChills', target: e.id };
       else if (can('shadowsHand')) cmds[u.id] = { type: 'skill', skill: 'shadowsHand', target: e.id };
       else if (u.res < 40) cmds[u.id] = { type: 'focus' };
       else cmds[u.id] = { type: 'attack' };

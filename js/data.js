@@ -45,7 +45,7 @@
     party: ['mel', 'john', 'mysti', 'jim'],
     bench: 'purpl',
     enemy: 'trollge', // the default fight
-    enemies: ['trollge', 'sid'], // picked on the title screen
+    enemies: ['trollge', 'sid', 'dolphin'], // picked on the title screen
 
     // ------------------------------------------------------------------
     // WORKERS
@@ -114,6 +114,12 @@
           doc: 'Doesn’t do anything physically, but targeting an enemy with a basic attack makes them suffer a random debuff.',
           hits: 0,
           verb: 'hexes',
+          // Her Hex depends on how she feels this turn (Mood Swings).
+          moods: {
+            happy: { angerDown: 10, heal: 6, rules: 'HAPPY: {e} calms down (ANGER -10) and every worker heals a little.' },
+            angry: { power: 1.0, defDown: 0.25, turns: 2, rules: 'ANGRY: real MAGIC damage, and {e}’s DEF drops 25% for 2 turns.' },
+            sad: { atkDown: 0.25, spdDown: 0.25, turns: 2, rules: 'SAD: {e} is weighed down: ATK and SPD drop 25% for 2 turns.' },
+          },
         },
         armor: {
           name: 'Magical Robes',
@@ -121,7 +127,7 @@
           magBonus: 0.1,
         },
         skills: ['seriousChills', 'shadowsHand', 'foresight', 'phaseForItems'],
-        passives: ['ghostBody', 'freakyDoctor', 'moralSupport', 'possession'],
+        passives: ['ghostBody', 'freakyDoctor', 'moralSupport', 'possession', 'moodSwings'],
       },
 
       jim: {
@@ -342,6 +348,95 @@
           '“FRIENDS DON’T RUN. WHY YOU RUNNING. WE FRIENDS.”',
           '“ME COUNT YOUR FINGERS LATER. ME GOOD AT COUNTING.”',
         ],
+      },
+
+      dolphin: {
+        name: 'Dolphin Man',
+        title: 'DOLPHIN MAN',
+        tags: ['[Cryptid]', '[CONSIDERABLE]'],
+        class: 'CRYPTID',
+        danger: 'CONSIDERABLE',
+        stats: { atk: 17, def: 57, spd: 27, mag: 0, chm: 3, smt: 57, brv: 100 },
+        health: 'OK',
+        spiritualPower: 'None',
+        morals: 'NONE',
+        exp: 150,
+        maxHp: 2400,
+        weakenedAt: 0.35,
+        barelyStandingAt: 0.12,
+        weakenedStun: 2,
+        getsUpAnger: 20,
+        anger: {
+          start: 10,
+          max: 100,
+          perTurn: [3, 5],
+          perDamage: 40,
+          charmDivisor: 400,
+          overflow: 80, // Eyes of the Angry: from here he can see everything
+          atkBonusPerPoint: 0.015, // ATK 17 is tiny; ANGER is what makes him dangerous (x2.2 at 80)
+          wildAt: 90,
+          wildChance: 0.2,
+        },
+        // He hunts by sound (SlashCo VR: "loud noises made by smashing glass bottles or installing a
+        // battery will trigger the Dolphinman, entering its [Hunt] state"). Every NOISE angers him
+        // more the angrier he already is, and he goes after whoever made it, seeing them better.
+        hearing: {
+          perAnger: 0.01, // ANGER from a NOISE x(1 + ANGER * this)
+          huntTurns: 2, // he HUNTS whoever made the noise for this many more turns
+          huntEyes: 0.3, // added to his eyesight against whoever he hunts
+          // Sounds only he reacts to, as ANGER: a battery going in, glass breaking, an explosion,
+          // and Captain Jim yelling about his locker (Grouch Behavior) when he guards.
+          sounds: { battery: 6, glass: 6, boom: 8, shout: 4 },
+          lines: {
+            battery: '{e} hears the battery clunk into place!',
+            glass: '{e} hears the glass shatter!',
+            boom: '{e} hears the blast!',
+            clang: '{e} hears the canister clang!',
+            ring: '{e} hears the ringtone!',
+            screech: '{e} hears the screech!',
+            shout: '{e} hears the yelling!',
+          },
+        },
+        skills: ['loudWail', 'fetalPosition', 'tailWhip'],
+        passives: ['eyesOfTheAngry'],
+        weapon: {
+          name: 'Dolphin Hands',
+          doc: 'This is all Dolphin Man has; a  little slippery, but efficient. Basic attacks hit 5 times and heal slightly based on damage.',
+          hits: 5,
+          power: 1.1,
+          lifesteal: 1.5, // health he gets back per point of damage dealt
+        },
+        armor: {
+          name: 'Mucus Layer',
+          doc: 'Not really armor, but causes many attacks to slip over the skin… Physical ones.',
+          slipChance: 0.3, // a physical hit slips...
+          slipDamage: 0.25, // ...and only this much of it lands
+        },
+        // How often he picks each move (weights), below and from 50 ANGER. He re-rolls every turn.
+        ai: {
+          calm: { hands: 45, whip: 20, wail: 15, fetal: 20 },
+          angry: { hands: 35, whip: 25, wail: 35, fetal: 5 },
+          angryAt: 50,
+          hurtFetal: 15, // extra weight on curling up once he's hurt below 60%
+        },
+        hands: [
+          'Dolphin Man slaps at {t} with his slippery hands!',
+          'Dolphin Man paws blindly at {t}!',
+          'Dolphin Man grabs at {t}, again and again!',
+        ],
+        whip: ['Dolphin Man spins around and whips {t} with his tail!', 'Dolphin Man’s tail cracks across {t}!'],
+        escapeOverflow: { label: 'Dolphin Man can see you', value: -8 },
+        secret:
+          'EXTRA-SECRET: Dolphin Man hunts by sound. A battery going in, breaking glass, a ringing phone, Captain Jim yelling about his locker: loud things make him angrier and send him after whoever made them, camouflage or not. Everyone else guards quietly.',
+        lines: {
+          intro: 'Something wet slaps against the lockers…',
+          overflow: ['Dolphin Man’s milky eyes clear up…', 'Eyes of the Angry! Dolphin Man can see everything now!'],
+          overflowShort: 'SHARP EYES',
+          calm: 'Dolphin Man’s eyes cloud over again.',
+          barelyStanding: 'Dolphin Man curls up on the floor, whimpering!',
+          dazed: 'Dolphin Man flops around on the floor…',
+          blocksEscape: ['Dolphin Man hears the door creak, and slams it shut!', 'Dolphin Man lunges across the doorway!', 'The door won’t budge!'],
+        },
       },
     },
 
@@ -623,6 +718,34 @@
         crit: 0.05,
       },
 
+      // ---------------- DOLPHIN MAN ----------------
+      loudWail: {
+        name: 'Loud Wail',
+        doc: 'Probably the scariest thing you could hear. Dolphin Man lets out a loud screeching wail, dealing repeated damage to all enemies, decreasing their speed and smarts. (Damage increases with ANGER.)',
+        pulses: 3, // the wail hits everyone this many times
+        damage: [4, 7], // per pulse, before ANGER; it's sound, so DEF doesn't help (GUARD does)
+        perAnger: 0.02, // x(1 + ANGER * this): x2.6 at 80 ANGER
+        spdDown: 0.15,
+        smtDown: 0.25, // lower SMARTS also make Mel's and John's skill checks harder
+        turns: 2,
+      },
+      fetalPosition: {
+        name: 'Fetal Position',
+        doc: 'Dolphin Man is unable to attack; but while in Fetal Position, increases ANGER from most sources of sound. Also significantly increases defense.',
+        turns: 2, // curled up for the rest of this turn and all of the next
+        defUp: 0.8,
+        noiseMult: 2, // every NOISE angers him twice as much
+        hitNoise: 2, // and every hit on him makes a little NOISE
+      },
+      tailWhip: {
+        name: 'Tail Whip',
+        doc: 'A little inaccurate, especially with that crap eyesight. Deals damage based on current defense, and slightly increases ANGER.',
+        power: 1.2, // x his current DEF instead of ATK: lowering his DEF softens it
+        hitMult: 0.8,
+        crit: 0,
+        angerUp: 5,
+      },
+
       // ---------------- SID ----------------
       jumboCookie: {
         name: 'Sid’s JUMBO Cookie',
@@ -720,7 +843,15 @@
       moralSupport: {
         name: 'Moral Support',
         doc: 'You could put some real work into it… But okay. John and Mel’s skill checks are much easier.',
-        zoneScale: 1.6,
+        rules: 'While she is here: the fuel arrow falls slower, and the battery clips move slower and steadier.',
+        fuelSlow: 0.8, // the fuel check runs at 80% speed
+        clipSlow: 0.7, // the battery clips move at 70% speed and turn less often
+      },
+      // Not in the doc: added on request. Every turn she feels HAPPY, ANGRY or SAD.
+      moodSwings: {
+        name: 'Mood Swings',
+        rules: 'Every turn she feels HAPPY, ANGRY or SAD, and her Hex changes with it.',
+        moods: ['happy', 'angry', 'sad'],
       },
       possession: {
         name: 'Possession',
@@ -783,6 +914,14 @@
       overflowingAnger: {
         name: 'Overflowing ANGER',
         doc: 'At 80 ANGER, Sid will no longer be able to consume any item, including Cookies. He will also equip his Desert Eagle and use it as a basic attack for extra damage.',
+      },
+      // DOLPHIN MAN
+      eyesOfTheAngry: {
+        name: 'Eyes of the Angry',
+        doc: 'Dolphin Man’s eyesight will begin extremely bad, causing physical attacks to miss most of the time. But as ANGER increases, so does eyesight.',
+        rules: 'His slaps and Tail Whip hit at 30% of the usual HIT RATE at 0 ANGER, rising to full at 100. Whoever he HUNTS is easier to see.',
+        hitAt0: 0.3,
+        hitAt100: 1.05,
       },
     },
 
@@ -938,6 +1077,7 @@
       chilled: 5,
       confused: 5,
       blind: 5,
+      curledUp: 10, // Dolphin Man in Fetal Position
       // (each slasher's `escapeOverflow` applies from its overflow ANGER: Sid's gun, Trollge's run)
       speedPerPoint: 0.25, // per point of (team average SPD - slasher SPD)
       speedMin: -15,
@@ -969,8 +1109,10 @@
       confusedSkip: 0.35,
       enemyConfusedFumble: 0.3,
       bleedPercent: 0.025, // of the slasher's max health per turn
+      // The generator checks (rules in js/checks.js). zone grows with SMARTS: a wider safe arch
+      // for the fuel, more room around the middle of the terminals for the battery.
       // pourMs: how long Mel's fuel check lasts. clipMs: how long John has to clip the battery.
-      skillCheck: { baseZone: 0.16, perSmarts: 0.0008, sweepMs: 950, timeLimitMs: 2800, pourMs: 3600, clipMs: 4200 },
+      skillCheck: { baseZone: 0.16, perSmarts: 0.0008, pourMs: 4000, clipMs: 5000 },
     },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -622,6 +622,86 @@
     return { w: b.w, h: b.h, head: face, body: S.chest, feet: S.feet, clawL: S.clawL, clawR: S.clawR, muzzle: S.clawR };
   }
 
+  // ------------------------------------------------------------------ Dolphin Man
+  // Also made by tools/make_images.py, from his render: a body, a head that bobs on its neck
+  // the way Trollge's does (but twitchier), the open-mouthed head of his Loud Wail, and the
+  // whole of him curled up on the floor in Fetal Position.
+  const DOLPH_EYES = {
+    milky: [hex('#8f9ba2'), hex('#4d5960')], // "eyesight will begin extremely bad"
+    sharp: [hex('#ffffff'), hex('#cfeeff')], // Eyes of the Angry
+    dim: [hex('#3e474d'), hex('#20262a')],
+  };
+
+  // Copy a layer, sliding each row sideways by shift(row) pixels.
+  function blitRows(px, src, x0, y0, shift) {
+    for (let y = 0; y < src.h; y++) {
+      const dx = Math.round(shift(y));
+      for (let x = 0; x < src.w; x++) {
+        const i = (y * src.w + x) * 4;
+        if (src.d[i + 3]) px.set(x0 + x + dx, y0 + y, [src.d[i], src.d[i + 1], src.d[i + 2], 255]);
+      }
+    }
+  }
+
+  // o: { t (ms), pose: 'idle' | 'lunge' | 'whip' | 'wail' | 'fetal' | 'twitch' | 'down', eyes: 'milky' | 'sharp' | 'dim' }
+  function dolphin(o) {
+    const S = SC.SPRITES.dolphin;
+    const L = spritePix.dolphin;
+    const px = new Pix(S.size[0], S.size[1]);
+    const t = o.t || 0;
+    const pose = o.pose || 'idle';
+
+    if (pose === 'fetal' || pose === 'twitch' || pose === 'down') {
+      // Curled up on the floor, rocking. He flinches at every sound ('twitch').
+      const f = L.fetal;
+      let amp = Math.sin(t / 520) * 1.2;
+      if (pose === 'twitch') amp = Math.sin(t / 40) * 2.5;
+      else if (pose === 'down') amp = Math.sin(t / 1100) * 0.7;
+      blitRows(px, f, S.fetalAt[0], S.fetalAt[1], (y) => amp * (1 - y / f.h));
+      return px;
+    }
+
+    // Standing. The body breathes (a pixel up and down); the head sways on the neck and
+    // every few seconds jerks sideways, like something listening.
+    const lift = Math.sin(t / 760) > 0.3 ? 1 : 0;
+    let amp = Math.sin(t / 470) * 2.2;
+    const beat = (t % 2900) / 2900;
+    if (beat < 0.05) amp += 5 * Math.sin(beat * 20 * Math.PI);
+    let dy = -lift;
+    if (pose === 'lunge') amp = 5;
+    else if (pose === 'whip') amp = -6;
+    else if (pose === 'wail') {
+      amp = Math.sin(t / 35) * 1.5; // shaking with the scream
+      dy += Math.round(Math.sin(t / 60));
+    }
+    px.blit(L.body, S.bodyAt[0], S.bodyAt[1] - lift);
+    const pvy = S.pivot[1];
+    const head = pose === 'wail' ? L.wail : L.head;
+    const [hx, hy] = pose === 'wail' ? S.wailAt : S.headAt;
+    const span = Math.max(1, pvy - hy);
+    const shift = (row) => amp * clamp01((pvy - (hy + row)) / span);
+    blitRows(px, head, hx, hy + dy, shift);
+    if (pose === 'wail') return px; // the open-mouthed head has its own eyes
+    // His eyes: milky and dull, or glowing once his ANGER sharpens them.
+    const [c0, c1] = DOLPH_EYES[o.eyes] || DOLPH_EYES.milky;
+    for (const [ex, ey] of S.eyes) {
+      const x = hx + ex + Math.round(shift(ey));
+      const y = hy + ey + dy;
+      px.rect(x, y, 2, 2, c0);
+      if (o.eyes === 'sharp') {
+        px.set(x - 1, y, c1);
+        px.set(x + 2, y + 1, c1);
+      }
+    }
+    return px;
+  }
+
+  function dolphinPoints() {
+    const S = SC.SPRITES.dolphin;
+    const face = [S.headAt[0] + 12, S.headAt[1] + 16];
+    return { w: S.size[0], h: S.size[1], head: face, mouth: S.mouth, body: S.chest, feet: S.feet, clawL: S.handL, clawR: S.handR, muzzle: S.mouth, curled: S.fetalFace };
+  }
+
   // ------------------------------------------------------------------ icons
   const K = hex('#000000');
   const W = hex('#ffffff');
@@ -680,6 +760,7 @@
     dead: DARK,
     slasher: R(['#000000', '#1c0000', '#420000', '#6e0303']),
     umbra: R(['#000000', '#12051c', '#2c0d42', '#4f1a6e']),
+    cryptid: R(['#000000', '#03101a', '#0b2233', '#15384f']),
     furious: R(['#050000', '#3d0000', '#8c0000', '#d10a0a']),
     frozen: GREY,
   };
@@ -720,11 +801,15 @@
           })
         )
         .concat(
-          Object.keys(sprites).map((name) =>
-            Promise.all([loadPix(sprites[name].body), loadPix(sprites[name].head)]).then(([body, head]) => {
-              if (body && head) spritePix[name] = { body, head };
-            })
-          )
+          // Every image layer of each sprite (body, head, and Dolphin Man's wail and fetal).
+          Object.keys(sprites).map((name) => {
+            const keys = Object.keys(sprites[name]).filter((k) => typeof sprites[name][k] === 'string');
+            return Promise.all(keys.map((k) => loadPix(sprites[name][k]))).then((layers) => {
+              if (layers.some((l) => !l)) return;
+              spritePix[name] = {};
+              keys.forEach((k, i) => (spritePix[name][k] = layers[i]));
+            });
+          })
         )
     );
   }
@@ -893,6 +978,8 @@
   SC.Art.sid = sid;
   SC.Art.trollge = trollge;
   SC.Art.trollgePoints = trollgePoints;
+  SC.Art.dolphin = dolphin;
+  SC.Art.dolphinPoints = dolphinPoints;
   SC.Art.icon = icon;
   SC.Art.card = card;
   SC.Art.loadPortraits = loadPortraits;

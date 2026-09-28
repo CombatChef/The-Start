@@ -3,8 +3,8 @@
 A turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki), with a black-and-white
 HUD styled after the game's own. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner in a
 locker hallway against **Trollge** [DEVASTATING]. **Purpl Lady** waits on the bench and can swap in for anyone.
-**Sid** [CONSIDERABLE] is still there as the easier fight: switch slashers on the title screen. Every stat, skill,
-passive, weapon and item comes from the *Slasher Statistics* doc.
+Switch slashers on the title screen: **Sid** [CONSIDERABLE] and **Dolphin Man** [CONSIDERABLE] are the other two
+fights. Every stat, skill, passive, weapon and item comes from the *Slasher Statistics* doc.
 
 ![Battle screen](docs/screenshot-battle.png)
 
@@ -18,9 +18,10 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 | Confirm | Z, Enter, Space | Click / tap |
 | Back / undo | X, Esc, Backspace | "BACK" / "UNDO" |
 | Skip text | Z or X while text types | Click SLASHERBOY |
-| Fuel check | Hold Q / E (or ← / →) | Hold a side of the box |
+| Fuel check | Tap Q / E (or ← / →) | Tap a side of the box |
 | Battery check | Space, Z, Enter | Tap |
 | Swap the squad | SWAP ▸ on the title screen | Click a portrait on the title screen |
+| Change slasher | SLASHER ▸ on the title screen | |
 | Battle log | L | LOG button |
 | Fast text | F | FAST button |
 | Sound | M | SOUND button |
@@ -34,17 +35,18 @@ rather than a bar.
 - **SLASHERBOY** (top), the computer in SlashCo's monitor room, prints the battle log. Its title bar shows the turn,
   your CREDITS and the heli's ETA.
 - **The slasher** (left): `[TROLLGE]`, its class and danger level (MODERATE yellow, CONSIDERABLE orange,
-  DEVASTATING red), its condition (`[GOOD]` down to `[WEAKENED]`) and its ANGER, which turns orange and then red
-  as it nears 80.
+  DEVASTATING red), its condition (its doc health, such as `[GOOD]` or `[OK]`, down to `[WEAKENED]`) and its
+  ANGER, which turns orange and then red as it nears 80.
 - **The profiles** (bottom): each worker's `[NAME]`, portrait, a heart in their health colour with the word under
-  it, their STAMINA, and their statuses in brackets (`[SEEN]`, `[GUARD]`, `[CARRYING MEL]`…).
+  it, their STAMINA, and their statuses in brackets (`[SEEN]`, `[HUNTED]`, `[GUARD]`, `[CARRYING MEL]`…).
 
   | `[OVERSATED]` `[SATED]` | `[OK]` | `[STABLE]` | `[SCATHED]` | `[HURT]` | `[CRITICAL]` | `[DEAD]` | `[GHOST]` |
   | --- | --- | --- | --- | --- | --- | --- | --- |
   | cyan heart | bright green | pale green | cream | amber | orange skull and crossbones | grey skull | Purpl Lady's violet ghost |
 
   OK, STABLE, SCATHED and CRITICAL use the colours from the game's own HUD; the rest are filled in between. When
-  John is awake, his *Hyperceptive* puts a red flag (STARE, SCRATCH, TARGET) on whoever the slasher goes for next.
+  John is awake, his *Hyperceptive* puts a red flag (STARE, SCRATCH, TARGET, ALL) on whoever the slasher goes for
+  next.
 - **The menu** (right): **FIGHT** and **ESCAPE**, then ATTACK, SKILLS, ITEMS, GUARD and CARRY, in blocky letters
   like the SLASHCO logo. The escape odds sit at the top; click them to see how they add up.
 
@@ -61,18 +63,34 @@ slasher is weakened she POSSESSES a body so it walks out on its own. Her Freaky 
 and brings the first worker to die back once. That makes her the strongest swap, especially against Trollge (see
 the numbers below).
 
+### Purpl Lady's moods
+
+![Purpl Lady happy, angry and sad](docs/purpl-moods.png)
+
+Every turn she feels **HAPPY**, **ANGRY** or **SAD** (*Mood Swings*). Her face on her profile shows it (a smile,
+gritted teeth under furrowed brows, or a frown and a tear), and her Hex (her ATTACK) changes with it:
+
+- **HAPPY**: the slasher calms down (ANGER -10) and every worker heals a little.
+- **ANGRY**: real MAGIC damage, and the slasher's DEF drops 25% for 2 turns.
+- **SAD**: the slasher is weighed down: ATK and SPD drop 25% for 2 turns.
+
 ## Generator checks
 
 ![Fuel and battery checks](docs/screenshot-checks.png)
 
 Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashCo VR's generator checks:
 
-- **Fuel.** The ▽ marker loses its balance and drifts along the arch toward the red `-X-` ends. Hold **Q** or **E**
-  to push it back (the bar over the key turns into an arrow while you hold it) until the pump fills up. Touch the
-  red and the can lands on Mel's foot.
+- **Fuel.** The ▽ marker loses its balance: the further it leans, the faster it falls, a gust keeps shoving it
+  one way or the other, and it gets worse as the pour goes on. Every tap of **Q** or **E** makes it jump back a
+  little, so keep tapping to hold it over the top until the pump fills up. Touch the red `-X-` ends and the can
+  lands on Mel's foot.
 - **Battery.** "[SPACE] to clip terminals." The two clips bounce up and down at random speeds and change direction
-  at random, so it's all about timing: press when **both** clips are level with the red terminals. Miss, or run
-  out of time, and the ⚡ turns into a yellow ⚠ as the generator shocks John.
+  at random, so it's all about timing: press when **both** clips are level with the middle of the terminals (the
+  ✱, between the white marks). Miss, or run out of time, and the ⚡ turns into a yellow ⚠ as the generator shocks
+  John.
+- With Purpl Lady in the squad (*Moral Support*), the fuel arrow falls slower, and the clips move slower and
+  change direction less often.
+- Both get harder when the Loud Wail lowers the worker's SMARTS.
 
 ## How the battle works
 
@@ -108,14 +126,47 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
   calm down. If anyone on your team eats a Cookie, his ANGER jumps by 35 (METH Addict).
 - GUARD whoever John flags as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
 
-![Escaping](docs/screenshot-escape.png)
+### Dolphin Man [CONSIDERABLE]
+
+![Dolphin Man's Loud Wail](docs/screenshot-dolphin.png)
+
+- **He can barely see** (*Eyes of the Angry*). At low ANGER his slaps and *Tail Whip* miss most of the time; the
+  angrier he gets, the better he sees, and at 80 his milky eyes clear up and he sees everything.
+- **Dolphin Hands**: his slaps hit 5 times, and he heals a little from the damage. **Tail Whip** hits once and
+  hard, with his DEF instead of his ATK (so lowering his DEF softens it), and angers him a little.
+- **Loud Wail** hits everyone three times, harder the angrier he is, and lowers SPEED and SMARTS for 2 turns. It's
+  sound, so DEF doesn't help, but GUARD does.
+- **Mucus Layer**: punches, slaps, stabs and thrown things sometimes slip off his skin for a quarter of the
+  damage. Magic, shocks, blasts, bleeding and traps don't slip.
+- **He hunts by sound.** A battery going in, glass breaking, a ringing phone, a blast, Captain Jim yelling about
+  his locker: loud things anger him (more the angrier he already is), and he goes after whoever made them for 2
+  turns, seeing them better (**HUNTED**). Camouflage doesn't hide you from him once he's hunting you.
+- **Fetal Position.** Now and then he curls up on the floor: he can't attack and his DEF shoots up, but every noise
+  angers him twice as much, and every hit is a noise. Use the time to heal, guard, buff or run.
+
+## Sound
+
+Everything is synthesized in the browser; there are no audio files.
+
+- **Ambience**: a low hallway drone with the strip lights buzzing, and things clanking, thudding and creaking far
+  away.
+- **Chase**: a heartbeat and a pounding bass line. It fades in once the slasher is weakened, or when the team is
+  about to lose (one worker left standing, or everyone left is CRITICAL).
+- **Dolphin Man's Loud Wail** is modelled on his sound in SlashCo VR gameplay footage: a shrill band of noise
+  around 3.2 kHz that buzzes about 50 times a second and swells again and again, over a hoarse, wobbling scream.
+
+The YouTube tracks themselves aren't included: they're SlashCo VR's copyrighted audio, and the game can't stream
+them. If you have audio files you're allowed to use, name them `ambience.mp3`, `chase.mp3` and `wail.mp3` (or
+`.ogg`), put them in `assets/audio/`, and the game plays them instead of the synthesized ones when you open
+`index.html` from this folder. **M** mutes everything.
 
 ## Tuning and editing
 
 Everything is in **`js/data.js`**: stats, skill costs and power, passives, items, the starting bag, health
 states, each slasher's AI weights, the escape formula, the skill checks' timing, and the default squad (`party`)
 and bench (`bench`). The doc's text is quoted word for word in `doc:` fields and shown in the in-game skill and
-item menus. Save and refresh.
+item menus. Save and refresh. The skill checks' physics (how fast the fuel arrow falls, how far a tap moves it,
+how fast the clips move) are at the top of `js/checks.js`.
 
 `npm test` (or `node tests/simulate.js`) plays hundreds of battles against each slasher with three play styles,
 with the default squad and with Purpl Lady swapped in for each worker in turn. It checks for crashes and broken
@@ -124,14 +175,17 @@ states and prints win rates:
 | | careful play | casual play | button mashing |
 | --- | --- | --- | --- |
 | Trollge | 85% | 37% | 35% |
-| Trollge, Purpl Lady in for Mel | 98% | 62% | 42% |
-| Trollge, Purpl Lady in for John | 100% | 58% | 47% |
-| Trollge, Purpl Lady in for Mysti | 83% | 38% | 39% |
-| Trollge, Purpl Lady in for Captain Jim | 94% | 34% | 22% |
+| Trollge, Purpl Lady in for Mel | 99% | 68% | 39% |
+| Trollge, Purpl Lady in for John | 100% | 69% | 53% |
+| Trollge, Purpl Lady in for Mysti | 87% | 35% | 42% |
+| Trollge, Purpl Lady in for Captain Jim | 97% | 47% | 25% |
 | Sid | 98% | 71% | 39% |
-| Sid, with Purpl Lady in | 100% | 68–93% | 38–62% |
+| Sid, with Purpl Lady in | 99–100% | 70–96% | 32–59% |
+| Dolphin Man | 99% | 65% | 49% |
+| Dolphin Man, with Purpl Lady in | 99–100% | 55–94% | 47–77% |
 
-Against Trollge with the default squad, someone dies in most casual battles.
+Against Trollge with the default squad, someone dies in most casual battles. Careful play against Dolphin Man
+means not hitting him while he's curled up.
 
 ## Choices I made where the doc leaves room
 
@@ -154,6 +208,20 @@ Against Trollge with the default squad, someone dies in most casual battles.
     heli's 5-turn guaranteed escape.
   - Trollge's HP isn't in the doc; it has 4000 ("Health: Good"). Wounds anger it less than Sid, so its ANGER
     mostly comes from time and from workers caught moving under its stare.
+- **Dolphin Man.**
+  - His stats, skills, passive, weapon and armor are the doc's. His HP isn't in the doc; he has 2400 ("Health:
+    OK"). With ATK 17, ANGER is what makes him dangerous: +1.5% ATK per point (x2.2 at 80).
+  - *Eyes of the Angry*: 30% of the usual HIT RATE at 0 ANGER, rising to full at 100.
+  - Hunting by sound comes from SlashCo VR itself (the gameplay video's captions: loud noises "made by smashing
+    glass bottles or installing a battery will trigger the Dolphinman, entering it's [Hunt] State", his eyesight
+    improves while hunting, and his hearing gets sharper as his ANGER rises). Here that means John's battery
+    check, Mel's *Toss Glasses*, Captain Jim's phone and Proxy Locator, blasts, and Jim's locker-yelling on GUARD.
+  - *Fetal Position* lasts the rest of the turn and the next, with DEF +80%. The doc says it "increases ANGER from
+    most sources of sound"; every blow landing on him counts as one.
+  - *Dolphin Hands* heals him 1.5 health per point of damage it deals. *Mucus Layer* makes 30% of physical hits
+    slip, doing a quarter of their damage.
+- **Purpl Lady's Mood Swings** isn't in the doc; it was added on request, along with the mood-based Hex above
+  (her doc Hex is "a random debuff").
 - **Captain Jim.** His *Burner Phone* hits once but hard, and sometimes rings (NOISE). *Proxy Locator* is an
   on/off switch. *Bear Trap* stops the attack it catches. *Confidential Documents* shows the slasher's exact
   numbers and adds +10% team crit. *Full Blood Aussie* halves the ANGER his actions cause and makes items 30%
@@ -174,8 +242,10 @@ Against Trollge with the default squad, someone dies in most casual battles.
   - Mel and John come from the SlashCo VR lobby-NPC screenshot.
   - Mysti is from her in-game render (red beret, white mask).
   - Captain Jim is from his in-game render.
-  - Purpl Lady is from her new reference, cropped to her face (glasses, violet streaks).
-  - Trollge's title-screen card is its head, and Sid's red card is the art from the doc.
+  - Purpl Lady is from her new reference, cropped to her face (glasses, violet streaks). Her HAPPY, ANGRY and SAD
+    faces are the same portrait with the mouth and brows redrawn.
+  - Trollge's title-screen card is its head, Dolphin Man's is his wailing head, and Sid's red card is the art
+    from the doc.
 
   Nobody is cut out of their picture: each worker keeps the background they were captured against, softened and
   darkened so the face reads first, and posterized into the black / grey / white style of the doc's art. Red stays
@@ -185,6 +255,10 @@ Against Trollge with the default squad, someone dies in most casual battles.
 - **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head
   wobbles on its skinny body". It freezes when it stares, its eyes glow red once it's a Fast Runner, and it folds
   up when weakened.
+- **Dolphin Man** is made the same way from his two renders: his head bobs and twitches on his neck like
+  Trollge's, his mouth hangs open while he wails, he spins round for the Tail Whip, his eyes clear up at 80 ANGER,
+  and in Fetal Position (and when he's weakened) he's curled up on the floor. His legs and the curled-up pose are
+  drawn to match the renders, which don't show them.
 - **The hallway and Sid** are drawn in code (`js/art.js`) as dithered pixel art at 2x. Sid is drawn to the
   proportions of the in-game screenshot in `assets/source/sid_reference.png`.
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
@@ -199,10 +273,11 @@ index.html            the page
 css/style.css         the HUD (a 1280x960 stage, scaled to fit)
 js/data.js            all stats, skills, items and tuning  ← edit this
 js/battle.js          the turn engine (no DOM; also runs in Node)
+js/checks.js          the generator checks' rules (no DOM)
 js/ui.js              HUD, menus, targeting, animations, generator checks, title screen and squad
-js/art.js, pixel.js   hallway, Sid, Trollge's moving head, portrait cards
+js/art.js, pixel.js   hallway, Sid, Trollge and Dolphin Man's moving sprites, portrait cards
 js/images.js          portraits and sprites (generated)
-js/audio.js           synthesized sound effects
+js/audio.js           synthesized sound effects, the wail, ambience and chase music
 js/main.js            title → battle → end loop
 tests/simulate.js     headless balance and crash test
 tools/make_images.py  builds the portraits and sprites

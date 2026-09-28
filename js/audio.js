@@ -232,7 +232,7 @@
       hiss({ dur: 0.35, vol: 0.2, filter: 400 });
     },
     wail: () => {
-      if (TRACKS.wail) return playOnce(TRACKS.wail.src, 0.9);
+      if (TRACKS.wail) return playOnce(TRACKS.wail, 0.9, wail);
       return wail();
     },
     // Dolphin Man curling up: a thin, falling squeak.
@@ -449,7 +449,28 @@
   const CHASE_AT = 142; // 2:22, where the chase starts in the SlashCo ambience video
   let source = { kind: 'built-in', label: '', chaseAt: CHASE_AT };
 
+  // Played through an <audio> element (light on memory), or decoded with Web Audio when the page
+  // won't play it that way (see bufferBed).
   function trackBed(tr) {
+    let level = 0;
+    let inner = mediaBed(tr, () => {
+      if (!tr.blob || !ctx) return;
+      inner.stop();
+      inner = bufferBed(tr);
+      inner.fade(level, 0.3);
+    });
+    return {
+      fade(l, secs) {
+        level = l;
+        inner.fade(l, secs);
+      },
+      stop() {
+        inner.stop();
+      },
+    };
+  }
+
+  function mediaBed(tr, failed) {
     const a = new root.Audio();
     const from = tr.from || 0;
     let fading = null;
@@ -468,6 +489,7 @@
     };
     a.addEventListener('loadedmetadata', () => from && (a.currentTime = from), { once: true });
     a.addEventListener('ended', start);
+    a.addEventListener('error', failed, { once: true });
     // Keep to its part of the file: back to the start of it at the end of it.
     const watch = tr.to != null ? setInterval(() => a.currentTime >= tr.to - 0.05 && (a.currentTime = from), 40) : null;
     start();
@@ -490,21 +512,94 @@
     };
   }
 
-  function playOnce(src, volume) {
-    const a = new root.Audio(src);
+  // Some pages won't play a picked file through an <audio> element; Web Audio can still decode
+  // it. Decoded once per file, and kept.
+  const decoded = new Map();
+  function decode(blob) {
+    if (!decoded.has(blob)) {
+      const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+      decoded.set(
+        blob,
+        blob.arrayBuffer().then((b) => (ctx || new Offline(1, 1, 44100)).decodeAudioData(b))
+      );
+    }
+    return decoded.get(blob);
+  }
+
+  function bufferBed(tr) {
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.connect(ctx.destination);
+    let node = null;
+    let stopped = false;
+    decode(tr.blob)
+      .then((buf) => {
+        if (stopped) return;
+        node = ctx.createBufferSource();
+        node.buffer = buf;
+        node.loop = true;
+        node.loopStart = tr.from || 0;
+        node.loopEnd = tr.to != null ? Math.min(tr.to, buf.duration) : buf.duration;
+        node.connect(g);
+        node.start(0, tr.from || 0);
+      })
+      .catch(() => {});
+    return {
+      fade(level, secs) {
+        const t = ctx.currentTime;
+        g.gain.cancelScheduledValues(t);
+        g.gain.setValueAtTime(g.gain.value, t);
+        g.gain.linearRampToValueAtTime(level, t + secs);
+      },
+      stop() {
+        stopped = true;
+        if (node) node.stop();
+        setTimeout(() => g.disconnect(), 3000);
+      },
+    };
+  }
+
+  // A one-off sound from a file (the wail), with the built-in one if the file won't play.
+  function playOnce(tr, volume, fallback) {
+    const a = new root.Audio(tr.src);
     a.volume = volume;
+    a.addEventListener(
+      'error',
+      () => {
+        if (!tr.blob) return fallback();
+        decode(tr.blob).then((buf) => {
+          const n = ctx.createBufferSource();
+          const g = ctx.createGain();
+          g.gain.value = volume;
+          n.buffer = buf;
+          n.connect(g).connect(ctx.destination);
+          n.start();
+        }, fallback);
+      },
+      { once: true }
+    );
     const p = a.play();
     if (p && p.catch) p.catch(() => {});
   }
 
   // How long a file is (seconds), or 0 if it can't be read.
-  function duration(src) {
+  function duration(file) {
     return new Promise((resolve) => {
       const a = new root.Audio();
       a.preload = 'metadata';
       a.addEventListener('loadedmetadata', () => resolve(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
-      a.addEventListener('error', () => resolve(0), { once: true });
-      a.src = src;
+      a.addEventListener(
+        'error',
+        () =>
+          file.blob
+            ? decode(file.blob).then(
+                (b) => resolve(b.duration),
+                () => resolve(0)
+              )
+            : resolve(0),
+        { once: true }
+      );
+      a.src = file.src;
     });
   }
 
@@ -522,17 +617,17 @@
     TRACKS.chase = null;
     let parts = [];
     if (ambFile && chaseFile) {
-      TRACKS.ambience = { src: ambFile.src };
-      TRACKS.chase = { src: chaseFile.src };
+      TRACKS.ambience = { src: ambFile.src, blob: ambFile.blob };
+      TRACKS.chase = { src: chaseFile.src, blob: chaseFile.blob };
       parts = [`${ambFile.name} (ambience)`, `${chaseFile.name} (chase)`];
     } else if (ambFile) {
-      const long = (await duration(ambFile.src)) > at + 5;
-      TRACKS.ambience = long ? { src: ambFile.src, to: at } : { src: ambFile.src };
-      if (long) TRACKS.chase = { src: ambFile.src, from: at };
+      const long = (await duration(ambFile)) > at + 5;
+      TRACKS.ambience = { src: ambFile.src, blob: ambFile.blob, to: long ? at : null };
+      if (long) TRACKS.chase = { src: ambFile.src, blob: ambFile.blob, from: at };
       const t = `${Math.floor(at / 60)}:${String(Math.round(at % 60)).padStart(2, '0')}`;
       parts = [long ? `${ambFile.name} (ambience to ${t}, chase from ${t})` : `${ambFile.name} (ambience)`];
     }
-    TRACKS.wail = wailFile ? { src: wailFile.src } : null;
+    TRACKS.wail = wailFile ? { src: wailFile.src, blob: wailFile.blob } : null;
     if (wailFile) parts.push(`${wailFile.name} (wail)`);
     source = { kind: parts.length ? kind : 'built-in', label: parts.join(', '), chaseAt: at };
     restartMusic();
@@ -604,7 +699,7 @@
     list.map((f) => {
       const src = URL.createObjectURL(f.blob);
       urls.push(src);
-      return { name: f.name, src };
+      return { name: f.name, src, blob: f.blob };
     });
 
   async function useFiles(fileList, chaseAt) {

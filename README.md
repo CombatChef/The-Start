@@ -281,12 +281,13 @@ means not hitting him while he's curled up.
   - Mysti is from her in-game render (red beret, white mask).
   - Captain Jim is from his in-game render.
   - Purpl Lady is from her new reference, cropped to her head and shoulders (glasses, violet streaks).
-  - Trollge's title-screen card is its head, Dolphin Man's is his wailing head, and Sid's red card is the art
-    from the doc.
+  - Dolphin Man's title-screen card is his wailing screenshot, framed from his head to his chest.
+  - Trollge's title-screen card is its head, and Sid's red card is the art from the doc.
 
-  Nobody is cut out of their picture: each worker keeps the background they were captured against, softened and
-  darkened so the face reads first, and posterized into the black / grey / white style of the doc's art. Red stays
-  red (Jim's goggles, Mysti's beret) and violet stays violet (Purpl Lady's hair). In the game the edges fade into
+  Nobody is cut out of their picture: each worker, and Dolphin Man, keeps the background they were captured
+  against, softened and darkened so the face reads first, and posterized into the black / grey / white style of the
+  doc's art. Red stays red (Jim's goggles, Mysti's beret, Dolphin Man's open mouth) and violet stays violet (Purpl
+  Lady's hair). In the game the edges fade into
   a dark backdrop, the picture turns red when they're CRITICAL, and effects go on top: sweat, blood, cracks, Zzz.
   Mel's no-glasses face (after *Toss Glasses*) and John's sleeping face (*Nap*) are edited versions.
 - **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head

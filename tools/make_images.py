@@ -382,8 +382,9 @@ DOLPH_BELLY = np.array([(96, 100, 108), (160, 165, 174), (212, 216, 224)], float
 def dolphin():
     """Dolphin Man, from two small screenshots: dolphin.webp (standing, cut off at the thighs)
     and dolphin_wail.webp (his mouth wide open). His head, torso and arms are cut out of the
-    first; the second gives the wailing head. His legs and his fetal position aren't in either
-    picture, so they are drawn here in his colours and dithered the same way."""
+    first; the second gives the wailing head, and his title card as a full frame. His legs and
+    his fetal position aren't in either picture, so they are drawn here in his colours and
+    dithered the same way."""
     S = 4  # work at 4x the screenshots' size
     cv2.setRNGSeed(7)
     rng = np.random.default_rng(3)
@@ -568,14 +569,13 @@ def dolphin():
         Image.fromarray(img).save(os.path.join(SPRITES, f'dolphin_{name}.png'))
         print(f'wrote sprites/dolphin_{name}.png', img.shape[1], 'x', img.shape[0])
 
-    # Title-screen card: the wailing head, as big as it goes.
-    s = 118 / max(wx.max() + 1 - wx.min(), wy.max() + 1 - wy.min())
-    card = outlined(shrink(wail, s, (wx.min(), wy.min(), wx.max() + 1, wy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
-    out = np.zeros((SIZE, SIZE, 4), np.uint8)
-    ch, cw = card.shape[:2]
-    out[(SIZE - ch) // 2:(SIZE - ch) // 2 + ch, (SIZE - cw) // 2:(SIZE - cw) // 2 + cw] = card
-    Image.fromarray(out).save(os.path.join(OUT, 'dolphin.png'))
-    print('wrote portraits/dolphin.png')
+    # Title-screen card: the open-mouth picture as a full frame, head to chest, posterized
+    # like the workers' portraits. The room behind him is black; a faint smudge of it that
+    # isn't joined to him is dropped.
+    card = poster(bgr18, (140, 0, 360, 220), (30, 56, 82), (0.5, 0.45, 0.32, 0.46), clahe=1.2, accent=reds(90, 40))
+    _, lab, st, _ = cv2.connectedComponentsWithStats((card > 0).astype(np.uint8), connectivity=4)
+    card[(lab != 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])) & (card > 0)] = 0
+    save(card, GRAY + REDS, 'dolphin')
     return {
         'size': [Wc, Hc],
         'bodyAt': body_at,

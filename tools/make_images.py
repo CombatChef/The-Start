@@ -19,9 +19,12 @@ effects on top, so only a few source edits live here:
     trollge         - Trollge's head, for the title screen
 
 SPRITES (assets/sprites/). Trollge's battle sprite is his render, shrunk into dithered pixel
-art. The head is a separate layer so the game can make it wobble on the skinny body. Sid's are
-green-screen renders of his model, front and back, with and without the Desert Eagle, made the
-same way; the gun is a layer of its own so it can twirl and kick.
+art. The head is a separate layer so the game can make it wobble on the skinny body. Sid's and
+Dolphin Man's are green-screen renders of their models, front and back, made the same way: Sid
+with and without the Desert Eagle (the gun is a layer of its own so it can twirl and kick), and
+Dolphin Man folded down into a crouch for Fetal Position.
+
+ICONS (assets/icons/). halted.png, the red skull on a worker who is out of the fight.
 
 Everything is also embedded in js/images.js as data URIs, so the game can read the pixels
 even when index.html is opened straight from disk (file://).
@@ -29,7 +32,8 @@ even when index.html is opened straight from disk (file://).
 Sources: lobby_npcs.webp (Mel and John), jim.png (Captain Jim), mysti.png (Bravo Team
 Mysti), purpl.webp (Purpl Lady), sid_card.png (the doc's Sid art), sid_front.webp,
 sid_front_gun.webp, sid_back.webp and sid_back_gun.webp (Sid's model), trollge.webp (Trollge),
-dolphin.webp and dolphin_wail.webp (Dolphin Man).
+dolphin_front.webp and dolphin_back.webp (Dolphin Man's model), dolphin_wail.webp (his title
+card), halted.webp (the HALTED skull).
 """
 import base64
 import json
@@ -378,223 +382,53 @@ def trollge():
 DOLPH = hexes(['#05070a', '#10141b', '#1b212b', '#272e3b', '#343c4b', '#444d5e', '#586274', '#707a8c', '#8e97a7',
                '#b1b8c4', '#d3d8df', '#eef1f4', '#ffffff', '#3a0a0e', '#6e1419', '#a3272c', '#d0585a'])
 DOLPH_OUTLINE = (2, 3, 5, 255)
-# His skin, dark to light, for the parts that are drawn (sampled from his arms).
-DOLPH_SKIN = np.array([(6, 8, 11), (16, 20, 27), (30, 35, 45), (48, 55, 68), (74, 82, 98)], float)
-DOLPH_BELLY = np.array([(96, 100, 108), (160, 165, 174), (212, 216, 224)], float)
+
+
+def fold(rgba, bands):
+    """Squash horizontal bands of a render, top to bottom: [(y0, y1, scale), ...]."""
+    parts = [cv2.resize(rgba[y0:y1], (rgba.shape[1], max(1, int(round((y1 - y0) * k)))), interpolation=cv2.INTER_AREA) for y0, y1, k in bands]
+    return np.vstack(parts)
 
 
 def dolphin():
-    """Dolphin Man, from two small screenshots: dolphin.webp (standing, cut off at the thighs)
-    and dolphin_wail.webp (his mouth wide open). His head, torso and arms are cut out of the
-    first; the second gives the wailing head, and his title card as a full frame. His legs and
-    his fetal position aren't in either picture, so they are drawn here in his colours and
-    dithered the same way."""
-    S = 4  # work at 4x the screenshots' size
-    cv2.setRNGSeed(7)
-    rng = np.random.default_rng(3)
-    Hs, Ws = load('dolphin.webp').shape[:2]
-    big_bgr = cv2.resize(load('dolphin.webp'), (Ws * S, Hs * S), interpolation=cv2.INTER_CUBIC)
-    big = big_bgr[..., ::-1].astype(float)
-
-    def at(pts):
-        return np.array([(x * S, y * S) for x, y in pts], np.int32)
-
-    # ---- cut him out: a rough outline, refined by GrabCut, then minus the olive-grey wall
-    outline = [(172, 70), (182, 72), (190, 82), (192, 96), (191, 110), (186, 117), (196, 121), (208, 126), (214, 134), (216, 148),
-               (220, 162), (224, 178), (226, 195), (227, 210), (224, 218), (218, 220), (212, 212), (210, 196), (207, 180), (203, 165),
-               (200, 172), (199, 195), (199, 221), (150, 221), (149, 195), (148, 172), (145, 165), (141, 180), (137, 196), (133, 210),
-               (126, 218), (116, 216), (114, 205), (118, 190), (124, 172), (128, 155), (132, 140), (137, 128), (147, 122), (159, 118),
-               (155, 110), (153, 96), (156, 82), (163, 73)]
-    gc = np.full(big.shape[:2], cv2.GC_BGD, np.uint8)
-    cv2.fillPoly(gc, [at(outline)], cv2.GC_PR_FGD)
-    gc[cv2.erode((gc == cv2.GC_PR_FGD).astype(np.uint8), np.ones((31, 31), np.uint8)) > 0] = cv2.GC_FGD
-    cv2.grabCut(big_bgr, gc, None, np.zeros((1, 65)), np.zeros((1, 65)), 6, cv2.GC_INIT_WITH_MASK)
-    fig = (gc == cv2.GC_FGD) | (gc == cv2.GC_PR_FGD)
-    r, g, b = big[..., 0], big[..., 1], big[..., 2]
-    wall = (g - b > 2) & (0.3 * r + 0.59 * g + 0.11 * b < 185)
-    wall = cv2.morphologyEx(wall.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)) > 0
-    fig = (fig & ~wall).astype(np.uint8)
-    fig = cv2.morphologyEx(fig, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
-    fig = cv2.morphologyEx(fig, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    _, lab, st, _ = cv2.connectedComponentsWithStats(fig)
-    fig = lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])
-    _, lab, st, _ = cv2.connectedComponentsWithStats((~fig).astype(np.uint8))
-    for k in range(1, len(st)):
-        x, y, w, h, area = st[k]
-        if x > 0 and y > 0 and x + w < fig.shape[1] and y + h < fig.shape[0] and area < 4000:
-            fig[lab == k] = True  # fill small holes
-
-    # ---- a limb painter: rounded shading from the distance to the edge, lit from the front-left
-    def ramp(t, tones):
-        t = np.clip(t, 0, 1) * (len(tones) - 1)
-        i = np.floor(t).astype(int)
-        f = (t - i)[..., None]
-        return tones[i] * (1 - f) + tones[np.minimum(i + 1, len(tones) - 1)] * f
-
-    def painter(canvas, alpha):
-        yy, xx = np.mgrid[0:canvas.shape[0], 0:canvas.shape[1]]
-
-        def paint(mask, lift=0.0, tones=DOLPH_SKIN, per_row=False, gain=0.45):
-            mask = mask > 0
-            if not mask.any():
-                return
-            d = cv2.distanceTransform(mask.astype(np.uint8), cv2.DIST_L2, 5)
-            if per_row:  # legs: thin shins shade like thick thighs
-                t = (d / np.maximum(1, d.max(axis=1, keepdims=True))) ** 0.55 * 0.8 + 0.08
-            else:
-                ys, xs = np.where(mask)
-                t = np.clip(d / max(1.0, np.percentile(d[mask], 97)), 0, 1) ** 0.5 * 0.75 + 0.1
-                t = t + (-0.3 * (xx - xs.mean()) - 0.6 * (yy - ys.mean())) / max(np.ptp(ys), np.ptp(xs), 1) * gain
-            t = t + lift + cv2.GaussianBlur(rng.normal(0, 1, t.shape), (0, 0), 2.0) * 0.07
-            canvas[mask] = ramp(t, tones)[mask]
-            alpha[mask] = 255
-
-        return paint
-
-    def chain(shape, pts, radii):
-        m = np.zeros(shape, np.uint8)
-        for (p0, p1), (r0, r1) in zip(zip(pts[:-1], pts[1:]), zip(radii[:-1], radii[1:])):
-            for k in range(17):
-                f = k / 16
-                c = (int((p0[0] + (p1[0] - p0[0]) * f) * S), int((p0[1] + (p1[1] - p0[1]) * f) * S))
-                cv2.circle(m, c, int((r0 + (r1 - r0) * f) * S), 1, -1)
-        return m
-
-    def ellipse(shape, c, axes, angle):
-        m = np.zeros(shape, np.uint8)
-        cv2.ellipse(m, (int(c[0] * S), int(c[1] * S)), (int(axes[0] * S), int(axes[1] * S)), angle, 0, 360, 1, -1)
-        return m
-
-    # ---- standing: the cut-out over drawn legs
-    ext = 120 * S
-    canvas = np.zeros((big.shape[0] + ext, big.shape[1], 3), float)
-    alpha = np.zeros(canvas.shape[:2], np.uint8)
-    paint = painter(canvas, alpha)
-    legs = [
-        [(152, 204), (175, 204), (175, 222), (172, 240), (166, 265), (164, 285), (162, 300), (160, 318), (151, 318), (150, 305), (147, 285),
-         (149, 265), (147, 255), (145, 230), (148, 216)],
-        [(175, 204), (198, 204), (202, 216), (205, 230), (203, 255), (201, 265), (203, 285), (200, 305), (199, 318), (190, 318), (188, 300),
-         (186, 285), (184, 265), (178, 240), (175, 222)],
-    ]
-    for pts, lift in zip(legs, (0, -0.04)):
-        m = np.zeros(canvas.shape[:2], np.uint8)
-        cv2.fillPoly(m, [at(pts)], 1)
-        paint(cv2.GaussianBlur(m.astype(float), (0, 0), 1.2) > 0.5, lift, per_row=True)
-    for cx, ang in ((155, -6), (195, 6)):
-        paint(ellipse(canvas.shape[:2], (cx, 320), (8, 4), ang), -0.05)
-    top = fig.copy()
-    top[218 * S:, :] = False  # soften the cut-out's flat bottom into his hips
-    soft = np.clip(cv2.GaussianBlur(top.astype(float), (0, 0), 3), 0, 1)
-    H0 = big.shape[0]
-    canvas[:H0] = canvas[:H0] * (1 - soft[..., None]) + big * soft[..., None]
-    alpha[:H0] = np.maximum(alpha[:H0], np.where(soft > 0.5, 255, 0).astype(np.uint8))
-    stand = np.dstack([np.clip(canvas, 0, 255).astype(np.uint8), alpha])
-
-    ys, xs = np.where(alpha > 20)
-    X0, Y0, X1, Y1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
-    scale = 196 / (Y1 - Y0)  # 196 art pixels tall (392 on screen)
-    yy, xx = np.mgrid[0:alpha.shape[0], 0:alpha.shape[1]]
-    head = (alpha > 20) & (yy < 117 * S) & (xx > 148 * S) & (xx < 198 * S)
-    body = stand.copy()
-    body[head, 3] = 0
-    B = outlined(shrink(body, scale, (X0, Y0, X1, Y1), DOLPH), DOLPH, DOLPH_OUTLINE)
-    hy, hx = np.where(head)
-    HX, HY = hx.min(), hy.min()
-    Hd = outlined(shrink(stand * head[..., None], scale, (HX, HY, hx.max() + 1, hy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
-
-    def on_body(p):
-        return [int(v) + 1 for v in np.round((np.array(p, float) * S - [X0, Y0]) * scale)]
-
-    def on_head(p):
-        return [int(v) + 1 for v in np.round((np.array(p, float) * S - [HX, HY]) * scale)]
-
-    # ---- the wailing head, from the open-mouth picture: the head and the red of the mouth
-    bgr18 = load('dolphin_wail.webp')
-    h18, w18 = bgr18.shape[:2]
-    big18 = cv2.resize(bgr18, (w18 * S, h18 * S), interpolation=cv2.INTER_CUBIC)[..., ::-1].astype(int)
-    m = np.zeros(big18.shape[:2], np.uint8)
-    cv2.fillPoly(m, [at([(226, 13), (240, 15), (252, 25), (258, 44), (257, 64), (255, 76), (203, 76), (200, 62), (200, 40), (206, 24)])], 1)
-    jaw = np.zeros_like(m)
-    cv2.fillPoly(jaw, [at([(202, 70), (257, 70), (250, 100), (243, 126), (238, 146), (220, 146), (214, 126), (207, 100)])], 1)
-    red = (big18[..., 0] > big18[..., 1] + 12) & (big18[..., 0] > big18[..., 2] + 8)
-    teeth = (big18.sum(-1) > 480) & (jaw > 0)
-    teeth[125 * S:, :] = False  # the upper teeth only
-    mouth = cv2.morphologyEx(((red | teeth) & (jaw > 0)).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    m = cv2.dilate(((m > 0) | (mouth > 0)).astype(np.uint8), np.ones((5, 5), np.uint8))
-    _, lab, st, _ = cv2.connectedComponentsWithStats(m)
-    m = cv2.GaussianBlur((lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(float), (0, 0), 2) > 0.5
-    skin = ~((red & (jaw > 0)) | (big18.sum(-1) > 600))  # darker, bluer skin to match; the mouth and eyes stay
-    col = np.where(skin[..., None], big18 * np.array([0.52, 0.55, 0.68]), big18)
-    wail = np.dstack([np.clip(col, 0, 255), m * 255]).astype(np.uint8)
-    wy, wx = np.where(m)
-    ratio = 1.2 * (hx.max() - HX) / (wx.max() - wx.min())  # a little bigger than his normal head: he opens right up
-    Wl = outlined(shrink(wail, scale * ratio, (wx.min(), wy.min(), wx.max() + 1, wy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
-
-    # ---- fetal position: lying on his side facing us, curled up, head on the left
-    fc = np.zeros((100 * S, 200 * S, 3), float)
-    fa = np.zeros(fc.shape[:2], np.uint8)
-    fpaint = painter(fc, fa)
-    torso = chain(fa.shape, [(64, 62), (92, 52), (124, 50), (150, 60), (164, 76)], [15, 19, 20, 19, 17])
-    fpaint(torso)
-    fpaint(chain(fa.shape, [(70, 66), (96, 62), (126, 62), (148, 70)], [5, 7, 7, 6]) & torso, 0.05, DOLPH_BELLY, gain=0.25)
-    fpaint(chain(fa.shape, [(160, 74), (112, 66)], [12, 10]), -0.2)  # far thigh
-    fpaint(chain(fa.shape, [(112, 66), (148, 84)], [9, 7]), -0.22)  # far shin
-    turned = cv2.rotate(stand[70 * S:118 * S, 150 * S:198 * S].copy(), cv2.ROTATE_90_COUNTERCLOCKWISE)
-    on = turned[..., 3] > 127
-    oy, ox = 44 * S, 18 * S
-    fc[oy:oy + turned.shape[0], ox:ox + turned.shape[1]][on] = turned[..., :3][on]
-    fa[oy:oy + turned.shape[0], ox:ox + turned.shape[1]][on] = 255
-    fpaint(chain(fa.shape, [(164, 80), (104, 74)], [14, 11]))  # near thigh, up to his chest
-    fpaint(chain(fa.shape, [(104, 76), (150, 88)], [10, 7]))  # near shin, folded back
-    fpaint(ellipse(fa.shape, (158, 89), (10, 4.5), -6), -0.05)  # foot
-    fpaint(chain(fa.shape, [(80, 62), (76, 82)], [8, 7]), 0.05)  # arm, wrapped round his shins
-    fpaint(chain(fa.shape, [(76, 82), (118, 84)], [7, 6]), 0.08)
-    fpaint(ellipse(fa.shape, (122, 84), (6, 5), 0), 0.1)  # hand
-    fa[95 * S:, :] = 0  # flat on the floor
-    fetal = np.dstack([np.clip(fc, 0, 255).astype(np.uint8), fa])
-    fy, fx = np.where(fa > 20)
-    fscale = scale * 1.15
-    F = outlined(shrink(fetal, fscale, (fx.min(), fy.min(), fx.max() + 1, fy.max() + 1), DOLPH), DOLPH, DOLPH_OUTLINE)
-
-    # ---- one canvas every pose fits in: standing in the middle, the fetal pose on the same floor
-    pad = 8  # room above his head for the wailing jaw and the wobble
-    Wc = max(B.shape[1], F.shape[1]) + 4
-    Hc = B.shape[0] + pad
-    body_at = [(Wc - B.shape[1]) // 2, pad]
-    head_at = [body_at[0] + int(round((HX - X0) * scale)), body_at[1] + int(round((HY - Y0) * scale))]
-    fetal_at = [(Wc - F.shape[1]) // 2, Hc - F.shape[0]]
-
-    def pt(p):
-        q = on_body(p)
-        return [body_at[0] + q[0], body_at[1] + q[1]]
-
-    os.makedirs(SPRITES, exist_ok=True)
-    for name, img in (('body', B), ('head', Hd), ('wail', Wl), ('fetal', F)):
-        Image.fromarray(img).save(os.path.join(SPRITES, f'dolphin_{name}.png'))
-        print(f'wrote sprites/dolphin_{name}.png', img.shape[1], 'x', img.shape[0])
+    """Dolphin Man's battle sprite, from green-screen renders of his model, made like Sid's: him
+    standing, his back (the dorsal fin and tail, for when he spins round to Tail Whip), and Fetal
+    Position, the front view folded down into a crouch with his head pulled into his shoulders.
+    His title card is the open-mouth screenshot, posterized like the workers' portraits."""
+    S = 0.21
+    front, back = green_screen('dolphin_front.webp'), green_screen('dolphin_back.webp')
+    fetal = fold(front, [(0, 250, 1.0), (250, 330, 0.35), (330, 640, 0.8), (640, 1104, 0.22)])
+    middle = torso_x(front)
+    views = {
+        'body': (front, (middle, 1103), S),
+        'back': (back, (torso_x(back), 949), S * 1.15),  # shot from further away
+        'fetal': (fetal, (middle, fetal.shape[0] - 1), S),
+    }
+    layers, at, size, cx, floor, on = lay_out(views, DOLPH, DOLPH_OUTLINE)
+    save_sprites('dolphin', layers)
 
     # Title-screen card: the open-mouth picture as a full frame, head to chest, posterized
     # like the workers' portraits. The room behind him is black; a faint smudge of it that
     # isn't joined to him is dropped.
-    card = poster(bgr18, (140, 0, 360, 220), (30, 56, 82), (0.5, 0.45, 0.32, 0.46), clahe=1.2, accent=reds(90, 40))
+    card = poster(load('dolphin_wail.webp'), (140, 0, 360, 220), (30, 56, 82), (0.5, 0.45, 0.32, 0.46), clahe=1.2, accent=reds(90, 40))
     _, lab, st, _ = cv2.connectedComponentsWithStats((card > 0).astype(np.uint8), connectivity=4)
     card[(lab != 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])) & (card > 0)] = 0
     save(card, GRAY + REDS, 'dolphin')
     return {
-        'size': [Wc, Hc],
-        'bodyAt': body_at,
-        'headAt': head_at,  # where head.png's top-left goes
-        'wailAt': [head_at[0] + (Hd.shape[1] - Wl.shape[1]) // 2, head_at[1] - 4],  # ...and wail.png's
-        'fetalAt': fetal_at,
-        'pivot': pt((174, 119)),  # his head wobbles around his neck
-        'eyes': [on_head((164, 95)), on_head((182, 95))],  # on head.png
-        'mouth': pt((173, 110)),
-        'chest': pt((174, 160)),
-        'feet': pt((175, 322)),
-        'handL': pt((118, 208)),
-        'handR': pt((224, 212)),
-        # his face when curled up, on the canvas
-        'fetalFace': [fetal_at[0] + int(round((30 * S - fx.min()) * fscale)), fetal_at[1] + int(round((60 * S - fy.min()) * fscale))],
+        'size': size,
+        'at': at,  # where each layer's top-left goes on the canvas
+        'cx': cx,
+        'floor': floor,
+        # On the standing view. His head sways above `neck` (a canvas row: just under his beak).
+        'eyes': [on('body', (987, 167)), on('body', (1033, 168))],
+        'mouth': on('body', (1002, 266)),  # the tip of his beak
+        'neck': on('body', (1002, 280))[1],
+        'top': on('body', (1010, 60))[1],
+        'chest': on('body', (1040, 400)),
+        'handL': on('body', (895, 615)),
+        'handR': on('body', (1154, 633)),
+        'tail': on('back', (990, 800)),  # the flukes, on his back view
+        'fetalFace': on('fetal', (1005, 200)),  # his face when he's curled up
     }
 
 
@@ -608,53 +442,97 @@ SID_OUTLINE = (8, 10, 16, 255)
 
 
 def green_screen(name):
-    """A render on a green screen -> RGBA: the green keyed out with a soft edge, and the green
-    that spilled onto the edges taken back out."""
+    """A render on a green screen -> RGBA: the green keyed out with a soft edge, the green that
+    spilled onto the edges taken back out, and only the figure kept (not a card or menu that
+    was left on the screen)."""
     rgb = load(name)[..., ::-1].astype(float)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     a = np.clip(1 - (g - np.maximum(r, b) - 30) / 90, 0, 1)
     rgb[..., 1] = np.minimum(g, np.maximum(r, b) + 8)
+    _, lab, st, _ = cv2.connectedComponentsWithStats((a > 0.5).astype(np.uint8))
+    figure = (lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(np.uint8)
+    a[cv2.dilate(figure, np.ones((51, 51), np.uint8)) == 0] = 0
     return np.dstack([rgb, a * 255]).clip(0, 255).astype(np.uint8)
 
 
+def torso_x(rgba):
+    """The middle of a figure's torso (x), in a render."""
+    a = rgba[..., 3] > 128
+    ys = np.where(a)[0]
+    y0, y1 = ys.min(), ys.max()
+    return float(np.median(np.where(a[y0 + (y1 - y0) * 3 // 10:y0 + (y1 - y0) // 2])[1]))
+
+
+def lay_out(views, pal, line, room=(0, 0)):
+    """Shrink several views of a figure into dithered pixel art on one canvas.
+
+    views: {name: (rgba render, (x, floor y) in it, scale[, palette])}. Each view's x lands on the canvas's
+    middle column and its floor on the canvas's floor row, so switching views keeps him in
+    place. `room` is extra space (left, right) for things that swing out. Returns the layers
+    (name -> RGBA image), where each one's top-left goes, the canvas size, the middle column,
+    the floor row, and on(name, point): a point in a render -> canvas pixels."""
+    layers = {}
+    for k, (rgba, anchor, S, *own) in views.items():
+        P = own[0] if own else pal
+        rgb = rgba[..., :3].copy()
+        for _ in range(2):
+            rgb = cv2.bilateralFilter(rgb, 9, 40, 9)
+        rgb = (255 * (rgb.astype(float) / 255) ** 1.15).astype(np.uint8)  # into the dimmer light of the game
+        ys, xs = np.where(rgba[..., 3] > 20)
+        box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
+        idx = shrink(np.dstack([rgb, rgba[..., 3]]), S, box, P)
+        layers[k] = {'img': outlined(idx, P, line), 'box': box, 'f': idx.shape[1] / (box[2] - box[0]), 'anchor': anchor, 'S': S}
+    rel = lambda L, x, y: ((x - L['anchor'][0]) * L['S'], (y - L['anchor'][1]) * L['S'])  # from the anchor
+    left = min(rel(L, L['box'][0], 0)[0] for L in layers.values()) - 1
+    right = max(rel(L, L['box'][2], 0)[0] for L in layers.values()) + 1
+    top = min(rel(L, 0, L['box'][1])[1] for L in layers.values()) - 1
+    bottom = max(rel(L, 0, L['box'][3])[1] for L in layers.values()) + 1
+    pad = 4
+    cx = int(np.ceil(-left)) + pad + room[0]
+    floor = int(np.ceil(-top)) + pad
+    at = {k: [int(round(rel(L, *L['box'][:2])[i] + (cx, floor)[i])) - 1 for i in (0, 1)] for k, L in layers.items()}
+    size = [cx + int(np.ceil(right)) + pad + room[1], floor + max(6, int(np.ceil(bottom)) + pad)]
+
+    def on(k, p):  # +1: the outline's margin
+        L = layers[k]
+        return [int(round(at[k][i] + 1 + (p[i] - L['box'][i]) * L['f'])) for i in (0, 1)]
+
+    return {k: L['img'] for k, L in layers.items()}, at, size, cx, floor, on
+
+
+def save_sprites(prefix, layers):
+    os.makedirs(SPRITES, exist_ok=True)
+    for k, img in layers.items():
+        Image.fromarray(img).save(os.path.join(SPRITES, f'{prefix}_{k}.png'))
+        print(f'wrote sprites/{prefix}_{k}.png', img.shape[1], 'x', img.shape[0])
+
+
 def sid_sprite():
-    """Sid's battle sprite, from green-screen renders of his model: front and back, with and
-    without the Desert Eagle. Each view is shrunk into dithered pixel art like Trollge's, and
-    they share one canvas with his torso in the middle and his planted foot on the floor. The gun
-    comes off the armed front view as a layer of its own, so it can twirl round his finger and
-    kick when he fires; the back views are for turning round to draw it or put it away."""
-    S = 0.185
-    views = {  # layer: (render, the floor in it: where his planted foot is)
-        'front': ('sid_front.webp', 1134),  # his foot runs off the bottom of this one
-        'armed': ('sid_front_gun.webp', 1051),
-        'back': ('sid_back.webp', 1084),
-        'backGun': ('sid_back_gun.webp', 1134),
-    }
-    renders = {k: green_screen(f) for k, (f, _) in views.items()}
+    """Sid's battle sprite, from green-screen renders of his model: standing in front of you with
+    and without the Desert Eagle, and from behind. Each view is shrunk into dithered pixel art
+    like Trollge's, on one canvas. The gun comes off the armed view as a layer of its own, so it
+    can twirl round his finger, come up to aim and kick when he fires; the back views are for
+    turning round to draw it or put it away."""
+    S = 0.24
+    B = S * 0.81  # the back views were shot from closer
+    renders = {k: green_screen(f'sid_{f}.webp') for k, f in (('front', 'front'), ('armed', 'front_gun'), ('back', 'back'), ('backGun', 'back_gun'))}
+    floors = {'front': 994, 'armed': 990, 'back': 1084, 'backGun': 1134}  # his planted foot (off the bottom of back_gun)
 
-    def torso_x(rgba):  # the middle of his torso
-        a = rgba[..., 3] > 128
-        ys = np.where(a)[0]
-        y0, y1 = ys.min(), ys.max()
-        return float(np.median(np.where(a[y0 + (y1 - y0) * 3 // 10:y0 + (y1 - y0) // 2])[1]))
-
-    anchors = {k: (torso_x(renders[k]), views[k][1]) for k in views}
-
-    # ---- the gun: the steel inside a rough outline of it. Where the grip sat in his fist, the
-    # fist is filled back in with fur.
+    # ---- the gun, hanging from his right hand: the steel inside a rough outline of it. Where the
+    # grip sat in his fist, the fist is filled back in with fur.
     armed = renders['armed']
     c = armed[..., :3].astype(int)
     r, g, b = c[..., 0], c[..., 1], c[..., 2]
     near = np.zeros(armed.shape[:2], np.uint8)
-    cv2.fillPoly(near, [np.array([(762, 548), (872, 392), (902, 392), (968, 440), (968, 506), (905, 512), (800, 568), (762, 568)], np.int32)], 1)
+    cv2.fillPoly(near, [np.array([(772, 548), (826, 422), (868, 422), (878, 470), (880, 528), (842, 534), (803, 576), (772, 576)], np.int32)], 1)
     steel = (np.abs(r - g) < 26) & (np.abs(g - b) < 30) & (np.maximum(np.maximum(r, g), b) < 205) & (armed[..., 3] > 40)
     gun = cv2.morphologyEx((steel & (near > 0)).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
     _, lab, st, _ = cv2.connectedComponentsWithStats(gun)
     gun = cv2.dilate((lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
     gun &= armed[..., 3] > 0
     fist = np.zeros_like(near)
-    fur = np.argwhere((armed[400:520, 880:980, 3] > 128) & ~gun[400:520, 880:980])
-    cv2.fillPoly(fist, [cv2.convexHull(np.array([(x + 880, y + 400) for y, x in fur], np.int32))], 1)
+    fur = np.argwhere((armed[455:540, 815:890, 3] > 128) & ~gun[455:540, 815:890])
+    cv2.fillPoly(fist, [cv2.convexHull(np.array([(x + 815, y + 455) for y, x in fur], np.int32))], 1)
     hole = gun & (fist > 0)
     body = armed.copy()
     body[..., :3] = cv2.inpaint(armed[..., :3], hole.astype(np.uint8) * 255, 6, cv2.INPAINT_TELEA)
@@ -662,55 +540,61 @@ def sid_sprite():
     renders['armed'] = body
     renders['gun'] = armed.copy()
     renders['gun'][~gun, 3] = 0
-    anchors['gun'] = anchors['armed']
+    floors['gun'] = floors['armed']
 
-    # ---- shrink every layer, then lay them out on one canvas
-    layers = {}
-    for k, rgba in renders.items():
-        rgb = rgba[..., :3].copy()
-        for _ in range(2):
-            rgb = cv2.bilateralFilter(rgb, 9, 40, 9)
-        rgb = (255 * (rgb.astype(float) / 255) ** 1.15).astype(np.uint8)  # into the hallway's dimmer light
-        ys, xs = np.where(rgba[..., 3] > 20)
-        box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
-        idx = shrink(np.dstack([rgb, rgba[..., 3]]), S, box, SID)
-        layers[k] = {'img': outlined(idx, SID, SID_OUTLINE), 'box': box, 'f': idx.shape[1] / (box[2] - box[0])}
-    rel = lambda k, x, y: ((x - anchors[k][0]) * S, (y - anchors[k][1]) * S)  # from his anchor
-    left = min(rel(k, L['box'][0], 0)[0] for k, L in layers.items()) - 1
-    right = max(rel(k, L['box'][2], 0)[0] for k, L in layers.items()) + 1
-    top = min(rel(k, 0, L['box'][1])[1] for k, L in layers.items()) - 1
-    pad = 4
-    cx = int(np.ceil(-left)) + pad + 26  # room on the left for the gun to twirl
-    floor = int(np.ceil(-top)) + pad
-    at = {k: [int(round(rel(k, *L['box'][:2])[0] + cx)) - 1, int(round(rel(k, *L['box'][:2])[1] + floor)) - 1] for k, L in layers.items()}
+    anchors = {k: torso_x(renders['armed' if k == 'gun' else k]) for k in renders}
+    views = {k: (rgba, (anchors[k], floors[k]), B if k.startswith('back') else S) for k, rgba in renders.items()}
+    views['gun'] += (SID[17:23],)  # nothing but steel for the gun
+    layers, at, size, cx, floor, on = lay_out(views, SID, SID_OUTLINE, room=(8, 0))
+    save_sprites('sid', layers)
 
-    def on(k, p):  # a point in render k -> canvas pixels (+1: the outline's margin)
-        L = layers[k]
-        return [int(round(at[k][i] + 1 + (p[i] - L['box'][i]) * L['f'])) for i in (0, 1)]
-
-    os.makedirs(SPRITES, exist_ok=True)
-    for k, L in layers.items():
-        Image.fromarray(L['img']).save(os.path.join(SPRITES, f'sid_{k}.png'))
-        print(f'wrote sprites/sid_{k}.png', L['img'].shape[1], 'x', L['img'].shape[0])
-    r_eye = lambda rad: round(rad * S, 1)
+    # Aiming, the gun comes up this far round his finger (radians, clockwise on screen).
+    aim = 0.6
+    grip, muzzle = on('gun', (848, 492)), on('gun', (783, 557))
+    d = np.subtract(muzzle, grip)
+    aimed = [int(round(grip[0] + d[0] * np.cos(aim) - d[1] * np.sin(aim))), int(round(grip[1] + d[0] * np.sin(aim) + d[1] * np.cos(aim)))]
+    eye = lambda k, x, y, rad: on(k, (x, y)) + [round(rad * S, 1)]
     return {
-        'size': [cx + int(np.ceil(right)) + pad, floor + 6],
+        'size': size,
         'at': at,  # where each layer's top-left goes on the canvas
         'cx': cx,
         'floor': floor,
         # Where things are on each front view. His head sways above `neck`, and his legs fold below
         # `hips` when he drops to one knee (canvas rows).
         'face': {
-            'front': {'eyes': [on('front', (868, 81)) + [r_eye(22)], on('front', (918, 83)) + [r_eye(23)]], 'mouth': on('front', (885, 186)),
-                      'neck': on('front', (880, 238))[1], 'top': on('front', (895, 42))[1], 'hand': on('front', (1045, 610)),
-                      'chest': on('front', (960, 380)), 'hips': on('front', (950, 745))[1]},
-            'armed': {'eyes': [on('armed', (1028, 142)) + [r_eye(22)], on('armed', (1077, 141)) + [r_eye(23)]], 'mouth': on('armed', (1062, 238)),
-                      'neck': on('armed', (1060, 290))[1], 'top': on('armed', (1060, 88))[1], 'hand': on('armed', (1115, 630)),
-                      'chest': on('armed', (1110, 420)), 'hips': on('armed', (1110, 720))[1]},
+            'front': {'eyes': [eye('front', 1091, 184, 15), eye('front', 1123, 191, 16)], 'mouth': on('front', (1083, 255)),
+                      'neck': on('front', (1080, 290))[1], 'top': on('front', (1080, 164))[1], 'chest': on('front', (1063, 430)),
+                      'hips': on('front', (1063, 680))[1]},
+            'armed': {'eyes': [eye('armed', 1014, 232, 15), eye('armed', 1047, 234, 15)], 'mouth': on('armed', (1027, 300)),
+                      'neck': on('armed', (1027, 338))[1], 'top': on('armed', (1027, 207))[1], 'chest': on('armed', (1000, 460)),
+                      'hips': on('armed', (1000, 690))[1]},
         },
-        'muzzle': on('gun', (772, 548)),  # the end of the barrel
-        'grip': on('gun', (912, 470)),  # the gun twirls round his finger here
+        'grip': grip,  # the gun turns round his finger here
+        'muzzle': muzzle,  # the end of the barrel, hanging
+        'aim': aim,
+        'muzzleAimed': aimed,  # ...and aimed
     }
+
+
+# ---------------------------------------------------------------- icons
+ICONS = os.path.join(ROOT, 'assets', 'icons')
+
+
+def halted_icon():
+    """A worker who is out of the fight: SlashCo VR's red skull with the lightning bolt
+    (halted.webp, red on black). The black is see-through, so the holes in it are too."""
+    rgb = load('halted.webp')[..., ::-1].astype(float)
+    a = np.clip((rgb[..., 0] - 12) / 230, 0, 1)  # how red: the skull, its soft edge, or nothing
+    ys, xs = np.where(a > 0.05)
+    x0, y0, x1, y1 = xs.min() - 2, ys.min() - 2, xs.max() + 3, ys.max() + 3
+    col = np.array([255, 52, 25], float)  # the skull's red
+    rgba = np.dstack([np.broadcast_to(col, a.shape + (3,)), a * 255])[y0:y1, x0:x1]
+    h = 96  # twice the size it's shown at
+    w = int(round(rgba.shape[1] * h / rgba.shape[0]))
+    small = cv2.resize(rgba, (w, h), interpolation=cv2.INTER_AREA)
+    os.makedirs(ICONS, exist_ok=True)
+    Image.fromarray(small.clip(0, 255).astype(np.uint8)).save(os.path.join(ICONS, 'halted.png'))
+    print('wrote icons/halted.png', w, 'x', h)
 
 
 def uri(path):
@@ -730,6 +614,10 @@ def bundle(sprites):
     for name in sorted(os.listdir(OUT)):
         if name.endswith('.png'):
             lines.append(f"    {name[:-4]}: '{uri(os.path.join(OUT, name))}',")
+    lines += ['  };', '  SC.ICONS = {']
+    for name in sorted(os.listdir(ICONS)):
+        if name.endswith('.png'):
+            lines.append(f"    {name[:-4]}: '{uri(os.path.join(ICONS, name))}',")
     lines += ['  };', '  SC.SPRITES = {']
     for name, sp in sprites.items():
         lines.append(f'    {name}: {{')
@@ -751,8 +639,9 @@ if __name__ == '__main__':
     mysti()
     purpl()
     sid()
+    halted_icon()
     bundle({
         'sid': {'layers': {k: f'sid_{k}.png' for k in ('front', 'armed', 'gun', 'back', 'backGun')}, 'meta': sid_sprite()},
         'trollge': {'layers': {'body': 'trollge_body.png', 'head': 'trollge_head.png'}, 'meta': trollge()},
-        'dolphin': {'layers': {'body': 'dolphin_body.png', 'head': 'dolphin_head.png', 'wail': 'dolphin_wail.png', 'fetal': 'dolphin_fetal.png'}, 'meta': dolphin()},
+        'dolphin': {'layers': {k: f'dolphin_{k}.png' for k in ('body', 'back', 'fetal')}, 'meta': dolphin()},
     })

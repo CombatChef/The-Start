@@ -35,9 +35,9 @@
   ];
   // Where each slasher's sprite sits on the stage (it is drawn at 2x).
   const ENEMY_BOX = {
-    sid: { left: 450, top: 244 },
+    sid: { left: 500, top: 250 },
     trollge: { left: 390, top: 256 },
-    dolphin: { left: 482, top: 262 },
+    dolphin: { left: 536, top: 210 },
   };
   const SCALE = 2;
   // SlashCo's danger levels, colour-coded 1 (yellow) to 3 (red).
@@ -501,11 +501,11 @@
     return null;
   }
 
-  // Heart for the living, skull and crossbones when CRITICAL, a skull when dead, a ghost for
-  // Purpl Lady (who has no health at all).
+  // Heart for the living, skull and crossbones when CRITICAL, SlashCo VR's red HALTED skull when
+  // dead, a ghost for Purpl Lady (who has no health at all).
   function vitalIcon(u, hs) {
     if (u.ghost) return 'ghost';
-    if (hs === 'DEAD') return 'skull';
+    if (hs === 'DEAD') return 'halted';
     if (hs === 'CRITICAL') return 'skullBones';
     return 'heart';
   }
@@ -521,9 +521,9 @@
       const icon = vitalIcon(u, hs);
       if (c.icon !== icon) {
         c.icon = icon;
-        c.heart.innerHTML = SVG[icon];
+        c.heart.innerHTML = icon === 'halted' ? `<img src="${SC.ICONS.halted}" alt="">` : SVG[icon];
       }
-      const word = `[${hs === 'NONE' ? 'GHOST' : hs}]`;
+      const word = `[${{ NONE: 'GHOST', DEAD: 'HALTED' }[hs] || hs}]`;
       if (c.state.textContent !== word) c.state.textContent = word;
       c.state.classList.toggle('long', word.length > 9);
       const res = `${u.def.resource.short} ${Math.round(u.res)}/${u.resMax}`;
@@ -635,6 +635,7 @@
     armed: false,
     turn: null, // { start, from } while he turns round
     kickAt: -1e9,
+    aimUntil: 0,
     override: null,
     since: 0,
     until: 0,
@@ -644,8 +645,12 @@
       this.until = this.since + ms;
       this.draw(this.since, true);
     },
-    // He fires: the gun kicks up.
+    // He raises the gun to aim (for `ms`), and fires: it kicks up.
+    aim(ms) {
+      this.aimUntil = Math.max(this.aimUntil, performance.now() + ms);
+    },
     kick() {
+      this.aim(600);
       this.kickAt = performance.now();
     },
     // A new fight: no turning round for the gun he already has (or hasn't).
@@ -654,6 +659,7 @@
       this.armed = !!(s && s.flags.overflow);
       this.turn = null;
       this.override = null;
+      this.aimUntil = 0;
     },
     draw(now, force) {
       const b = UI.battle;
@@ -686,9 +692,11 @@
       const pose = this.override && now < this.until ? this.override : null;
       const k = pose ? (now - this.since) / Math.max(1, this.until - this.since) : 0;
       let gun = 0;
-      // The Desert Eagle: twice round his finger and slowing down, swung up for a whip, kicking.
+      // The Desert Eagle: twice round his finger and slowing down, swung up for a whip, raised to
+      // aim, kicking when it fires.
       if (pose === 'twirl') gun = Math.PI * 4 * (1 - (1 - k) * (1 - k));
       else if (pose === 'whip') gun = Math.sin(k * Math.PI) * 1.4;
+      else if (now < this.aimUntil) gun = SC.SPRITES.sid.aim;
       const kicked = now - this.kickAt;
       if (kicked < 140) gun += 0.45 * (1 - kicked / 140);
       SC.Art.sid({
@@ -729,15 +737,18 @@
     },
   };
 
-  // Dolphin Man moves like Trollge (the head bobs on its neck) but jerkier. He screams with
-  // his mouth hanging open, and curls up on the floor in Fetal Position (and when he's down).
+  // Dolphin Man moves like Trollge (the head bobs on its neck) but jerkier. He screams with his
+  // beak hanging open, spins round to show his back and tail for the Tail Whip, and curls up in
+  // Fetal Position (and when he's down).
   const DolphinView = {
     override: null,
+    since: 0,
     until: 0,
     set(pose, ms) {
       this.override = pose;
-      this.until = performance.now() + ms;
-      this.draw(performance.now(), true);
+      this.since = performance.now();
+      this.until = this.since + ms;
+      this.draw(this.since, true);
     },
     draw(now, force) {
       const b = UI.battle;
@@ -746,6 +757,9 @@
       if (s && s.status.stunned) pose = 'down';
       else if (s && s.status.fetal) pose = 'fetal';
       if (this.override && now < this.until) pose = this.override;
+      // In step with the spin: his back shows while he's turned round (see SidView).
+      const k = (now - this.since) / 420;
+      if (pose === 'whip' && k >= 2 / 6 && k < 5 / 6) pose = 'back';
       const eyes = s && s.flags.overflow ? 'sharp' : 'milky';
       SC.Art.dolphin({ t: now, pose, eyes }).toCanvas(enemyCanvas);
       if (force) enemyCanvas.dataset.pose = pose;
@@ -984,6 +998,7 @@
           return T(260);
         }
         if (e.kind === 'magdump') {
+          SidView.aim(1500);
           sfx('rack');
           return T(160);
         }

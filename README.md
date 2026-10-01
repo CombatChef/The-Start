@@ -41,9 +41,9 @@ rather than a bar.
 - **The profiles** (bottom): each worker's `[NAME]`, portrait, a heart in their health colour with the word under
   it, their STAMINA, and their statuses in brackets (`[SEEN]`, `[HUNTED]`, `[GUARD]`, `[CARRYING MEL]`…).
 
-  | `[OVERSATED]` `[SATED]` | `[OK]` | `[STABLE]` | `[SCATHED]` | `[HURT]` | `[CRITICAL]` | `[DEAD]` | `[GHOST]` |
+  | `[OVERSATED]` `[SATED]` | `[OK]` | `[STABLE]` | `[SCATHED]` | `[HURT]` | `[CRITICAL]` | `[HALTED]` | `[GHOST]` |
   | --- | --- | --- | --- | --- | --- | --- | --- |
-  | cyan heart | bright green | pale green | cream | amber | orange skull and crossbones | grey skull | Purpl Lady's violet ghost |
+  | cyan heart | bright green | pale green | cream | amber | orange skull and crossbones | SlashCo VR's red skull | Purpl Lady's violet ghost |
 
   OK, STABLE, SCATHED and CRITICAL use the colours from the game's own HUD; the rest are filled in between. When
   John is awake, his *Hyperceptive* puts a red flag (STARE, SCRATCH, TARGET, ALL) on whoever the slasher goes for
@@ -293,18 +293,19 @@ means not hitting him while he's curled up.
   Lady's hair). In the game the edges fade into a dark backdrop, the picture turns red when they're CRITICAL, and
   effects go on top: sweat, blood, cracks, Zzz. Mel's no-glasses face (after *Toss Glasses*) and John's sleeping
   face (*Nap*) are edited versions.
-- **Sid** is made from green-screen renders of his model, from the front and the back, with and without the Desert
-  Eagle, each shrunk into dithered pixel art like Trollge. His head sways, his googly eyes rattle round, and the gun
-  is a layer of its own: it twirls round his finger (*Desert Eagle*), kicks when he fires, and swings up for a
-  pistol-whip. At 80 ANGER he turns his back to draw it, and turns round again to put it away. He munches his
-  cookie, shakes his head as he rambles, and drops to one knee, dizzy, when he's weakened.
+- **Sid** is made from green-screen renders of his model, standing in front of you with and without the Desert
+  Eagle and seen from behind, each shrunk into dithered pixel art like Trollge. His head sways, his googly eyes
+  rattle round, and the gun is a layer of its own: it hangs at his side, twirls round his finger (*Desert Eagle*),
+  comes up to aim and kicks when he fires, and swings up for a pistol-whip. At 80 ANGER he turns his back to draw
+  it, and turns round again to put it away. He munches his cookie, shakes his head as he rambles, and drops to one
+  knee, dizzy, when he's weakened.
 - **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head
   wobbles on its skinny body". It freezes when it stares, its eyes glow red once it's a Fast Runner, and it folds
   up when weakened.
-- **Dolphin Man** is made the same way from his two renders: his head bobs and twitches on his neck like
-  Trollge's, his mouth hangs open while he wails, he spins round for the Tail Whip, his eyes clear up at 80 ANGER,
-  and in Fetal Position (and when he's weakened) he's curled up on the floor. His legs and the curled-up pose are
-  drawn to match the renders, which don't show them.
+- **Dolphin Man** is made the same way from green-screen renders of his model, front and back: his head bobs and
+  twitches on his neck like Trollge's, his beak gapes open while he wails, he spins round to show his back, fin
+  and tail for the Tail Whip, and his eyes clear up at 80 ANGER. In Fetal Position (and when he's weakened) he
+  crouches down small, his head pulled into his shoulders: the front view, folded.
 - **The hallway** is drawn in code (`js/art.js`) as dithered pixel art at 2x.
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.

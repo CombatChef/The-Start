@@ -47,7 +47,7 @@
   --hp-scathed: #e6e7c2;
   --hp-hurt: #f0a04b;
   --hp-critical: #ff6b3d;
-  --hp-dead: #8c8c8c;
+  --hp-dead: #ff3419; /* HALTED: the red of SlashCo VR's skull */
   --hp-none: #b58cff;
   /* SlashCo's danger levels: 1 yellow, 2 orange, 3 red */
   --danger-1: #f2c12e;
@@ -789,6 +789,12 @@ button:focus-visible {
   height: 100%;
   display: block;
   fill: currentColor;
+}
+.profile .heart img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 .profile .state {
   font-size: 20px;

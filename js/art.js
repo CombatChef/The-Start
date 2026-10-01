@@ -330,10 +330,10 @@
     });
   }
 
-  // How a front view is bent this frame, as canvas rows: his head (above F.neck) slid sideways,
-  // more the higher it is, and moved up or down by `dy`; down on one knee, everything above his
-  // hips sinks by `drop` and his legs fold into the space left.
-  function sidBend(S, F, amp, dy, drop) {
+  // How a standing view is bent this frame, as canvas rows: the head (above F.neck) slid
+  // sideways, more the higher it is, and moved up or down by `dy`; down on one knee (Sid),
+  // everything above the hips sinks by `drop` and the legs fold into the space left.
+  function neckBend(S, F, amp, dy, drop) {
     const span = Math.max(1, F.neck - F.top);
     const floor = S.floor;
     return {
@@ -438,7 +438,7 @@
       amp = 3 + Math.sin(t / 800) * 0.7;
       dy = 1;
     }
-    const bend = sidBend(S, F, amp, dy, o.down ? 13 : 0);
+    const bend = neckBend(S, F, amp, dy, o.down ? 13 : 0);
     blitBent(px, L[view], S.at[view][0], S.at[view][1], bend);
     if (view === 'armed') {
       const [gx, gy] = S.at.gun;
@@ -461,7 +461,7 @@
       w: S.size[0],
       h: S.size[1],
       cx: S.cx,
-      muzzle: S.muzzle,
+      muzzle: S.muzzleAimed, // he aims before he fires
       mouth: F.mouth,
       head: [F.mouth[0], F.mouth[1] - 12],
       body: F.chest,
@@ -534,14 +534,17 @@
   }
 
   // ------------------------------------------------------------------ Dolphin Man
-  // Also made by tools/make_images.py, from his render: a body, a head that bobs on its neck
-  // the way Trollge's does (but twitchier), the open-mouthed head of his Loud Wail, and the
-  // whole of him curled up on the floor in Fetal Position.
+  // Made by tools/make_images.py from green-screen renders of his model, like Sid: him standing,
+  // his back (the dorsal fin and tail, while he spins round for the Tail Whip), and Fetal
+  // Position, folded down into a crouch. His head bobs on his neck the way Trollge's does (but
+  // twitchier), and his beak gapes open while he wails.
   const DOLPH_EYES = {
     milky: [hex('#8f9ba2'), hex('#4d5960')], // "eyesight will begin extremely bad"
     sharp: [hex('#ffffff'), hex('#cfeeff')], // Eyes of the Angry
     dim: [hex('#3e474d'), hex('#20262a')],
   };
+  const MAW = R(['#1a0306', '#3a0a0e', '#6e1419', '#a3272c']);
+  const BEAK = R(['#272e3b', '#586274', '#8e97a7']);
 
   // Copy a layer, sliding each row sideways by shift(row) pixels.
   function blitRows(px, src, x0, y0, shift) {
@@ -554,54 +557,71 @@
     }
   }
 
-  // o: { t (ms), pose: 'idle' | 'lunge' | 'whip' | 'wail' | 'fetal' | 'twitch' | 'down', eyes: 'milky' | 'sharp' | 'dim' }
+  // His beak hanging wide open from under his eyes: the dark red of his throat, teeth along the
+  // top, and the lower jaw dropped and shaking under it. (x, y) is the tip of his beak.
+  function dolphinMaw(px, x, y, t) {
+    const drop = 7 + Math.round(Math.sin(t / 70) * 1.2);
+    const cx = x + 0.5;
+    const top = y - 9;
+    const bottom = y + drop;
+    const ry = (bottom - top) / 2;
+    px.ellipse(cx, top + ry, 6.2, ry + 0.5, BEAK[0]);
+    px.ellipse(cx, top + ry, 5.2, ry - 0.5, (xx, yy, nx, ny) => ramp(MAW, 0.8 - ny * 0.5 - Math.abs(nx) * 0.35, xx, yy));
+    for (let i = -4; i <= 4; i += 2) px.set(x + i, top + 1 + (Math.abs(i) > 3 ? 1 : 0), hex('#e8e4dc')); // teeth
+    px.ellipse(cx, bottom + 1, 5.6, 2.2, (xx, yy, nx, ny) => ramp(BEAK, 0.75 - ny * 0.45 - nx * 0.2, xx, yy)); // lower jaw
+    for (let i = -3; i <= 3; i += 2) px.set(x + i, bottom - 1, hex('#d8d4cc')); // lower teeth
+  }
+
+  // o: { t (ms), pose: 'idle' | 'lunge' | 'whip' | 'back' | 'wail' | 'fetal' | 'twitch' | 'down', eyes: 'milky' | 'sharp' | 'dim' }
   function dolphin(o) {
     const S = SC.SPRITES.dolphin;
     const L = spritePix.dolphin;
     const px = new Pix(S.size[0], S.size[1]);
+    if (!L) return px;
     const t = o.t || 0;
     const pose = o.pose || 'idle';
 
     if (pose === 'fetal' || pose === 'twitch' || pose === 'down') {
-      // Curled up on the floor, rocking. He flinches at every sound ('twitch').
+      // Curled up, rocking. He flinches at every sound ('twitch').
       const f = L.fetal;
       let amp = Math.sin(t / 520) * 1.2;
       if (pose === 'twitch') amp = Math.sin(t / 40) * 2.5;
       else if (pose === 'down') amp = Math.sin(t / 1100) * 0.7;
-      blitRows(px, f, S.fetalAt[0], S.fetalAt[1], (y) => amp * (1 - y / f.h));
+      blitRows(px, f, S.at.fetal[0], S.at.fetal[1], (y) => amp * (1 - y / f.h));
+      return px;
+    }
+    if (pose === 'back') {
+      // Spun round: his back, the fin and the tail.
+      px.blit(L.back, S.at.back[0], S.at.back[1]);
       return px;
     }
 
-    // Standing. The body breathes (a pixel up and down); the head sways on the neck and
-    // every few seconds jerks sideways, like something listening.
-    const lift = Math.sin(t / 760) > 0.3 ? 1 : 0;
+    // Standing. He breathes (his head lifts a pixel), and his head sways on his neck and every
+    // few seconds jerks sideways, like something listening.
     let amp = Math.sin(t / 470) * 2.2;
     const beat = (t % 2900) / 2900;
     if (beat < 0.05) amp += 5 * Math.sin(beat * 20 * Math.PI);
-    let dy = -lift;
+    let dy = Math.sin(t / 760) > 0.3 ? -1 : 0;
     if (pose === 'lunge') amp = 5;
     else if (pose === 'whip') amp = -6;
     else if (pose === 'wail') {
       amp = Math.sin(t / 35) * 1.5; // shaking with the scream
-      dy += Math.round(Math.sin(t / 60));
+      dy = Math.round(Math.sin(t / 60)) - 1;
     }
-    px.blit(L.body, S.bodyAt[0], S.bodyAt[1] - lift);
-    const pvy = S.pivot[1];
-    const head = pose === 'wail' ? L.wail : L.head;
-    const [hx, hy] = pose === 'wail' ? S.wailAt : S.headAt;
-    const span = Math.max(1, pvy - hy);
-    const shift = (row) => amp * clamp01((pvy - (hy + row)) / span);
-    blitRows(px, head, hx, hy + dy, shift);
-    if (pose === 'wail') return px; // the open-mouthed head has its own eyes
+    const bend = neckBend(S, S, amp, dy, 0);
+    blitBent(px, L.body, S.at.body[0], S.at.body[1], bend);
+    if (pose === 'wail') {
+      const [mx, my] = bend.point(S.mouth[0], S.mouth[1]);
+      dolphinMaw(px, mx, my, t);
+    }
     // His eyes: milky and dull, or glowing once his ANGER sharpens them.
-    const [c0, c1] = DOLPH_EYES[o.eyes] || DOLPH_EYES.milky;
+    const [c0, c1] = DOLPH_EYES[pose === 'wail' ? 'sharp' : o.eyes] || DOLPH_EYES.milky;
     for (const [ex, ey] of S.eyes) {
-      const x = hx + ex + Math.round(shift(ey));
-      const y = hy + ey + dy;
-      px.rect(x, y, 2, 2, c0);
-      if (o.eyes === 'sharp') {
-        px.set(x - 1, y, c1);
-        px.set(x + 2, y + 1, c1);
+      const [x, y] = bend.point(ex, ey);
+      px.rect(x - 1, y, 3, 1, c0);
+      if (o.eyes === 'sharp' || pose === 'wail') {
+        px.set(x - 2, y, c1);
+        px.set(x + 2, y, c1);
       }
     }
     return px;
@@ -609,8 +629,8 @@
 
   function dolphinPoints() {
     const S = SC.SPRITES.dolphin;
-    const face = [S.headAt[0] + 12, S.headAt[1] + 16];
-    return { w: S.size[0], h: S.size[1], head: face, mouth: S.mouth, body: S.chest, feet: S.feet, clawL: S.handL, clawR: S.handR, muzzle: S.mouth, curled: S.fetalFace };
+    const face = [Math.round((S.eyes[0][0] + S.eyes[1][0]) / 2), S.eyes[0][1] + 6];
+    return { w: S.size[0], h: S.size[1], head: face, mouth: S.mouth, body: S.chest, feet: [S.cx, S.floor], clawL: S.handL, clawR: S.handR, muzzle: S.mouth, tail: S.tail, curled: S.fetalFace };
   }
 
   // ------------------------------------------------------------------ icons

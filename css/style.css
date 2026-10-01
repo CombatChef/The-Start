@@ -119,12 +119,18 @@ button:focus-visible {
 }
 
 /* ------------------------------------------------------------------ scene */
+/* Where the fight is: a screenshot from SlashCo VR, shown as it is (not pixelated). js/ui.js
+   sets the picture and which part of it shows (data.js places). */
 #bg {
   position: absolute;
   left: 0;
   top: 0;
   width: 1280px;
   height: 960px;
+  background-color: #000;
+  background-repeat: no-repeat;
+  background-size: cover;
+  image-rendering: auto;
 }
 #flicker {
   position: absolute;
@@ -203,7 +209,7 @@ button:focus-visible {
   }
 }
 
-/* The slasher sprite, drawn at 2x with its feet on the hallway floor. js/ui.js (ENEMY_BOX)
+/* The slasher sprite, drawn at 2x with its feet on the floor. js/ui.js (ENEMY_BOX)
    places and sizes it for the slasher being fought. */
 #enemy-wrap {
   position: absolute;
@@ -283,7 +289,7 @@ button:focus-visible {
     scale: -1 1;
   }
 }
-/* Static Stare: the hallway goes dark around it. */
+/* Static Stare: the room goes dark around it. */
 #stage.staring #bg {
   filter: brightness(0.35) saturate(0.6);
   transition: filter 200ms linear;
@@ -530,7 +536,7 @@ button:focus-visible {
 #foe.hit {
   animation: card-hit 300ms steps(5) 1;
 }
-/* Out of the way while a skill check or the skills list covers the hallway. */
+/* Out of the way while a skill check or the skills list covers the room. */
 #stage.covered #foe {
   visibility: hidden;
 }
@@ -1619,6 +1625,10 @@ button:focus-visible {
 .versus .who span {
   font-size: 14px;
   color: var(--grey-1);
+}
+.versus .who .where {
+  display: block;
+  margin-top: 4px;
 }
 
 /* Help, end screen and the full log. */

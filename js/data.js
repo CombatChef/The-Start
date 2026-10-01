@@ -47,6 +47,25 @@
     enemy: 'trollge', // the default fight
     enemies: ['trollge', 'sid', 'dolphin'], // picked on the title screen
 
+    // Where the fight happens: picked on the title screen (PLACE), or at random. `image` is a
+    // screenshot from SlashCo VR, shown as it is behind the fight; `focus` is which part of it
+    // the 4:3 stage shows (0 its left edge, 100 its right), and `tone` lights the slasher's
+    // sprite to match (a CSS filter). In `dark` places everyone's HIT RATE drops by
+    // `balance.darkHit`, except whoever has Shadowborn.
+    places: {
+      hallway: { name: 'Hallway', image: 'assets/places/hallway.webp', focus: 50, dark: false },
+      cafeteria: { name: 'Cafeteria', image: 'assets/places/cafeteria.webp', focus: 45, dark: false },
+      generator: {
+        name: 'Generator Hall',
+        image: 'assets/places/generator-hall.webp',
+        focus: 0,
+        dark: true,
+        tone: 'brightness(0.82) sepia(0.25) hue-rotate(-20deg) saturate(1.25)',
+      },
+      gym: { name: 'Gym', image: 'assets/places/gym.webp', focus: 85, dark: true, tone: 'brightness(0.78) saturate(0.8)' },
+      lockers: { name: 'Locker Room', image: 'assets/places/locker-room.webp', focus: 40, dark: true, tone: 'brightness(0.72) saturate(0.7)' },
+    },
+
     // ------------------------------------------------------------------
     // WORKERS
     // ------------------------------------------------------------------
@@ -258,14 +277,14 @@
         escapeOverflow: { label: 'Trollge is running fast', value: -10 },
         secret: 'EXTRA-SECRET: Trollge only sees what moves. Whoever GUARDS holds still: its claws mostly miss them, and its stare can’t catch them.',
         lines: {
-          intro: 'A grin floats at the end of the hallway…',
+          intro: 'A grin floats out of the dark…',
           overflow: ['Trollge’s stick legs start twitching…', 'Slow Walker, Fast Runner! Trollge’s speed massively increases!'],
           overflowShort: 'FAST',
           calm: 'Trollge slows back down to a crawl.',
           barelyStanding: 'Trollge folds up on its stick legs!',
           dazed: 'Trollge’s head lolls around on its skinny neck…',
           blocksEscape: [
-            'Trollge’s stick arm reaches across the hallway and blocks the way!',
+            'Trollge’s stick arm reaches across and blocks the way!',
             'Trollge is already standing in the doorway, grinning.',
             'The door won’t budge!',
           ],
@@ -434,7 +453,7 @@
         secret:
           'EXTRA-SECRET: Dolphin Man hunts by sound. A battery going in, breaking glass, a ringing phone, Captain Jim yelling about his locker: loud things make him angrier and send him after whoever made them, camouflage or not. Everyone else guards quietly.',
         lines: {
-          intro: 'Something wet slaps against the lockers…',
+          intro: 'Something wet slaps against the wall…',
           overflow: ['Dolphin Man’s milky eyes clear up…', 'Eyes of the Angry! Dolphin Man can see everything now!'],
           overflowShort: 'SHARP EYES',
           calm: 'Dolphin Man’s eyes cloud over again.',
@@ -1135,6 +1154,7 @@
     balance: {
       variance: [0.85, 1.15],
       baseHit: 0.95,
+      darkHit: 0.15, // HIT RATE lost in a dark place (not with Shadowborn)
       evasionPerSpd: 0.0025, // per point the defender is faster than the attacker
       critBase: 0.03,
       critPerSmarts: 0.0006, // SMARTS 100 = +6% crit

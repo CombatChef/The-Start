@@ -106,6 +106,10 @@
         u.resMax = def.resource.max;
         return u;
       });
+      // Where the fight is: picked on the title screen, or at random.
+      const places = Object.keys(D.places);
+      this.place = D.places[opts.place] ? opts.place : places[Math.floor(this.rng() * places.length)];
+      this.placeDef = D.places[this.place];
       const enemyId = opts.enemy || D.enemy;
       const edef = D.slashers[enemyId];
       this.enemyDef = edef;
@@ -349,6 +353,9 @@
         if (att.has('shadowborn')) hit += this.D.passives.shadowborn.hitBonus;
         if (att.flags.glassesOff) hit -= this.D.skills.tossGlasses.hitPenalty;
       }
+      // A dark place: nobody can see well, except whoever has Shadowborn ("darkness does not affect
+      // HIT RATE").
+      if (this.placeDef.dark && !att.has('shadowborn')) hit -= this.D.balance.darkHit;
       hit += this.mod(att, 'hit');
       hit -= this.mod(def, 'eva');
       const faster = this.stat(def, 'spd') - this.stat(att, 'spd');
@@ -445,7 +452,7 @@
       if (e.status.fetal && attacker && !this.outcome) {
         if (!e.flags.echoSaid) {
           e.flags.echoSaid = true;
-          await this.say(`Every blow echoes down the hallway… ${this.en} twitches at the sound!`, { tone: 'anger' });
+          await this.say(`Every blow echoes off the walls… ${this.en} twitches at the sound!`, { tone: 'anger' });
         }
         await this.noise(attacker, this.D.skills.fetalPosition.hitNoise, { quiet: true });
       }
@@ -690,6 +697,11 @@
       const L = this.enemyDef.lines;
       if (L.intro) await this.say(L.intro, { tone: 'intro' });
       await this.say(`${this.partyNames()} are backed into a corner against ${this.en}!`, { tone: 'intro' });
+      if (this.placeDef.dark) {
+        await this.say(`It’s dark in the ${this.placeDef.name}… everyone’s HIT RATE is lower.`, { tone: 'debuff' });
+        const seers = this.party.filter((u) => u.has('shadowborn')).map((u) => u.name);
+        if (seers.length) await this.say(`${joinNames(seers)} can see in the dark (Shadowborn).`);
+      }
       for (const u of this.party) {
         const line = u.def.weapon.intro && u.def.weapon.intro[this.enemy.id];
         if (line) await this.say(line);
@@ -2009,7 +2021,7 @@
       const t = this.pickEnemyTarget((u) => !!u.status.seen) || this.pickEnemyTarget();
       if (!t) return;
       await this.fx({ type: 'enemyAttack', kind: 'lap', target: t.id });
-      await this.say(`${this.en} darts back around the hallway!`, { tone: 'danger' });
+      await this.say(`${this.en} darts back around the room!`, { tone: 'danger' });
       await this.claw(t, t.status.seen ? 'scratch' : 'claws');
       this.refresh();
     }

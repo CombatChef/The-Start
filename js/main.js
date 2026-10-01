@@ -7,7 +7,7 @@
   const SC = root.SC;
 
   async function battle() {
-    const b = new SC.Battle({ io: SC.UI.io, enemy: SC.UI.enemy, party: SC.UI.party.slice() });
+    const b = new SC.Battle({ io: SC.UI.io, enemy: SC.UI.enemy, party: SC.UI.party.slice(), place: SC.UI.place });
     SC.UI.setBattle(b);
     SC.UI.resolving(true);
     await b.start();

@@ -97,6 +97,7 @@
   const UI = {
     battle: null,
     enemy: SC.DATA.enemy, // the slasher picked on the title screen
+    place: 'random', // where the fight is: a data.js place, or 'random' (a different one each fight)
     party: SC.DATA.party.slice(), // the squad picked on the title screen
     bench: SC.DATA.bench,
     fast: false,
@@ -119,6 +120,20 @@
   const slotOf = (id) => UI.party.indexOf(id);
   const enemyId = () => (UI.battle ? UI.battle.enemy.id : UI.enemy);
   const enemyDef = () => SC.DATA.slashers[enemyId()];
+  // The place behind the fight (or, on the title screen, the one picked: the hallway for RANDOM).
+  const placeId = () => (UI.battle ? UI.battle.place : SC.DATA.places[UI.place] ? UI.place : 'hallway');
+  const placeLabel = (P) => P.name.toUpperCase() + (P.dark ? ' · DARK' : '');
+
+  // The place's screenshot, shown as it is, and the slasher lit to match it.
+  function showPlace() {
+    const id = placeId();
+    const P = SC.DATA.places[id];
+    const bg = $('#bg');
+    bg.style.backgroundImage = `url("${P.image}")`;
+    bg.style.backgroundPosition = `${P.focus}% 50%`;
+    enemyWrap.style.filter = P.tone || '';
+    stage.dataset.place = id;
+  }
   const enemyPoints = () => {
     const id = enemyId();
     if (id === 'trollge') return SC.Art.trollgePoints();
@@ -556,6 +571,7 @@
     enemyWrap.classList.toggle('chilled', !!s.status.chilled);
     enemyWrap.classList.toggle('down', !!s.status.stunned);
     $('#turn-chip').textContent = 'TURN ' + Math.max(1, b.turn);
+    $('#place-chip').textContent = placeLabel(b.placeDef);
     $('#credits-chip').textContent = b.credits + ' CR';
     const chopper = $('#chopper-chip');
     chopper.style.display = b.chopper && !b.outcome ? '' : 'none';
@@ -1878,7 +1894,8 @@
           ? "<p><b>THE HELI.</b> Captain Jim's Helicopter Escape lands after 5 turns and gets everyone out, bodies included, as long as someone who can carry a body is still alive.</p>"
           : ''
       }
-      <p><b>HEALTH</b> is a word, as in SlashCo VR: [OVERSATED], [SATED], [OK], [STABLE], [SCATHED], [HURT], [CRITICAL] (the heart turns into a skull and crossbones). STA is STAMINA, which pays for skills.</p>
+      <p><b>HEALTH</b> is a word, as in SlashCo VR: [OVERSATED], [SATED], [OK], [STABLE], [SCATHED], [HURT], [CRITICAL] (the heart turns into a skull and crossbones), and [HALTED] under SlashCo VR's red skull for a worker who is out of the fight. STA is STAMINA, which pays for skills.</p>
+      <p><b>THE PLACE.</b> Each fight is somewhere in the school: the Hallway or the Cafeteria, which are lit, or the Generator Hall, the Gym or the Locker Room, which are dark. In the dark everyone's HIT RATE is lower, the slasher's too, except for anyone with <b>Shadowborn</b> (John). Pick a place on the title screen with PLACE, or leave it on RANDOM.</p>
       <p><b>THE SQUAD.</b> On the title screen, click anyone to swap them with whoever is on the bench (Purpl Lady, to start with), or press SWAP.</p>
       <p><b>GENERATOR CHECKS.</b> Mel's <b>fuel</b> check: the arrow loses its balance and falls toward the red, faster and faster. Every tap of Q / ← or E / → (or of a side of the box) makes it jump back a little; keep it out of the red until the pour is done. John's <b>battery</b> check: the clips bounce around at random speeds; press Z / Space (or tap) when both are level with the middle of the terminals, or the generator shocks him.${
         has('purpl') ? " Purpl Lady's Moral Support slows both down." : ''
@@ -1945,6 +1962,8 @@
 
   function titleHtml() {
     const S = enemyDef();
+    const P = SC.DATA.places[UI.place];
+    const where = P ? 'IN THE ' + placeLabel(P) : 'SOMEWHERE IN THE SCHOOL (RANDOM)';
     const member = (id, bench) => {
       const d = SC.DATA.workers[id];
       return `<button class="member${bench ? ' bench' : ''}" data-id="${id}"><span data-p="${id}"></span><span class="nm">${esc(d.name.toUpperCase())}</span><span class="role">${
@@ -1959,14 +1978,20 @@
       <div class="swap-hint">Click anyone to swap them with the bench.</div>
       <div class="versus"><span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span><span class="who"><b>[${esc(S.title)}]</b><span>${esc(
         S.class
-      )} · <span style="color: var(--danger-${DANGER[S.danger] || 1})">${esc(S.danger)}</span></span></span></div>
-      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-music">MUSIC</button><button class="go" id="t-help">HOW TO PLAY</button>
+      )} · <span style="color: var(--danger-${DANGER[S.danger] || 1})">${esc(S.danger)}</span></span><span class="where">${esc(where)}</span></span></div>
+      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-place">PLACE ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-music">MUSIC</button><button class="go" id="t-help">HOW TO PLAY</button>
       <div class="keys">Z / ENTER: CONFIRM · ARROWS: MOVE · F: FAST TEXT · M: MUTE</div>
     </div>`;
   }
 
   async function title() {
     UI.phase = 'title';
+    // Back from a fight: the title screen shows what's picked now, not the last fight.
+    if (UI.battle) {
+      UI.battle = null;
+      placeEnemy();
+      showPlace();
+    }
     if (SC.Audio) {
       SC.Audio.theme('default');
       SC.Audio.music('ambience');
@@ -1976,8 +2001,8 @@
       const o = overlay('screen', 'title', titleHtml());
       o.querySelectorAll('[data-p]').forEach((s) => s.replaceWith(portraitCanvas(s.dataset.p, !!s.dataset.foe)));
       const ask = {
-        opts: ['#t-start', '#t-foe', '#t-swap', '#t-music', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
-        columns: 5,
+        opts: ['#t-start', '#t-foe', '#t-place', '#t-swap', '#t-music', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
+        columns: 6,
         back: false,
         initial: at,
         noCursor: true,
@@ -2020,11 +2045,23 @@
         continue;
       }
       if (at === 2) {
+        // Next place: RANDOM, then each one.
+        const list = ['random'].concat(Object.keys(SC.DATA.places));
+        UI.place = list[(list.indexOf(UI.place) + 1) % list.length];
+        try {
+          root.localStorage.setItem('sc-place', UI.place);
+        } catch (e) {
+          /* convenience only */
+        }
+        showPlace();
+        continue;
+      }
+      if (at === 3) {
         cycleSwap();
         continue;
       }
       closeOverlay('screen');
-      if (at === 3) await showMusic();
+      if (at === 4) await showMusic();
       else await showHelp();
     }
   }
@@ -2177,17 +2214,19 @@
     // Browsers only allow sound after a click or a key press: any one will do.
     doc.addEventListener('pointerdown', () => SC.Audio && SC.Audio.unlock(), true);
 
-    SC.Art.hallway().toCanvas($('#bg'));
     loadSquad();
     buildCards();
     buildPlate();
     try {
       const saved = root.localStorage.getItem('sc-enemy');
       if (SC.DATA.enemies.includes(saved)) UI.enemy = saved;
+      const place = root.localStorage.getItem('sc-place');
+      if (SC.DATA.places[place]) UI.place = place;
     } catch (e) {
       /* convenience only */
     }
     placeEnemy();
+    showPlace();
 
     $('#log').addEventListener('click', () => {
       Log.skip = true;
@@ -2247,6 +2286,7 @@
     UI.lastAction = {};
     buildCards();
     placeEnemy();
+    showPlace();
     // The slasher's own themes, after the sting for its danger level.
     if (SC.Audio) {
       SC.Audio.theme(b.enemy.id);

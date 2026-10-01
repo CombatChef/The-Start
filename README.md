@@ -1,8 +1,8 @@
 # SlashCo VR: Turn-Based Battle
 
 A turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki), with a black-and-white
-HUD styled after the game's own. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner in a
-locker hallway against **Trollge** [DEVASTATING]. **Purpl Lady** waits on the bench and can swap in for anyone.
+HUD styled after the game's own. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner somewhere
+in the school against **Trollge** [DEVASTATING]. **Purpl Lady** waits on the bench and can swap in for anyone.
 Switch slashers on the title screen: **Sid** [CONSIDERABLE] and **Dolphin Man** [CONSIDERABLE] are the other two
 fights. Every stat, skill, passive, weapon and item comes from the *Slasher Statistics* doc.
 
@@ -22,11 +22,28 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 | Battery check | Space, Z, Enter | Tap |
 | Swap the squad | SWAP ▸ on the title screen | Click a portrait on the title screen |
 | Change slasher | SLASHER ▸ on the title screen | |
+| Change place | PLACE ▸ on the title screen | |
 | Your own music | MUSIC on the title screen | |
 | Battle log | L | LOG button |
 | Fast text | F | FAST button |
 | Sound | M | SOUND button |
 | How to play | H | Title screen |
+
+## Places
+
+Every fight happens somewhere in the school. PLACE ▸ on the title screen picks one, or RANDOM (the default) picks a
+different one each fight. The place's name is in SLASHERBOY's title bar.
+
+| Place | Light | Effect |
+| --- | --- | --- |
+| Hallway | Lit | None |
+| Cafeteria | Lit | None |
+| Generator Hall | Dark (a red beacon) | Everyone's HIT RATE −15% |
+| Gym | Dark | Everyone's HIT RATE −15% |
+| Locker Room | Pitch dark | Everyone's HIT RATE −15% |
+
+"Everyone" means the slasher too. Only *Shadowborn* (John: "darkness does not affect HIT RATE") sees in the dark, so
+he loses nothing. The penalty is `balance.darkHit` in `data.js`, and the places are `places` there.
 
 ## The HUD
 
@@ -34,7 +51,7 @@ It follows SlashCo VR's own HUD: white text in square brackets, and health shown
 rather than a bar.
 
 - **SLASHERBOY** (top), the computer in SlashCo's monitor room, prints the battle log. Its title bar shows the turn,
-  your CREDITS and the heli's ETA.
+  your CREDITS, where the fight is (with DARK if it's dark) and the heli's ETA.
 - **The slasher** (left): `[TROLLGE]`, its class and danger level (MODERATE yellow, CONSIDERABLE orange,
   DEVASTATING red), its condition (its doc health, such as `[GOOD]` or `[OK]`, down to `[WEAKENED]`) and its
   ANGER, which turns orange and then red as it nears 80.
@@ -196,7 +213,7 @@ metal clanks and rings, relays click. Every attack sounds like what it is:
 
 Dolphin Man's Loud Wail is modelled on his sound in SlashCo VR gameplay footage: a shrill band of noise around
 3.2 kHz that buzzes about 50 times a second and swells again and again, over a hoarse, wobbling scream. If a music
-file can't play, a synthesized hallway drone and chase stand in.
+file can't play, a synthesized drone and chase stand in.
 
 **M** mutes everything.
 
@@ -306,7 +323,8 @@ means not hitting him while he's curled up.
   twitches on his neck like Trollge's, his beak gapes open while he wails, he spins round to show his back, fin
   and tail for the Tail Whip, and his eyes clear up at 80 ANGER. In Fetal Position (and when he's weakened) he
   crouches down small, his head pulled into his shoulders: the front view, folded.
-- **The hallway** is drawn in code (`js/art.js`) as dithered pixel art at 2x.
+- **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). In the dark
+  ones the slasher's sprite is dimmed to match (`tone` in `data.js` `places`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless
@@ -321,14 +339,14 @@ js/data.js            all stats, skills, items and tuning  ← edit this
 js/battle.js          the turn engine (no DOM; also runs in Node)
 js/checks.js          the generator checks' rules (no DOM)
 js/ui.js              HUD, menus, targeting, animations, generator checks, title screen and squad
-js/art.js, pixel.js   hallway, Sid, Trollge and Dolphin Man's moving sprites, portrait cards
+js/art.js, pixel.js   Sid, Trollge and Dolphin Man's moving sprites, portrait cards
 js/images.js          portraits and sprites (generated)
 js/audio.js           the music (soundtrack, or your own files) and the synthesized sound effects
 js/main.js            title → battle → end loop
 tests/simulate.js     headless balance and crash test
 tools/make_images.py  builds the portraits and sprites
-assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), the soundtrack (audio/), portraits, sprites,
-                      source images
+assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), the soundtrack (audio/), the places (places/),
+                      portraits, sprites, icons, source images
 ```
 
 SlashCo VR is by Mantibro. This is a fan project.

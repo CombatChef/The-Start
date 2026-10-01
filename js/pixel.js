@@ -2,10 +2,10 @@
  * SLASHCO VR — TURN-BASED BATTLE
  * pixel.js — a tiny software rasterizer for the pixel art.
  *
- * Everything is drawn pixel by pixel into small buffers (64x64 portraits, a 320x240
- * hallway, a 104x120 Sid) with no anti-aliasing, then shaded with ordered (Bayer)
- * dithering between palette colors. The browser scales the result up with
- * `image-rendering: pixelated`, which keeps every pixel crisp.
+ * Everything is drawn pixel by pixel into small buffers (128x128 portrait cards, the slashers'
+ * sprites) with no anti-aliasing, then shaded with ordered (Bayer) dithering between palette
+ * colors. The browser scales the result up with `image-rendering: pixelated`, which keeps every
+ * pixel crisp.
  */
 (function (root) {
   'use strict';

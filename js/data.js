@@ -1068,6 +1068,8 @@
       stings: { MODERATE: 'moderate.mp3', CONSIDERABLE: 'considerable.mp3', DEVASTATING: 'devastating.mp3' },
       // When the fight ends.
       endings: { win: 'escape.mp3', lose: 'death.mp3' },
+      // A slasher's own sounds in a fight. The battle theme waits for these too.
+      cues: { hunting: 'dolphin-man-hunting.mp3' }, // Dolphin Man starts HUNTING someone
       // `volume` evens the tracks out (measured: they're mastered at very different levels), and
       // `end` is where a one-off track's sound stops (seconds; the rest of the file is silence).
       files: {
@@ -1080,6 +1082,7 @@
         'devastating.mp3': { volume: 1, end: 15.2 },
         'escape.mp3': { volume: 1, end: 16.7 },
         'death.mp3': { volume: 1, end: 14.7 },
+        'dolphin-man-hunting.mp3': { volume: 0.3, end: 8.7 },
       },
     },
 

@@ -1,7 +1,8 @@
 /*
  * SLASHCO VR — TURN-BASED BATTLE
- * art.js — everything drawn in code: the locker hallway, Sid, Trollge's moving head, the effect
- * icons, and the portrait cards (backdrop + portrait + status effects).
+ * art.js — everything drawn in code: the locker hallway, the slashers' sprites moving (Sid's
+ * googly eyes and gun, Trollge's and Dolphin Man's heads), the effect icons, and the portrait
+ * cards (backdrop + portrait + status effects).
  *
  * Coordinates are in art pixels; the page shows them at 2x (the hallway is 640x480
  * art pixels on a 1280x960 stage).
@@ -295,18 +296,13 @@
   }
 
   // ------------------------------------------------------------------ Sid
-  // A big man in a filthy, blood-stained blue Cookie Monster bodysuit, drawn to the
-  // proportions of assets/source/sid_reference.png: a small costume head with googly eyes,
-  // broad shoulders, a long torso, and a wide stance.
-  const SID_W = 224;
-  const SID_H = 210;
-  const FUR = R(['#020409', '#060c1a', '#0b152d', '#111f42', '#192c58', '#223a6e', '#2d4984', '#3c5b9a', '#4f70ae']);
-  const STAIN = R(['#0d0304', '#1f0707', '#330d0b', '#4a1712', '#5c2217']);
-  const EYE = R(['#6f6f63', '#a9a99b', '#d8d8cb', '#f5f5ec']);
-  const MOUTH = R(['#030204', '#0e070b', '#1d0e15', '#361b22']);
-  const GUN = R(['#0b0c0e', '#26292d', '#474c52', '#747a82', '#b0b7be']);
+  // Made by tools/make_images.py from green-screen renders of his model: the front and back of
+  // him, with and without the Desert Eagle, each a layer on one canvas (SC.SPRITES.sid). His
+  // head sways on his neck, his googly eyes are drawn every frame so the pupils can rattle
+  // round, and the gun is a layer of its own: it twirls round his finger, kicks when he fires
+  // and swings up when he pistol-whips. He turns his back to draw it or put it away.
   const COOKIE = R(['#2a1606', '#5a3410', '#8a5620', '#b98038']);
-  const OUTLINE = hex('#020309');
+  const GOOGLY = { white: hex('#f4f8fa'), shade: hex('#b4bec8'), pupil: hex('#0a0a0c'), vein: hex('#c4161f') };
 
   // Smooth value noise (bilinear between hashed grid points), for organic shapes.
   function vnoise(x, y, scale, seed) {
@@ -325,85 +321,6 @@
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   }
 
-  // Fur shading: `light` in 0..1 from the shape's lighting, plus strands and grime.
-  function fur(x, y, light, seed) {
-    const strand = noise(x, Math.floor(y / 3) + ((x * 7) % 3), seed) - 0.5;
-    const clump = vnoise(x, y, 5, seed + 1) - 0.5;
-    const grime = vnoise(x, y, 14, seed + 2) - 0.5;
-    return clamp01(light * 0.86 + strand * 0.2 + clump * 0.2 + grime * 0.16);
-  }
-
-  // Dried blood: organic splotches with a few drips running down from them.
-  function stained(x, y, amount) {
-    const v = vnoise(x, y, 9, 77) * 0.7 + vnoise(x, y, 3.5, 78) * 0.3;
-    if (v > 1 - amount) return true;
-    // Drips: thin vertical runs under a splotch.
-    if (noise(x, 0, 79) > 0.86) {
-      for (let k = 1; k < 12; k++) {
-        const above = vnoise(x, y - k, 9, 77) * 0.7 + vnoise(x, y - k, 3.5, 78) * 0.3;
-        if (above > 1 - amount) return k < 4 + noise(x, 1, 80) * 8;
-      }
-    }
-    return false;
-  }
-
-  function limb(px, x0, y0, x1, y1, r0, r1, seed, shadeMul) {
-    px.stroke(x0, y0, x1, y1, r0, r1, (x, y, nx) => {
-      // Cylinder lighting across the limb, light from the left.
-      const l = clamp01(0.62 - nx * 0.42) * (shadeMul || 1);
-      if (noise(x, y, seed + 9) > 0.93 && Math.abs(nx) > 0.7) return null; // ragged fur edge
-      return ramp(FUR, fur(x, y, l, seed), x, y);
-    });
-  }
-
-  function blob(px, cx, cy, rx, ry, seed, opts) {
-    opts = opts || {};
-    const lx = opts.lx == null ? -0.5 : opts.lx;
-    const ly = opts.ly == null ? -0.55 : opts.ly;
-    px.ellipse(cx, cy, rx + 1.5, ry + 1.5, (x, y, nx, ny) => {
-      // Furry, ragged silhouette: jitter the edge.
-      const edge = nx * nx + ny * ny;
-      const jag = (noise(x, y, seed + 4) - 0.5) * 0.22;
-      if (edge > 0.86 + jag) return null;
-      let l = SC.Pixel.sphere(nx * 0.95, ny * 0.95, lx, ly);
-      l = 0.12 + l * 0.85;
-      if (opts.stain && stained(x, y, opts.stain)) return ramp(STAIN, l * 0.9, x, y);
-      return ramp(FUR, fur(x, y, l * (opts.mul || 1), seed), x, y);
-    });
-  }
-
-  function drawGun(px, hx, hy) {
-    // Desert Eagle, side view, pointing right from the hand at (hx, hy): a long boxy
-    // slide, a chunky grip going down through the fist, a small trigger guard.
-    const slide = [
-      [hx - 4, hy - 10],
-      [hx + 34, hy - 10],
-      [hx + 35, hy - 9],
-      [hx + 35, hy - 2],
-      [hx - 4, hy - 2],
-    ];
-    px.poly(slide, (x, y, nx, ny) => {
-      let l = 0.62 - ny * 0.28;
-      if (y === hy - 10) l += 0.3; // top edge catches the light
-      if (x > hx + 8 && x < hx + 30 && y === hy - 6) l -= 0.3; // slide groove
-      return ramp(GUN, l, x, y);
-    });
-    px.rect(hx - 4, hy - 2, 14, 3, (x, y) => ramp(GUN, 0.35, x, y)); // frame under the slide
-    px.poly(
-      [
-        [hx - 3, hy],
-        [hx + 7, hy],
-        [hx + 4, hy + 14],
-        [hx - 6, hy + 13],
-      ],
-      (x, y, nx) => ramp(GUN, 0.22 - nx * 0.08 + (noise(x, y, 70) > 0.8 ? 0.12 : 0), x, y)
-    );
-    px.rect(hx + 7, hy + 1, 5, 1, GUN[1]); // trigger guard
-    px.rect(hx + 11, hy + 1, 1, 4, GUN[1]);
-    px.rect(hx + 7, hy + 4, 5, 1, GUN[1]);
-    px.rect(hx + 33, hy - 8, 2, 4, GUN[0]); // muzzle
-  }
-
   function drawCookie(px, cx, cy, r) {
     r = r || 8;
     px.ellipse(cx, cy, r, r, (x, y, nx, ny) => {
@@ -413,150 +330,144 @@
     });
   }
 
-  function mitten(px, x, y, rx, ry, light, seed) {
-    px.ellipse(x, y, rx, ry, (xx, yy, nx, ny) => ramp(FUR, fur(xx, yy, light - nx * 0.2 - ny * 0.15, seed), xx, yy));
-  }
-
-  // pose: 'idle' | 'gun' | 'cookie' | 'down'
-  function sidBody(pose, breathe) {
-    const px = new Pix(SID_W, SID_H);
-    const cx = 101;
-    const down = pose === 'down';
-    const drop = down ? 22 : 0; // the whole body sinks when he's down on one knee
-    const top = drop + (breathe ? 1 : 0); // breathing lifts only the upper body
-    const T = (y) => y + top;
-
-    // Shadow on the floor.
-    px.ellipse(cx, 204, 66, 5.5, (x, y, nx, ny) => (0.6 - (nx * nx + ny * ny) * 0.55 > bayer(x, y) ? [0, 0, 0, 150] : null));
-
-    // ---- Legs: a wide, planted stance, or down on one knee.
-    const foot = (x, y, light, seed) => mitten(px, x, y, 13, 5.5, light, seed);
-    if (!down) {
-      limb(px, cx - 14, 134, cx - 25, 170, 12.5, 10, 11);
-      limb(px, cx - 25, 170, cx - 31, 198, 10, 8, 11);
-      limb(px, cx + 14, 134, cx + 27, 170, 12.5, 10, 12, 0.85);
-      limb(px, cx + 27, 170, cx + 33, 198, 10, 8, 12, 0.85);
-      foot(cx - 35, 202, 0.42, 13);
-      foot(cx + 37, 202, 0.32, 14);
-    } else {
-      limb(px, cx - 14, 134 + drop, cx - 27, 194, 12.5, 10, 11); // knee on the floor
-      limb(px, cx - 27, 194, cx - 10, 200, 9.5, 8, 11);
-      limb(px, cx + 14, 134 + drop, cx + 32, 174, 12.5, 10, 12, 0.85); // other foot planted
-      limb(px, cx + 32, 174, cx + 34, 198, 10, 8, 12, 0.85);
-      foot(cx + 38, 202, 0.32, 14);
-    }
-
-    // ---- Torso: broad shoulders, a thick chest and belly, narrower hips.
-    const torso = [
-      [cx - 12, T(38)],
-      [cx + 12, T(38)],
-      [cx + 30, T(44)],
-      [cx + 38, T(53)],
-      [cx + 36, T(72)],
-      [cx + 31, T(94)],
-      [cx + 27, T(114)],
-      [cx + 29, T(130)],
-      [cx + 20, 143 + drop],
-      [cx, 147 + drop],
-      [cx - 20, 143 + drop],
-      [cx - 29, T(130)],
-      [cx - 27, T(114)],
-      [cx - 31, T(94)],
-      [cx - 36, T(72)],
-      [cx - 38, T(53)],
-      [cx - 30, T(44)],
-    ];
-    px.poly(torso, (x, y, nx, ny) => {
-      const round = 1 - nx * nx;
-      let l = 0.24 + 0.5 * round - nx * 0.26 - Math.max(0, ny) * 0.1;
-      if (ny < -0.82) l += 0.1; // shoulders catch the ceiling light
-      if (ny > -0.42 && ny < -0.3 && Math.abs(nx) < 0.6) l -= 0.12; // shadow under the chest
-      if (ny > 0.62 && Math.abs(nx) < 0.12) l -= 0.1; // crotch seam
-      if (stained(x, y, 0.3)) return ramp(STAIN, clamp01(l * 1.05), x, y);
-      return ramp(FUR, fur(x, y, clamp01(l), 32), x, y);
-    });
-    blob(px, cx - 33, T(55), 11, 11, 35, { stain: 0.22 });
-    blob(px, cx + 33, T(55), 11, 11, 36, { stain: 0.22, mul: 0.85 });
-
-    // ---- Head: a small costume head on a thick furry neck.
-    const hx = cx + (down ? -8 : 1);
-    const hy = 22 + top + (down ? 10 : 0);
-    limb(px, cx, T(42), hx, hy + 8, 10.5, 10, 50);
-    blob(px, hx, hy, 18, 14.5, 51, { ly: -0.75 });
-    const open = pose === 'cookie' ? 1.2 : down ? 0.7 : 1;
-    px.ellipse(hx + 1, hy + 5, 12, 4.8 * open, (x, y, nx, ny) => (ny > 0.45 ? ramp(MOUTH, 0.7, x, y) : ramp(MOUTH, 0.05 + (ny + 1) * 0.18, x, y)));
-    px.ellipse(hx + 1, hy + 5 + 4.3 * open, 9.5, 1.6, (x, y, nx) => ramp(FUR, fur(x, y, 0.55 - nx * 0.2, 52), x, y));
-    for (let i = 0; i < 7; i++) {
-      px.set(hx - 10 + Math.floor(noise(i, 1, 57) * 22), hy + 8 + Math.floor(noise(i, 2, 57) * 4), COOKIE[1 + (i % 2)]);
-    }
-
-    // ---- Arms.
-    const arm = (sx, sy, ex, ey, hx2, hy2, seed, mul, hand) => {
-      limb(px, sx, sy, ex, ey, 9.5, 8.5, seed, mul);
-      limb(px, ex, ey, hx2, hy2, 8.5, 7.2, seed + 1, mul);
-      if (hand) mitten(px, hx2, hy2 + 2, 7, 7.5, hand, seed + 2);
+  // How a front view is bent this frame, as canvas rows: his head (above F.neck) slid sideways,
+  // more the higher it is, and moved up or down by `dy`; down on one knee, everything above his
+  // hips sinks by `drop` and his legs fold into the space left.
+  function sidBend(S, F, amp, dy, drop) {
+    const span = Math.max(1, F.neck - F.top);
+    const floor = S.floor;
+    return {
+      // canvas row → [source row, x shift], or null for nothing
+      row(Y) {
+        if (drop && Y >= F.hips + drop) return [Math.round(F.hips + ((Y - F.hips - drop) * (floor - F.hips)) / Math.max(1, floor - F.hips - drop)), 0];
+        const y = Y - drop;
+        if (y >= F.neck) return [y, 0];
+        const r = y - dy;
+        return [r, Math.round(amp * clamp01((F.neck - r) / span))];
+      },
+      // where a point of the head ends up
+      point(x, y) {
+        const dx = y < F.neck ? Math.round(amp * clamp01((F.neck - y) / span)) : 0;
+        return [x + dx, y + (y < F.neck ? dy : 0) + drop];
+      },
     };
-    if (pose === 'cookie') {
-      // Both hands hold a huge cookie up to his mouth, elbows out, like in the game.
-      arm(cx - 34, T(55), cx - 56, T(70), cx - 21, hy + 12, 41, 1.05, 0);
-      arm(cx + 34, T(55), cx + 58, T(70), cx + 23, hy + 12, 21, 0.9, 0);
-      drawCookie(px, hx + 1, hy + 11, 22);
-      mitten(px, cx - 21, hy + 13, 7, 7.5, 0.6, 43);
-      mitten(px, cx + 23, hy + 13, 7, 7.5, 0.45, 23);
-    } else if (pose === 'gun') {
-      arm(cx - 34, T(57), cx - 45, T(96), cx - 42, T(132), 41, 1.05, 0.58);
-      arm(cx + 34, T(55), cx + 58, T(64), cx + 81, T(70), 21, 0.95, 0);
-      drawGun(px, cx + 84, T(73));
-      mitten(px, cx + 83, T(73), 7, 7, 0.5, 23);
-    } else {
-      const sag = down ? 10 : 0;
-      arm(cx - 34, T(57), cx - 45, T(96), cx - 42, T(132) + sag, 41, 1.05, 0.58);
-      arm(cx + 34, T(57), cx + 46, T(96), cx + 43, T(132) + sag, 21, 0.85, 0.4);
-    }
-
-    px.outline(OUTLINE);
-    return { px, eyes: [[hx - 7, hy - 12], [hx + 8, hy - 13]], eyeR: 5.4, down };
   }
 
-  // Eyes are drawn every frame so the pupils can wander.
-  function sidEyes(px, body, opts) {
-    opts = opts || {};
-    body.eyes.forEach(([ex, ey], i) => {
-      const r = body.eyeR - (i ? 0.5 : 0);
-      px.ellipse(ex, ey, r + 1, r + 1, OUTLINE);
-      px.ellipse(ex, ey, r, r, (x, y, nx, ny) => {
-        const l = SC.Pixel.sphere(nx, ny, -0.4, -0.6);
-        if (opts.angry && noise(x, y, 60 + i) > 0.84 && nx * nx + ny * ny > 0.3) return hex('#9e1b1b');
-        return ramp(EYE, 0.3 + l * 0.75, x, y);
-      });
-      const p = (opts.pupils && opts.pupils[i]) || [0, 0];
-      const pr = r * (opts.angry ? 0.3 : 0.42);
-      if (opts.dizzy) {
-        // Spiral-ish dizzy eyes.
-        for (let a = 0; a < 14; a++) {
-          const t = a / 14;
-          const ang = t * Math.PI * 3 + (opts.frame || 0) * 0.6 + i;
-          px.set(Math.round(ex + Math.cos(ang) * t * (r - 2)), Math.round(ey + Math.sin(ang) * t * (r - 2)), OUTLINE);
-        }
-      } else {
-        px.ellipse(ex + p[0] * (r - pr - 1), ey + p[1] * (r - pr - 1), pr, pr, OUTLINE);
-        px.set(Math.round(ex + p[0] * (r - pr - 1) - 1), Math.round(ey + p[1] * (r - pr - 1) - 1), hex('#3a3a3a'));
+  function blitBent(px, src, x0, y0, bend) {
+    for (let Y = 0; Y < px.h; Y++) {
+      const [r, dx] = bend.row(Y);
+      const sy = r - y0;
+      if (sy < 0 || sy >= src.h) continue;
+      for (let x = 0; x < src.w; x++) {
+        const i = (sy * src.w + x) * 4;
+        if (src.d[i + 3]) px.set(x0 + x + dx, Y, [src.d[i], src.d[i + 1], src.d[i + 2], 255]);
       }
+    }
+  }
+
+  // Draw a layer turned by `ang` (radians, clockwise on screen) round its pixel (sx, sy), which
+  // lands on (ax, ay).
+  function blitTurned(px, src, sx, sy, ax, ay, ang) {
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    const R = Math.ceil(Math.hypot(Math.max(sx, src.w - sx), Math.max(sy, src.h - sy))) + 1;
+    for (let y = -R; y <= R; y++) {
+      for (let x = -R; x <= R; x++) {
+        const u = Math.round(sx + x * cos + y * sin);
+        const v = Math.round(sy - x * sin + y * cos);
+        if (u < 0 || v < 0 || u >= src.w || v >= src.h) continue;
+        const i = (v * src.w + u) * 4;
+        if (src.d[i + 3]) px.set(ax + x, ay + y, [src.d[i], src.d[i + 1], src.d[i + 2], 255]);
+      }
+    }
+  }
+
+  // His googly eyes: the pupils roll round inside (o.pupils, -1..1), spin when he's dizzy, and
+  // shrink with red veins round them when he's angry.
+  function sidEyes(px, F, bend, o) {
+    F.eyes.forEach(([x0, y0, r], i) => {
+      const [ex, ey] = bend.point(x0 + 0.5, y0 + 0.5);
+      px.ellipse(ex, ey, r, r, (x, y, nx, ny) => {
+        if (o.angry && nx * nx + ny * ny > 0.55 && noise(x, y, 61 + i) > 0.86) return GOOGLY.vein;
+        return nx * 0.6 + ny > 0.75 ? GOOGLY.shade : GOOGLY.white;
+      });
+      const pr = o.angry ? 1.05 : 1.55;
+      let p = (o.pupils && o.pupils[i]) || [0, 0.5];
+      if (o.dizzy) {
+        const a = (o.t || 0) / 150 + i * 2.4;
+        p = [Math.cos(a), Math.sin(a)];
+      }
+      const reach = Math.max(0, r - pr - 0.6);
+      px.ellipse(ex + p[0] * reach, ey + p[1] * reach, pr, pr, GOOGLY.pupil);
     });
   }
 
-  const sidCache = {};
-  function sid(opts) {
-    opts = opts || {};
-    const pose = opts.pose || 'idle';
-    const key = pose + (opts.breathe ? 1 : 0);
-    const body = sidCache[key] || (sidCache[key] = sidBody(pose, opts.breathe));
-    const px = body.px.clone();
-    sidEyes(px, body, { pupils: opts.pupils, angry: opts.angry, dizzy: pose === 'down' || opts.dizzy, frame: opts.frame });
+  // A jumbo cookie in his mouth, crumbs falling off it.
+  function sidMunch(px, F, bend, t) {
+    const [cx, cy] = bend.point(F.mouth[0], F.mouth[1] + 1);
+    drawCookie(px, cx + 1, cy, 7.5);
+    for (let i = 0; i < 7; i++) {
+      const life = (t / 700 + noise(i, 3, 91)) % 1;
+      px.set(cx - 7 + Math.floor(noise(i, 4, 91) * 16), cy + 6 + Math.floor(life * 34), COOKIE[1 + (i % 3)]);
+    }
+  }
+
+  // o: { t (ms), view: 'front' | 'armed' | 'back' | 'backGun', gun (radians the Desert Eagle is
+  //      turned by), munch, rant, down, pupils, angry, dizzy }
+  function sid(o) {
+    const S = SC.SPRITES.sid;
+    const L = spritePix.sid;
+    const px = new Pix(S.size[0], S.size[1]);
+    if (!L) return px;
+    const t = o.t || 0;
+    const view = o.view || 'front';
+    if (view === 'back' || view === 'backGun') {
+      px.blit(L[view], S.at[view][0], S.at[view][1]);
+      return px;
+    }
+    const F = S.face[view];
+    // His head sways and bobs as he breathes; it nods as he chews, and hangs when he's down.
+    let amp = Math.sin(t / 610) * 1.3;
+    let dy = Math.sin(t / 900) > 0.55 ? -1 : 0;
+    if (o.munch) {
+      amp *= 0.4;
+      dy = Math.floor(t / 110) % 2;
+    }
+    if (o.rant) amp = Math.sin(t / 45) * 2.2; // shaking his head as he rambles
+    if (o.down) {
+      amp = 3 + Math.sin(t / 800) * 0.7;
+      dy = 1;
+    }
+    const bend = sidBend(S, F, amp, dy, o.down ? 13 : 0);
+    blitBent(px, L[view], S.at[view][0], S.at[view][1], bend);
+    if (view === 'armed') {
+      const [gx, gy] = S.at.gun;
+      const [ax, ay] = S.grip;
+      if (o.down) blitTurned(px, L.gun, ax - gx, ay - gy, ax, ay + 13, -0.5); // hanging from his hand
+      else if (o.gun) blitTurned(px, L.gun, ax - gx, ay - gy, ax, ay, o.gun);
+      else px.blit(L.gun, gx, gy);
+    }
+    sidEyes(px, F, bend, o);
+    if (o.munch) sidMunch(px, F, bend, t);
     return px;
   }
-  // Where the gun's muzzle and Sid's mouth are, for effects (art pixels in the sprite).
-  const SID_POINTS = { cx: 101, muzzle: [220, 67], mouth: [102, 27], head: [102, 20], body: [101, 92], feet: [101, 204], w: SID_W, h: SID_H };
+
+  // Where things are on the Sid sprite (canvas pixels), for effects and targeting. Armed, he
+  // crouches lower with the gun out.
+  function sidPoints(armed) {
+    const S = SC.SPRITES.sid;
+    const F = S.face[armed ? 'armed' : 'front'];
+    return {
+      w: S.size[0],
+      h: S.size[1],
+      cx: S.cx,
+      muzzle: S.muzzle,
+      mouth: F.mouth,
+      head: [F.mouth[0], F.mouth[1] - 12],
+      body: F.chest,
+      feet: [S.cx, S.floor],
+    };
+  }
 
   // ------------------------------------------------------------------ Trollge
   // Made from its render by tools/make_images.py: a body layer and a separate head layer, so
@@ -984,7 +895,7 @@
   SC.Art.card = card;
   SC.Art.loadPortraits = loadPortraits;
   SC.Art.MOODS = MOODS;
-  SC.Art.SID_POINTS = SID_POINTS;
+  SC.Art.sidPoints = sidPoints;
   SC.Art.PAL = PAL;
   SC.Art.homography = homography;
 })(typeof window !== 'undefined' ? window : globalThis);

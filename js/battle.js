@@ -317,7 +317,8 @@
       const was = e.status.hunt;
       e.status.hunt = { target: u.id, turns: this.enemyDef.hearing.huntTurns, fresh: true };
       if (was && was.target === u.id) return;
-      await this.fx({ type: 'status', target: u.id, text: 'HUNTED' });
+      // His hunting call, when he starts hunting (not each time he switches prey).
+      await this.fx({ type: 'status', target: u.id, text: 'HUNTED', cue: was ? null : 'hunting' });
       await this.say(`${this.en} is HUNTING ${u.name}!`, { tone: 'danger' });
       this.refresh();
     }

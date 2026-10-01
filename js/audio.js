@@ -5,7 +5,8 @@
  * MUSIC is SlashCo VR's soundtrack (assets/audio/, chosen in data.js `music`): each slasher's
  * battle theme (AMBIENCE) and desperate theme (CHASE: the slasher weakened, the team running
  * for it, or about to lose), which crossfade; a sting for the slasher's danger level as a fight
- * starts; and a track for escaping or dying at the end. Files picked in the game (MUSIC on the
+ * starts; a slasher's own sounds during it (Dolphin Man HUNTING someone), which the music turns
+ * down for; and a track for escaping or dying at the end. Files picked in the game (MUSIC on the
  * title screen) replace the battle themes, and stay in this browser. If a file can't play,
  * a synthesized version stands in.
  *
@@ -1046,12 +1047,22 @@
     if (p && p.catch) p.catch(() => {});
   }
 
-  // ------------------------------------------------------------------ stings and endings
-  // The danger-level sting as a fight starts (the music waits until it's over), and the escape
-  // or death track at the end. One at a time.
+  // ------------------------------------------------------------------ stings, cues and endings
+  // The danger-level sting as a fight starts and a slasher's cues during it (the music waits
+  // until they're over), and the escape or death track at the end. One at a time.
   let shot = null;
-  let hold = 0; // until when (performance.now()) the music waits for a sting
+  let hold = 0; // until when (performance.now()) the music waits for a sting or cue
   let holdTimer = null;
+
+  // The music comes back after a sting or cue: whatever should play now, or the same music
+  // back up where it was (a cue only turns it down).
+  function release() {
+    clearTimeout(holdTimer);
+    hold = 0;
+    const before = playing;
+    applyMusic();
+    if (playing && playing === before && beds[playing.key]) beds[playing.key].fade(levelOf(playing.tr, playing.name), FADE);
+  }
 
   function stopShot(secs) {
     if (!shot) return;
@@ -1075,8 +1086,7 @@
         failed.add(file);
         if (shot === me) {
           shot = null;
-          hold = 0;
-          applyMusic();
+          release();
         }
         if (fallback) fallback();
       },
@@ -1088,10 +1098,7 @@
     if (!waitForIt) return;
     const ms = (info.end || 8) * 1000; // where the sound actually ends; the rest is silence
     hold = performance.now() + ms;
-    holdTimer = setTimeout(() => {
-      hold = 0;
-      applyMusic();
-    }, ms);
+    holdTimer = setTimeout(release, ms);
   }
 
   // files: [{ name, src }]. One music file: the ambience is everything before `chaseAt` and
@@ -1294,6 +1301,14 @@
       }
       playShot(MUSIC && MUSIC.stings[danger], true);
     },
+    // A slasher's own sound in the fight (data.js `music.cues`; Dolphin Man starts HUNTING): the
+    // music turns down for it, and comes back up where it was when it's over.
+    cue(name) {
+      const file = MUSIC && MUSIC.cues && MUSIC.cues[name];
+      if (!file || failed.has(file) || muted || !ensure()) return;
+      if (playing && beds[playing.key]) beds[playing.key].fade(0, 0.5);
+      playShot(file, true);
+    },
     // The fight is over: escaping or dying.
     ending(win) {
       wanted = null;
@@ -1324,7 +1339,7 @@
       } catch (e) {
         /* per-browser convenience only */
       }
-      if (playing && beds[playing.key]) beds[playing.key].fade(levelOf(playing.tr, playing.name), 0.3);
+      if (playing && beds[playing.key] && performance.now() >= hold) beds[playing.key].fade(levelOf(playing.tr, playing.name), 0.3);
       if (shot) shot.a.volume = muted ? 0 : fileInfo(shot.file).volume != null ? fileInfo(shot.file).volume : 1;
       return muted;
     },

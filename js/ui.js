@@ -35,7 +35,7 @@
   ];
   // Where each slasher's sprite sits on the stage (it is drawn at 2x).
   const ENEMY_BOX = {
-    sid: { left: 438, top: 252 },
+    sid: { left: 450, top: 244 },
     trollge: { left: 390, top: 256 },
     dolphin: { left: 482, top: 262 },
   };
@@ -123,7 +123,7 @@
     const id = enemyId();
     if (id === 'trollge') return SC.Art.trollgePoints();
     if (id === 'dolphin') return SC.Art.dolphinPoints();
-    return SC.Art.SID_POINTS;
+    return SC.Art.sidPoints(SidView.armed);
   };
 
   function cardCenter(id) {
@@ -345,6 +345,7 @@
     P.cls.textContent = S.class;
     P.danger.dataset.level = DANGER[S.danger] || 1;
     P.danger.textContent = S.danger;
+    if (id === 'sid') SidView.reset();
     view().draw(performance.now(), true);
   }
 
@@ -618,24 +619,41 @@
   }
 
   // ------------------------------------------------------------------ slasher sprites
+  // Sid: his googly eyes rattle round, his head sways, and the Desert Eagle is a layer of its own
+  // (it twirls, kicks, and swings for a pistol-whip). He turns his back to draw it at 80 ANGER and
+  // to put it away again.
   const SidView = {
     pupils: [
-      [0, 0],
-      [0, 0],
+      [0, 0.5],
+      [0, 0.5],
     ],
     goals: [
       [0.4, 0.2],
       [-0.4, 0.3],
     ],
     next: [0, 0],
-    breathe: 0,
-    lastBreathe: 0,
+    armed: false,
+    turn: null, // { start, from } while he turns round
+    kickAt: -1e9,
     override: null,
+    since: 0,
     until: 0,
     set(pose, ms) {
       this.override = pose;
-      this.until = performance.now() + ms;
-      this.draw(performance.now(), true);
+      this.since = performance.now();
+      this.until = this.since + ms;
+      this.draw(this.since, true);
+    },
+    // He fires: the gun kicks up.
+    kick() {
+      this.kickAt = performance.now();
+    },
+    // A new fight: no turning round for the gun he already has (or hasn't).
+    reset() {
+      const s = UI.battle && UI.battle.enemy;
+      this.armed = !!(s && s.flags.overflow);
+      this.turn = null;
+      this.override = null;
     },
     draw(now, force) {
       const b = UI.battle;
@@ -650,23 +668,41 @@
         this.pupils[i][0] += (this.goals[i][0] - this.pupils[i][0]) * 0.45;
         this.pupils[i][1] += (this.goals[i][1] - this.pupils[i][1]) * 0.45;
       }
-      if (now - this.lastBreathe > 700) {
-        this.breathe ^= 1;
-        this.lastBreathe = now;
+      const armed = !!(s && s.flags.overflow);
+      if (armed !== this.armed) {
+        this.turn = { start: now, from: this.armed };
+        this.armed = armed;
+        pulse(enemyWrap, 'spin', 420);
       }
-      let pose = 'idle';
-      if (s && s.status.stunned) pose = 'down';
-      else if (s && s.flags.overflow) pose = 'gun';
-      if (this.override && now < this.until) pose = this.override;
-      const px = SC.Art.sid({
-        pose,
-        breathe: this.breathe,
+      let view = armed ? 'armed' : 'front';
+      if (this.turn) {
+        // In step with the spin: the front he had, his back (while he's mirrored), the new front.
+        const k = (now - this.turn.start) / 420;
+        if (k >= 1) this.turn = null;
+        else if (k < 2 / 6) view = this.turn.from ? 'armed' : 'front';
+        else if (k < 5 / 6) view = this.turn.from ? 'backGun' : 'back';
+      }
+      const down = !!(s && s.status.stunned);
+      const pose = this.override && now < this.until ? this.override : null;
+      const k = pose ? (now - this.since) / Math.max(1, this.until - this.since) : 0;
+      let gun = 0;
+      // The Desert Eagle: twice round his finger and slowing down, swung up for a whip, kicking.
+      if (pose === 'twirl') gun = Math.PI * 4 * (1 - (1 - k) * (1 - k));
+      else if (pose === 'whip') gun = Math.sin(k * Math.PI) * 1.4;
+      const kicked = now - this.kickAt;
+      if (kicked < 140) gun += 0.45 * (1 - kicked / 140);
+      SC.Art.sid({
+        t: now,
+        view,
+        gun,
+        munch: pose === 'cookie',
+        rant: pose === 'rant',
+        down,
         pupils: this.pupils,
-        angry: !!s && s.flags.overflow,
-        frame: UI.frame,
-      });
-      px.toCanvas(enemyCanvas);
-      if (force) enemyCanvas.dataset.pose = pose;
+        angry: armed,
+        dizzy: down,
+      }).toCanvas(enemyCanvas);
+      if (force) enemyCanvas.dataset.pose = pose || (down ? 'down' : view);
     },
   };
 
@@ -937,17 +973,17 @@
           return T(420);
         }
         if (e.kind === 'claims') {
+          SidView.set('rant', 1400);
           shake(false);
           sfx('growl');
           return T(320);
         }
         if (e.kind === 'deagle') {
-          SidView.set('gun', 900);
+          SidView.set('twirl', 900);
           sfx('spin');
           return T(260);
         }
         if (e.kind === 'magdump') {
-          SidView.set('gun', 2600);
           sfx('rack');
           return T(160);
         }
@@ -997,7 +1033,8 @@
         if (thrown === 'gun') {
           const [mx, my] = enemyPoint('muzzle');
           muzzle(mx, my);
-        }
+          SidView.kick();
+        } else if (e.kind === 'gun') SidView.set('whip', 420); // a pistol-whip
         sfx(thrown);
         await lunge(e.target, 170);
         return T(90);
@@ -1009,6 +1046,7 @@
         const jy = ty + rand(-80, 60);
         muzzle(mx, my);
         tracer(mx, my, jx, jy);
+        SidView.kick();
         sfx('shot');
         if (e.hit) pulse(card(e.target), 'hit', 320);
         else pop(jx, jy - 20, e.ghost ? 'PASS' : 'MISS', 'miss', 600);
@@ -1036,6 +1074,7 @@
         const [x, y] = posOf(e.target);
         pop(x, y - (e.target === enemyId() ? 150 : 90), e.text, 'status', 900);
         sfx('status');
+        if (e.cue && SC.Audio) SC.Audio.cue(e.cue);
         return T(240);
       }
       case 'credits': {

@@ -19,13 +19,17 @@ effects on top, so only a few source edits live here:
     trollge         - Trollge's head, for the title screen
 
 SPRITES (assets/sprites/). Trollge's battle sprite is his render, shrunk into dithered pixel
-art. The head is a separate layer so the game can make it wobble on the skinny body.
+art. The head is a separate layer so the game can make it wobble on the skinny body. Sid's are
+green-screen renders of his model, front and back, with and without the Desert Eagle, made the
+same way; the gun is a layer of its own so it can twirl and kick.
 
 Everything is also embedded in js/images.js as data URIs, so the game can read the pixels
 even when index.html is opened straight from disk (file://).
 
 Sources: lobby_npcs.webp (Mel and John), jim.png (Captain Jim), mysti.png (Bravo Team
-Mysti), purpl.webp (Purpl Lady), sid_card.png (the doc's Sid art), trollge.webp (Trollge).
+Mysti), purpl.webp (Purpl Lady), sid_card.png (the doc's Sid art), sid_front.webp,
+sid_front_gun.webp, sid_back.webp and sid_back_gun.webp (Sid's model), trollge.webp (Trollge),
+dolphin.webp and dolphin_wail.webp (Dolphin Man).
 """
 import base64
 import json
@@ -594,6 +598,121 @@ def dolphin():
     }
 
 
+# ---------------------------------------------------------------- Sid
+# Sid's fur from deep shadow to highlight, dried and wet blood, the Desert Eagle's steel, his
+# googly eyes and the dark band of his mouth.
+SID = hexes(['#141c2b', '#1e2a40', '#2a3a57', '#36496c', '#435a80', '#4e6c95', '#5a7faa', '#6893c0', '#77a8d6', '#8cc0e9',
+             '#b3dcf6', '#24100f', '#3e1414', '#5c1d1c', '#7d2a26', '#4a3438', '#66545a', '#16181b', '#2e3237', '#4c5258',
+             '#737a82', '#a3aab1', '#d3d8dc', '#f4f8fa', '#0a0a0c'])
+SID_OUTLINE = (8, 10, 16, 255)
+
+
+def green_screen(name):
+    """A render on a green screen -> RGBA: the green keyed out with a soft edge, and the green
+    that spilled onto the edges taken back out."""
+    rgb = load(name)[..., ::-1].astype(float)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    a = np.clip(1 - (g - np.maximum(r, b) - 30) / 90, 0, 1)
+    rgb[..., 1] = np.minimum(g, np.maximum(r, b) + 8)
+    return np.dstack([rgb, a * 255]).clip(0, 255).astype(np.uint8)
+
+
+def sid_sprite():
+    """Sid's battle sprite, from green-screen renders of his model: front and back, with and
+    without the Desert Eagle. Each view is shrunk into dithered pixel art like Trollge's, and
+    they share one canvas with his torso in the middle and his planted foot on the floor. The gun
+    comes off the armed front view as a layer of its own, so it can twirl round his finger and
+    kick when he fires; the back views are for turning round to draw it or put it away."""
+    S = 0.185
+    views = {  # layer: (render, the floor in it: where his planted foot is)
+        'front': ('sid_front.webp', 1134),  # his foot runs off the bottom of this one
+        'armed': ('sid_front_gun.webp', 1051),
+        'back': ('sid_back.webp', 1084),
+        'backGun': ('sid_back_gun.webp', 1134),
+    }
+    renders = {k: green_screen(f) for k, (f, _) in views.items()}
+
+    def torso_x(rgba):  # the middle of his torso
+        a = rgba[..., 3] > 128
+        ys = np.where(a)[0]
+        y0, y1 = ys.min(), ys.max()
+        return float(np.median(np.where(a[y0 + (y1 - y0) * 3 // 10:y0 + (y1 - y0) // 2])[1]))
+
+    anchors = {k: (torso_x(renders[k]), views[k][1]) for k in views}
+
+    # ---- the gun: the steel inside a rough outline of it. Where the grip sat in his fist, the
+    # fist is filled back in with fur.
+    armed = renders['armed']
+    c = armed[..., :3].astype(int)
+    r, g, b = c[..., 0], c[..., 1], c[..., 2]
+    near = np.zeros(armed.shape[:2], np.uint8)
+    cv2.fillPoly(near, [np.array([(762, 548), (872, 392), (902, 392), (968, 440), (968, 506), (905, 512), (800, 568), (762, 568)], np.int32)], 1)
+    steel = (np.abs(r - g) < 26) & (np.abs(g - b) < 30) & (np.maximum(np.maximum(r, g), b) < 205) & (armed[..., 3] > 40)
+    gun = cv2.morphologyEx((steel & (near > 0)).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    _, lab, st, _ = cv2.connectedComponentsWithStats(gun)
+    gun = cv2.dilate((lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    gun &= armed[..., 3] > 0
+    fist = np.zeros_like(near)
+    fur = np.argwhere((armed[400:520, 880:980, 3] > 128) & ~gun[400:520, 880:980])
+    cv2.fillPoly(fist, [cv2.convexHull(np.array([(x + 880, y + 400) for y, x in fur], np.int32))], 1)
+    hole = gun & (fist > 0)
+    body = armed.copy()
+    body[..., :3] = cv2.inpaint(armed[..., :3], hole.astype(np.uint8) * 255, 6, cv2.INPAINT_TELEA)
+    body[gun & ~hole, 3] = 0
+    renders['armed'] = body
+    renders['gun'] = armed.copy()
+    renders['gun'][~gun, 3] = 0
+    anchors['gun'] = anchors['armed']
+
+    # ---- shrink every layer, then lay them out on one canvas
+    layers = {}
+    for k, rgba in renders.items():
+        rgb = rgba[..., :3].copy()
+        for _ in range(2):
+            rgb = cv2.bilateralFilter(rgb, 9, 40, 9)
+        rgb = (255 * (rgb.astype(float) / 255) ** 1.15).astype(np.uint8)  # into the hallway's dimmer light
+        ys, xs = np.where(rgba[..., 3] > 20)
+        box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
+        idx = shrink(np.dstack([rgb, rgba[..., 3]]), S, box, SID)
+        layers[k] = {'img': outlined(idx, SID, SID_OUTLINE), 'box': box, 'f': idx.shape[1] / (box[2] - box[0])}
+    rel = lambda k, x, y: ((x - anchors[k][0]) * S, (y - anchors[k][1]) * S)  # from his anchor
+    left = min(rel(k, L['box'][0], 0)[0] for k, L in layers.items()) - 1
+    right = max(rel(k, L['box'][2], 0)[0] for k, L in layers.items()) + 1
+    top = min(rel(k, 0, L['box'][1])[1] for k, L in layers.items()) - 1
+    pad = 4
+    cx = int(np.ceil(-left)) + pad + 26  # room on the left for the gun to twirl
+    floor = int(np.ceil(-top)) + pad
+    at = {k: [int(round(rel(k, *L['box'][:2])[0] + cx)) - 1, int(round(rel(k, *L['box'][:2])[1] + floor)) - 1] for k, L in layers.items()}
+
+    def on(k, p):  # a point in render k -> canvas pixels (+1: the outline's margin)
+        L = layers[k]
+        return [int(round(at[k][i] + 1 + (p[i] - L['box'][i]) * L['f'])) for i in (0, 1)]
+
+    os.makedirs(SPRITES, exist_ok=True)
+    for k, L in layers.items():
+        Image.fromarray(L['img']).save(os.path.join(SPRITES, f'sid_{k}.png'))
+        print(f'wrote sprites/sid_{k}.png', L['img'].shape[1], 'x', L['img'].shape[0])
+    r_eye = lambda rad: round(rad * S, 1)
+    return {
+        'size': [cx + int(np.ceil(right)) + pad, floor + 6],
+        'at': at,  # where each layer's top-left goes on the canvas
+        'cx': cx,
+        'floor': floor,
+        # Where things are on each front view. His head sways above `neck`, and his legs fold below
+        # `hips` when he drops to one knee (canvas rows).
+        'face': {
+            'front': {'eyes': [on('front', (868, 81)) + [r_eye(22)], on('front', (918, 83)) + [r_eye(23)]], 'mouth': on('front', (885, 186)),
+                      'neck': on('front', (880, 238))[1], 'top': on('front', (895, 42))[1], 'hand': on('front', (1045, 610)),
+                      'chest': on('front', (960, 380)), 'hips': on('front', (950, 745))[1]},
+            'armed': {'eyes': [on('armed', (1028, 142)) + [r_eye(22)], on('armed', (1077, 141)) + [r_eye(23)]], 'mouth': on('armed', (1062, 238)),
+                      'neck': on('armed', (1060, 290))[1], 'top': on('armed', (1060, 88))[1], 'hand': on('armed', (1115, 630)),
+                      'chest': on('armed', (1110, 420)), 'hips': on('armed', (1110, 720))[1]},
+        },
+        'muzzle': on('gun', (772, 548)),  # the end of the barrel
+        'grip': on('gun', (912, 470)),  # the gun twirls round his finger here
+    }
+
+
 def uri(path):
     with open(path, 'rb') as f:
         return 'data:image/png;base64,' + base64.b64encode(f.read()).decode('ascii')
@@ -633,6 +752,7 @@ if __name__ == '__main__':
     purpl()
     sid()
     bundle({
+        'sid': {'layers': {k: f'sid_{k}.png' for k in ('front', 'armed', 'gun', 'back', 'backGun')}, 'meta': sid_sprite()},
         'trollge': {'layers': {'body': 'trollge_body.png', 'head': 'trollge_head.png'}, 'meta': trollge()},
         'dolphin': {'layers': {'body': 'dolphin_body.png', 'head': 'dolphin_head.png', 'wail': 'dolphin_wail.png', 'fetal': 'dolphin_fetal.png'}, 'meta': dolphin()},
     })

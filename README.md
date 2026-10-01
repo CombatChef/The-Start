@@ -159,10 +159,13 @@ The music is SlashCo VR's soundtrack, in `assets/audio/`:
   (zimzbooth). The battle theme comes in once it's over.
 - **A fight ends** with *Escape* when the team gets out, or *Death* when everyone who could carry a body is gone
   (zimzbooth).
+- **Dolphin Man's hunting call** (`dolphin-man-hunting.mp3`) plays when he starts HUNTING someone. It doesn't play
+  again when he switches to someone else mid-hunt, only after he has lost track. The music turns down for it and
+  comes back up where it was.
 - **The title screen** plays *SlashCo HQ (Low Anger)*.
 - The tracks are played as they are, only at different volumes: they're mastered at very different levels, so
   `data.js` (`music.files`) evens them out. Which track plays when is in `data.js` too (`music.themes`, `stings`,
-  `endings`).
+  `endings`, `cues`).
 
 **Credits.** Kamija: *Weather Alert (Trollge Ambience)* and *Rain? (Trollge Chase)*, from *SlashCo VR OST V.1*
 ([Bandcamp](https://kf1t.bandcamp.com/album/slashco-vr-ost-v-1)). zimzbooth: *SlashCo HQ (Low Anger)*, *SlashCo HQ
@@ -287,9 +290,14 @@ means not hitting him while he's curled up.
   Nobody is cut out of their picture: each worker, and Dolphin Man, keeps the background they were captured
   against, softened and darkened so the face reads first, and posterized into the black / grey / white style of the
   doc's art. Red stays red (Jim's goggles, Mysti's beret, Dolphin Man's open mouth) and violet stays violet (Purpl
-  Lady's hair). In the game the edges fade into
-  a dark backdrop, the picture turns red when they're CRITICAL, and effects go on top: sweat, blood, cracks, Zzz.
-  Mel's no-glasses face (after *Toss Glasses*) and John's sleeping face (*Nap*) are edited versions.
+  Lady's hair). In the game the edges fade into a dark backdrop, the picture turns red when they're CRITICAL, and
+  effects go on top: sweat, blood, cracks, Zzz. Mel's no-glasses face (after *Toss Glasses*) and John's sleeping
+  face (*Nap*) are edited versions.
+- **Sid** is made from green-screen renders of his model, from the front and the back, with and without the Desert
+  Eagle, each shrunk into dithered pixel art like Trollge. His head sways, his googly eyes rattle round, and the gun
+  is a layer of its own: it twirls round his finger (*Desert Eagle*), kicks when he fires, and swings up for a
+  pistol-whip. At 80 ANGER he turns his back to draw it, and turns round again to put it away. He munches his
+  cookie, shakes his head as he rambles, and drops to one knee, dizzy, when he's weakened.
 - **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head
   wobbles on its skinny body". It freezes when it stares, its eyes glow red once it's a Fast Runner, and it folds
   up when weakened.
@@ -297,8 +305,7 @@ means not hitting him while he's curled up.
   Trollge's, his mouth hangs open while he wails, he spins round for the Tail Whip, his eyes clear up at 80 ANGER,
   and in Fetal Position (and when he's weakened) he's curled up on the floor. His legs and the curled-up pose are
   drawn to match the renders, which don't show them.
-- **The hallway and Sid** are drawn in code (`js/art.js`) as dithered pixel art at 2x. Sid is drawn to the
-  proportions of the in-game screenshot in `assets/source/sid_reference.png`.
+- **The hallway** is drawn in code (`js/art.js`) as dithered pixel art at 2x.
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless

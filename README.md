@@ -2,9 +2,9 @@
 
 A turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki), with a black-and-white
 HUD styled after the game's own. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner somewhere
-in the school against **Trollge** [DEVASTATING]. **Purpl Lady** waits on the bench and can swap in for anyone.
-**Sid** and **Dolphin Man** are archived for now (see [Archived slashers](#archived-slashers)). Every stat, skill,
-passive, weapon and item comes from the *Slasher Statistics* doc.
+in the school against **Trollge** [DEVASTATING] or **Dolphin Man** [CONSIDERABLE]. **Purpl Lady** waits on the
+bench and can swap in for anyone. **Sid** is archived for now (see [Archived slashers](#archived-slashers)). Every
+stat, skill, passive, weapon and item comes from the *Slasher Statistics* doc.
 
 ![Battle screen](docs/screenshot-battle.png)
 
@@ -44,7 +44,7 @@ different one each fight. The place's name is in SLASHERBOY's title bar.
 
 "Everyone" means the slasher too. Only *Shadowborn* (John: "darkness does not affect HIT RATE") sees in the dark, so
 he loses nothing. The penalty is `balance.darkHit` in `data.js`, and the places are `places` there: each has its
-picture, whether it's dark, where the slasher stands on its floor (`stand`) and how the room lights it (`light`).
+picture, whether it's dark, where each slasher stands on its floor (`stand`) and how the room lights them (`light`).
 
 ## The HUD
 
@@ -136,20 +136,7 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
   that happens, or hold on until the heli.
 - Mysti's *Tactical Stab* is "extremely effective against Trollge".
 
-### Archived slashers
-
-Sid and Dolphin Man are out of the fight for now: they aren't in the list you pick from (`enemies` in `data.js`),
-but everything about them is still here (stats, skills, AI, sprites, sounds) and the simulator still tests them.
-Moving one from `archived` back into `enemies` brings it back, along with SLASHER ▸ on the title screen.
-
-#### Sid [CONSIDERABLE]
-
-- **ANGER** rises every turn and whenever he's hurt, and he hits harder the angrier he gets. From 60 he follows
-  his move with a second attack every turn. At 80 he draws his Desert Eagle and can no longer eat cookies to
-  calm down. If anyone on your team eats a Cookie, his ANGER jumps by 35 (METH Addict).
-- GUARD whoever John flags as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
-
-#### Dolphin Man [CONSIDERABLE]
+### Dolphin Man [CONSIDERABLE]
 
 ![Dolphin Man's Loud Wail](docs/screenshot-dolphin.png)
 
@@ -164,8 +151,22 @@ Moving one from `archived` back into `enemies` brings it back, along with SLASHE
 - **He hunts by sound.** A battery going in, glass breaking, a ringing phone, a blast, Captain Jim yelling about
   his locker: loud things anger him (more the angrier he already is), and he goes after whoever made them for 2
   turns, seeing them better (**HUNTED**). Camouflage doesn't hide you from him once he's hunting you.
-- **Fetal Position.** Now and then he curls up on the floor: he can't attack and his DEF shoots up, but every noise
-  angers him twice as much, and every hit is a noise. Use the time to heal, guard, buff or run.
+- **Fetal Position.** Now and then he sits down on the floor curled up, his back to you: he can't attack and his DEF
+  shoots up, but every noise angers him twice as much, and every hit is a noise. Use the time to heal, guard, buff
+  or run.
+
+### Archived slashers
+
+Sid is out of the fight for now: he isn't in the list you pick from (`enemies` in `data.js`), but everything about
+him is still here (stats, skills, AI, sprites, sounds) and the simulator still tests him. Moving him from `archived`
+back into `enemies` brings him back.
+
+#### Sid [CONSIDERABLE]
+
+- **ANGER** rises every turn and whenever he's hurt, and he hits harder the angrier he gets. From 60 he follows
+  his move with a second attack every turn. At 80 he draws his Desert Eagle and can no longer eat cookies to
+  calm down. If anyone on your team eats a Cookie, his ANGER jumps by 35 (METH Addict).
+- GUARD whoever John flags as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
 
 ## Music and sound
 
@@ -245,7 +246,7 @@ for crashes and broken states and prints win rates:
 | Trollge, Purpl Lady in for Captain Jim | 91% | 38% | 31% |
 | Sid (archived) | 98% | 68% | 45% |
 | Sid, with Purpl Lady in | 100% | 69–93% | 38–62% |
-| Dolphin Man (archived) | 99% | 63% | 48% |
+| Dolphin Man | 99% | 63% | 48% |
 | Dolphin Man, with Purpl Lady in | 99–100% | 49–91% | 39–71% |
 
 Against Trollge with the default squad, someone dies in most casual battles. Careful play against Dolphin Man
@@ -329,12 +330,15 @@ means not hitting him while he's curled up.
   Hall and the Gym, its grin glowing out of the dark rooms, and a soft shadow on the floor under its feet. It stands
   close to the camera on each room's floor (`stand`), so nothing in the room is ever in front of it. It freezes when
   it stares, its eyes glow red once it's a Fast Runner, and its head lolls and it sags when weakened.
-- **Dolphin Man** is made like Sid, from green-screen renders of his model, front and back: his head bobs and
-  twitches on his neck like Trollge's, his beak gapes open while he wails, he spins round to show his back, fin
-  and tail for the Tail Whip, and his eyes clear up at 80 ANGER. In Fetal Position (and when he's weakened) he
-  crouches down small, his head pulled into his shoulders: the front view, folded.
-- **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). Trollge is
-  lit to match each one (above); the archived slashers' pixel sprites are just dimmed in the dark ones (`tone`).
+- **Dolphin Man** is made the same way as Trollge, from green-screen renders of his model (front and back): kept
+  smooth, lit by each place, with his shadow on the floor and the wet shine on his skin catching what light there is
+  in the dark rooms. His head sways on his neck and twitches every few seconds, like something listening, and he
+  leans towards whoever he's HUNTING. His tail hangs behind him, and for the *Tail Whip* it cracks out from behind
+  him towards whoever he's hitting. He shakes as he wails, his face staying as it is. In *Fetal Position* (and when
+  he's weakened) he sits on the floor curled up with his back to you, his arms round his knees, head bowed and tail
+  along the floor: there's no render of him sitting, so that pose is built from his back render.
+- **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). Trollge and
+  Dolphin Man are lit to match each one (above); Sid's pixel sprite is just dimmed in the dark ones (`tone`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless

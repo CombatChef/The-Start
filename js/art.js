@@ -187,41 +187,115 @@
     };
   }
 
+  // ------------------------------------------------------------------ smooth sprites
+  // Trollge's and Dolphin Man's sprites are their renders, cut into layers by
+  // tools/make_images.py and kept smooth (not pixel art) so that they stand in the places'
+  // screenshots. Each place lights them (data.js places, `light`): every layer is lit once for
+  // the place, then each frame the layers are drawn moving, over a shadow on the floor.
+  //
+  // light: { mult: the colour of the light, rim: [colour, 'left' | 'right', strength] a lamp to
+  //          one side, fog: [colour, amount] the haze, glow: how much the glow layers (a grin,
+  //          wet skin) show in the dark, shadow: how dark the shadow on the floor is }
+  const NO_LIGHT = {};
+  const litCache = new WeakMap(); // light -> { sprite id -> { layer -> canvas } }
+
+  // One layer, lit. `at` is where its top-left goes on a sprite `width` wide (the lamp to one
+  // side shines across the whole sprite).
+  function lightLayer(px, light, at, width) {
+    const unit = (c) => hex(c).map((v) => v / 255);
+    const m = light.mult ? unit(light.mult) : [1, 1, 1];
+    const rim = light.rim && unit(light.rim[0]);
+    const fog = light.fog && unit(light.fog[0]);
+    const f = light.fog ? light.fog[1] : 0;
+    const img = new ImageData(px.w, px.h);
+    const d = px.d;
+    const o = img.data;
+    for (let y = 0; y < px.h; y++) {
+      for (let x = 0; x < px.w; x++) {
+        const i = (y * px.w + x) * 4;
+        if (!d[i + 3]) continue;
+        let k = 0;
+        if (rim) {
+          // strongest on the lamp's side, fading out across the sprite
+          const across = (at[0] + x + 0.5) / width;
+          const near = light.rim[1] === 'left' ? 1 - across : across;
+          k = light.rim[2] * near * near;
+        }
+        for (let c = 0; c < 3; c++) {
+          let v = (d[i + c] / 255) * m[c];
+          if (rim) v += k * rim[c] * (1 - v); // screen
+          if (fog) v = v * (1 - f) + fog[c] * f;
+          o[i + c] = v * 255;
+        }
+        o[i + 3] = d[i + 3];
+      }
+    }
+    const cv = root.document.createElement('canvas');
+    cv.width = px.w;
+    cv.height = px.h;
+    cv.getContext('2d').putImageData(img, 0, 0);
+    return cv;
+  }
+
+  // A smooth sprite's layers as canvases, lit for this light; its glow layers aren't lit.
+  // `at` gives each lit layer's top-left on the sprite.
+  function litLayers(id, light, at) {
+    let byLight = litCache.get(light);
+    if (!byLight) litCache.set(light, (byLight = {}));
+    if (!byLight[id] && spritePix[id]) {
+      const width = SC.SPRITES[id].size[0];
+      const out = {};
+      for (const [name, px] of Object.entries(spritePix[id])) {
+        out[name] = /glow/i.test(name) ? px.toCanvas() : lightLayer(px, light, at[name], width);
+      }
+      byLight[id] = out;
+    }
+    return byLight[id] || null;
+  }
+
+  // A soft shadow on the floor, `dark` (0..1) at its middle.
+  function floorShadow(ctx, x, y, rx, ry, dark) {
+    if (!(dark > 0) || !(rx > 0)) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, `rgba(0,0,0,${Math.min(1, dark)})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
+    ctx.restore();
+  }
+
+  // Draw a layer whose top-left is `at`, turned by `turn` (radians, clockwise) and scaled by
+  // [sx, sy] round `pivot`, and moved by (dx, dy).
+  function put(ctx, img, at, pivot, turn, dx, dy, sx, sy, alpha) {
+    ctx.save();
+    if (alpha != null) ctx.globalAlpha *= alpha;
+    ctx.translate(pivot[0] + (dx || 0), pivot[1] + (dy || 0));
+    if (turn) ctx.rotate(turn);
+    if (sx != null) ctx.scale(sx, sy == null ? sx : sy);
+    ctx.drawImage(img, at[0] - pivot[0], at[1] - pivot[1]);
+    ctx.restore();
+  }
+
   // ------------------------------------------------------------------ Trollge
-  // Its render, cut by tools/make_images.py into a body, a head and the glow of its face, and
-  // kept smooth so that it stands in the places' screenshots: it's lit to match each one
-  // (data.js places, `light`) and casts a shadow on the floor. "The large head wobbles on its
-  // skinny body": the head turns on its neck like a heavy pendulum.
+  // "The large head wobbles on its skinny body": the head turns on its neck like a heavy
+  // pendulum. Its glow layer is the bright part of its face (the grin, its highlights).
   const TROLL_EYES = {
     white: ['rgba(255,255,255,1)', 'rgba(200,186,255,0.45)'],
     red: ['rgba(255,70,70,1)', 'rgba(220,20,40,0.6)'],
     dim: ['rgba(150,140,165,0.8)', 'rgba(70,62,84,0.3)'],
   };
-  let trollgeKit = null; // its layers as canvases, and two more to light it on
-  function trollgeCanvases() {
-    if (trollgeKit) return trollgeKit;
-    const L = spritePix.trollge;
-    if (!L) return null;
-    const S = SC.SPRITES.trollge;
-    const blank = () => {
-      const c = root.document.createElement('canvas');
-      c.width = S.size[0];
-      c.height = S.size[1];
-      return c;
-    };
-    trollgeKit = { body: L.body.toCanvas(), head: L.head.toCanvas(), glow: L.glow.toCanvas(), shape: blank(), lit: blank() };
-    return trollgeKit;
-  }
 
   // Draws Trollge onto its canvas (SC.SPRITES.trollge.size).
   // o: { t (ms), pose: 'idle' | 'stare' | 'fast' | 'glance' | 'lunge' | 'down', eyes: 'white' | 'red' | 'dim', light }
   function trollge(cv, o) {
     const S = SC.SPRITES.trollge;
-    const K = trollgeCanvases();
     const ctx = cv.getContext('2d');
-    const w = cv.width;
-    const h = cv.height;
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const L = o.light || NO_LIGHT;
+    const K = litLayers('trollge', L, { body: S.bodyAt, head: S.headAt });
     if (!K) return;
     const t = o.t || 0;
     // How far its head is turned on its neck (radians), and how far it sinks.
@@ -237,72 +311,14 @@
       turn = 0.18 + Math.sin(t / 700) * 0.02;
       sink = 12;
     }
-    const [px, py] = S.pivot;
-    const withHead = (g, img) => {
-      g.save();
-      g.translate(px, py + sink);
-      g.rotate(turn);
-      g.drawImage(img, S.headAt[0] - px, S.headAt[1] - py);
-      g.restore();
-    };
-    // Its shape...
-    const shape = K.shape.getContext('2d');
-    shape.clearRect(0, 0, w, h);
-    shape.drawImage(K.body, S.bodyAt[0], S.bodyAt[1]);
-    withHead(shape, K.head);
-    // ...lit like the place: the colour of its light, a lamp to one side, the haze, then cut back
-    // to its shape. Its grin and the highlights on its face still show in the dark.
-    const L = o.light || {};
-    const lit = K.lit.getContext('2d');
-    lit.globalCompositeOperation = 'source-over';
-    lit.globalAlpha = 1;
-    lit.fillStyle = '#000'; // on black, so its soft edges don't pick up the light's colour
-    lit.fillRect(0, 0, w, h);
-    lit.drawImage(K.shape, 0, 0);
-    if (L.mult) {
-      lit.globalCompositeOperation = 'multiply';
-      lit.fillStyle = L.mult;
-      lit.fillRect(0, 0, w, h);
-    }
-    if (L.rim) {
-      const [color, side, k] = L.rim;
-      const g = lit.createLinearGradient(side === 'left' ? 0 : w, 0, side === 'left' ? w : 0, 0);
-      g.addColorStop(0, color);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      lit.globalCompositeOperation = 'screen';
-      lit.globalAlpha = k;
-      lit.fillStyle = g;
-      lit.fillRect(0, 0, w, h);
-    }
-    if (L.fog) {
-      lit.globalCompositeOperation = 'source-over';
-      lit.globalAlpha = L.fog[1];
-      lit.fillStyle = L.fog[0];
-      lit.fillRect(0, 0, w, h);
-    }
-    lit.globalAlpha = 1;
-    lit.globalCompositeOperation = 'destination-in';
-    lit.drawImage(K.shape, 0, 0);
-    lit.globalCompositeOperation = 'source-over';
-    if (L.glow) {
-      lit.globalAlpha = L.glow;
-      withHead(lit, K.glow);
-      lit.globalAlpha = 1;
-    }
     // On the floor: its shadow, then it.
     const [a, b] = S.soles;
-    const rx = (b[0] - a[0]) / 2 + 60;
-    ctx.save();
-    ctx.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
-    ctx.scale(1, 13 / rx);
-    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-    sh.addColorStop(0, `rgba(0,0,0,${L.shadow == null ? 0.5 : L.shadow})`);
-    sh.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = sh;
-    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
-    ctx.restore();
-    ctx.drawImage(K.lit, 0, 0);
+    floorShadow(ctx, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (b[0] - a[0]) / 2 + 60, 13, L.shadow == null ? 0.5 : L.shadow);
+    ctx.drawImage(K.body, S.bodyAt[0], S.bodyAt[1]);
+    put(ctx, K.head, S.headAt, S.pivot, turn, 0, sink);
+    if (L.glow) put(ctx, K.glow, S.headAt, S.pivot, turn, 0, sink, null, null, L.glow);
     // The glints in its big black eyes, turning with its head.
+    const [px, py] = S.pivot;
     const [c0, c1] = TROLL_EYES[o.eyes] || TROLL_EYES.white;
     const r = o.pose === 'stare' ? 6 : 4;
     for (const [ex, ey] of S.eyes) {
@@ -340,103 +356,151 @@
   }
 
   // ------------------------------------------------------------------ Dolphin Man
-  // Made by tools/make_images.py from green-screen renders of his model, like Sid: him standing,
-  // his back (the dorsal fin and tail, while he spins round for the Tail Whip), and Fetal
-  // Position, folded down into a crouch. His head bobs on his neck the way Trollge's does (but
-  // twitchier), and his beak gapes open while he wails.
-  const DOLPH_EYES = {
-    milky: [hex('#8f9ba2'), hex('#4d5960')], // "eyesight will begin extremely bad"
-    sharp: [hex('#ffffff'), hex('#cfeeff')], // Eyes of the Angry
-    dim: [hex('#3e474d'), hex('#20262a')],
-  };
-  const MAW = R(['#1a0306', '#3a0a0e', '#6e1419', '#a3272c']);
-  const BEAK = R(['#272e3b', '#586274', '#8e97a7']);
+  // His renders, cut by tools/make_images.py into his body, head and tail standing, and Fetal
+  // Position: sitting curled up with his back to you, his arms round his knees and his tail
+  // along the floor. His head sways on his neck and every few seconds twitches, like something
+  // listening; his tail swings out from behind him for the Tail Whip; he shakes as he screams
+  // (his face stays as it is) and rocks when he's curled up. The glow layers are the wet shine
+  // on his skin, which catches what light there is in the dark.
+  const dolphinAt = (S) => ({
+    body: S.bodyAt,
+    head: S.headAt,
+    tail: [S.tailPivot[0] - S.tailOrigin[0], S.tailPivot[1] - S.tailOrigin[1]],
+    fetal: S.fetalAt,
+  });
+  const ease = (k) => k * k * (3 - 2 * k);
 
-  // Copy a layer, sliding each row sideways by shift(row) pixels.
-  function blitRows(px, src, x0, y0, shift) {
-    for (let y = 0; y < src.h; y++) {
-      const dx = Math.round(shift(y));
-      for (let x = 0; x < src.w; x++) {
-        const i = (y * src.w + x) * 4;
-        if (src.d[i + 3]) px.set(x0 + x + dx, y0 + y, [src.d[i], src.d[i + 1], src.d[i + 2], 255]);
-      }
-    }
-  }
-
-  // His beak hanging wide open from under his eyes: the dark red of his throat, teeth along the
-  // top, and the lower jaw dropped and shaking under it. (x, y) is the tip of his beak.
-  function dolphinMaw(px, x, y, t) {
-    const drop = 7 + Math.round(Math.sin(t / 70) * 1.2);
-    const cx = x + 0.5;
-    const top = y - 9;
-    const bottom = y + drop;
-    const ry = (bottom - top) / 2;
-    px.ellipse(cx, top + ry, 6.2, ry + 0.5, BEAK[0]);
-    px.ellipse(cx, top + ry, 5.2, ry - 0.5, (xx, yy, nx, ny) => ramp(MAW, 0.8 - ny * 0.5 - Math.abs(nx) * 0.35, xx, yy));
-    for (let i = -4; i <= 4; i += 2) px.set(x + i, top + 1 + (Math.abs(i) > 3 ? 1 : 0), hex('#e8e4dc')); // teeth
-    px.ellipse(cx, bottom + 1, 5.6, 2.2, (xx, yy, nx, ny) => ramp(BEAK, 0.75 - ny * 0.45 - nx * 0.2, xx, yy)); // lower jaw
-    for (let i = -3; i <= 3; i += 2) px.set(x + i, bottom - 1, hex('#d8d4cc')); // lower teeth
-  }
-
-  // o: { t (ms), pose: 'idle' | 'lunge' | 'whip' | 'back' | 'wail' | 'fetal' | 'twitch' | 'down', eyes: 'milky' | 'sharp' | 'dim' }
-  function dolphin(o) {
+  // o: { t (ms), pose: 'idle' | 'hunt' | 'lunge' | 'whip' | 'wail' | 'down' | 'fetal' | 'twitch',
+  //      k (0..1 through a move), side (1: towards the right of the screen, -1: the left),
+  //      curl (0 standing .. 1 curled up, for the moment in between), light }
+  function dolphin(cv, o) {
     const S = SC.SPRITES.dolphin;
-    const L = spritePix.dolphin;
-    const px = new Pix(S.size[0], S.size[1]);
-    if (!L) return px;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const L = o.light || NO_LIGHT;
+    const at = dolphinAt(S);
+    const K = litLayers('dolphin', L, at);
+    if (!K) return;
     const t = o.t || 0;
-    const pose = o.pose || 'idle';
+    const k = o.k || 0;
+    const side = o.side || 1;
+    const curl = clamp01(o.curl || 0);
+    const shadow = (L.shadow == null ? 0.5 : L.shadow) / 0.5;
 
-    if (pose === 'fetal' || pose === 'twitch' || pose === 'down') {
-      // Curled up, rocking. He flinches at every sound ('twitch').
-      const f = L.fetal;
-      let amp = Math.sin(t / 520) * 1.2;
-      if (pose === 'twitch') amp = Math.sin(t / 40) * 2.5;
-      else if (pose === 'down') amp = Math.sin(t / 1100) * 0.7;
-      blitRows(px, f, S.at.fetal[0], S.at.fetal[1], (y) => amp * (1 - y / f.h));
-      return px;
-    }
-    if (pose === 'back') {
-      // Spun round: his back, the fin and the tail.
-      px.blit(L.back, S.at.back[0], S.at.back[1]);
-      return px;
-    }
-
-    // Standing. He breathes (his head lifts a pixel), and his head sways on his neck and every
-    // few seconds jerks sideways, like something listening.
-    let amp = Math.sin(t / 470) * 2.2;
-    const beat = (t % 2900) / 2900;
-    if (beat < 0.05) amp += 5 * Math.sin(beat * 20 * Math.PI);
-    let dy = Math.sin(t / 760) > 0.3 ? -1 : 0;
-    if (pose === 'lunge') amp = 5;
-    else if (pose === 'whip') amp = -6;
-    else if (pose === 'wail') {
-      amp = Math.sin(t / 35) * 1.5; // shaking with the scream
-      dy = Math.round(Math.sin(t / 60)) - 1;
-    }
-    const bend = neckBend(S, S, amp, dy, 0);
-    blitBent(px, L.body, S.at.body[0], S.at.body[1], bend);
-    if (pose === 'wail') {
-      const [mx, my] = bend.point(S.mouth[0], S.mouth[1]);
-      dolphinMaw(px, mx, my, t);
-    }
-    // His eyes: milky and dull, or glowing once his ANGER sharpens them.
-    const [c0, c1] = DOLPH_EYES[pose === 'wail' ? 'sharp' : o.eyes] || DOLPH_EYES.milky;
-    for (const [ex, ey] of S.eyes) {
-      const [x, y] = bend.point(ex, ey);
-      px.rect(x - 1, y, 3, 1, c0);
-      if (o.eyes === 'sharp' || pose === 'wail') {
-        px.set(x - 2, y, c1);
-        px.set(x + 2, y, c1);
+    if (curl < 1) {
+      // Standing. He breathes; his head sways on his neck, and twitches every few seconds.
+      const breath = Math.sin(t / 900);
+      let head = Math.sin(t / 470) * 0.045;
+      const beat = (t % 2900) / 2900;
+      if (beat < 0.06) head += 0.11 * Math.sin((beat / 0.06) * Math.PI);
+      let headY = breath * -1.5;
+      let headS = 1;
+      let headSY = 1;
+      let lean = 0;
+      let grow = 1 + breath * 0.004;
+      let sag = 1;
+      let dx = 0;
+      let tail = Math.sin(t / 1300) * 0.03;
+      let swept = null; // the tail's angle a moment ago, for the blur of a whip
+      const pose = o.pose;
+      if (pose === 'hunt') {
+        // Stalking whoever he's hunting: leaning their way, his head held still on them.
+        lean = side * 0.025;
+        head = side * 0.07 + Math.sin(t / 900) * 0.015;
+      } else if (pose === 'lunge') {
+        const e = Math.sin(k * Math.PI);
+        lean = side * 0.05 * e;
+        grow *= 1 + 0.06 * e;
+        head = side * 0.12 * e;
+        headY += 8 * e;
+        headS = 1 + 0.06 * e;
+      } else if (pose === 'whip') {
+        // Wind up, then the tail cracks out from behind him to one side, and comes back.
+        let a;
+        if (k < 0.28) a = -0.55 * ease(k / 0.28);
+        else if (k < 0.5) a = -0.55 + 2.55 * ease((k - 0.28) / 0.22);
+        else if (k < 0.65) a = 2.0;
+        else a = 2.0 * (1 - ease((k - 0.65) / 0.35));
+        tail = -side * a; // clockwise swings it to the left
+        if (k >= 0.28 && k < 0.58) swept = -side * Math.max(-0.55, a - 0.9);
+        lean = -side * 0.035 * Math.sin(Math.min(1, k / 0.65) * Math.PI);
+        head = -side * 0.08 * Math.sin(Math.min(1, k / 0.65) * Math.PI);
+      } else if (pose === 'wail') {
+        // Screaming: his head thrown back, shaking all over.
+        const env = Math.min(1, k / 0.12, (1 - k) / 0.15);
+        headY = -8 * env;
+        headSY = 1 - 0.05 * env;
+        head = Math.sin(t / 37) * 0.04 * env;
+        dx = Math.sin(t / 23) * 1.6 * env;
+        grow *= 1 + 0.015 * env;
+      } else if (pose === 'down') {
+        // Weakened: his head hanging, sagging where he stands.
+        head = 0.2 + Math.sin(t / 900) * 0.02;
+        headY = 16;
+        sag = 0.975;
+        lean = 0.02;
+        tail = 0.05;
       }
+      // Curling up: he sinks down as he turns away.
+      sag *= 1 - 0.18 * curl;
+      ctx.save();
+      ctx.globalAlpha = 1 - curl;
+      for (const [x, y, rx, ry, d] of S.shadows.stand) floorShadow(ctx, x, y, rx, ry, d * shadow);
+      // All of him leans and breathes from his feet.
+      const [fx, fy] = S.feet;
+      ctx.translate(fx + dx, fy);
+      ctx.rotate(lean);
+      ctx.scale(grow, grow * sag);
+      ctx.translate(-fx, -fy);
+      const tailAt = at.tail;
+      if (swept != null) {
+        for (let i = 3; i >= 1; i--) put(ctx, K.tail, tailAt, S.tailPivot, tail + (swept - tail) * (i / 3), 0, 0, null, null, 0.1 + 0.08 * (3 - i));
+      }
+      put(ctx, K.tail, tailAt, S.tailPivot, tail);
+      ctx.drawImage(K.body, S.bodyAt[0], S.bodyAt[1]);
+      if (L.glow) put(ctx, K.glow, S.bodyAt, S.feet, 0, 0, 0, null, null, L.glow);
+      put(ctx, K.head, S.headAt, S.pivot, head, 0, headY, headS, headS * headSY);
+      if (L.glow) put(ctx, K.headGlow, S.headAt, S.pivot, head, 0, headY, headS, headS * headSY, L.glow);
+      ctx.restore();
     }
-    return px;
+
+    if (curl > 0) {
+      // Curled up, rocking a little; he flinches ('twitch') at every sound.
+      let rock = Math.sin(t / 800) * 0.018;
+      let dx = 0;
+      const breath = 1 + Math.sin(t / 650) * 0.008;
+      if (o.pose === 'twitch') {
+        rock += Math.sin(t / 30) * 0.02;
+        dx = Math.sin(t / 19) * 2;
+      } else if (o.pose === 'down') rock = Math.sin(t / 1300) * 0.008;
+      ctx.save();
+      ctx.globalAlpha = curl;
+      for (const [x, y, rx, ry, d] of S.shadows.fetal) floorShadow(ctx, x, y, rx, ry, d * shadow);
+      const lift = (1 - curl) * 12; // settling down onto the floor
+      put(ctx, K.fetal, S.fetalAt, S.seat, rock, dx, -lift, 1, breath);
+      if (L.glow) put(ctx, K.fetalGlow, S.fetalAt, S.seat, rock, dx, -lift, 1, breath, L.glow);
+      ctx.restore();
+    }
   }
 
-  function dolphinPoints() {
+  // Anchor points on the Dolphin Man sprite in art pixels, standing or curled up.
+  function dolphinPoints(curled) {
     const S = SC.SPRITES.dolphin;
-    const face = [Math.round((S.eyes[0][0] + S.eyes[1][0]) / 2), S.eyes[0][1] + 6];
-    return { w: S.size[0], h: S.size[1], head: face, mouth: S.mouth, body: S.chest, feet: [S.cx, S.floor], clawL: S.handL, clawR: S.handR, muzzle: S.mouth, tail: S.tail, curled: S.fetalFace };
+    const A = (p) => [p[0] / S.res, p[1] / S.res];
+    const back = A(S.curled);
+    return {
+      w: S.size[0] / S.res,
+      h: S.size[1] / S.res,
+      res: S.res,
+      smooth: true,
+      head: curled ? [back[0], back[1] - 20] : A(S.face),
+      mouth: curled ? [back[0], back[1] - 22] : A(S.mouth),
+      body: curled ? back : A(S.chest),
+      feet: A(S.feet),
+      clawL: A(S.clawL),
+      clawR: A(S.clawR),
+      muzzle: A(S.mouth),
+    };
   }
 
   // ------------------------------------------------------------------ icons
@@ -538,7 +602,7 @@
           })
         )
         .concat(
-          // Every image layer of each sprite (body, head, and Dolphin Man's wail and fetal).
+          // Every image layer of each sprite (body, head, glows, Sid's gun, Dolphin Man's tail and fetal).
           Object.keys(sprites).map((name) => {
             const keys = Object.keys(sprites[name]).filter((k) => typeof sprites[name][k] === 'string');
             return Promise.all(keys.map((k) => loadPix(sprites[name][k]))).then((layers) => {

@@ -33,11 +33,10 @@
     [644, 714],
     [958, 714],
   ];
-  // Where each slasher's sprite sits on the stage (it is drawn at 2x).
+  // Where a pixel-art slasher's sprite sits on the stage (it is drawn at 2x). Trollge and
+  // Dolphin Man stand where each place puts them instead (data.js places, `stand`).
   const ENEMY_BOX = {
     sid: { left: 500, top: 250 },
-    trollge: { left: 390, top: 256 },
-    dolphin: { left: 536, top: 210 },
   };
   const SCALE = 2;
   // SlashCo's danger levels, colour-coded 1 (yellow) to 3 (red).
@@ -137,7 +136,7 @@
   const enemyPoints = () => {
     const id = enemyId();
     if (id === 'trollge') return SC.Art.trollgePoints();
-    if (id === 'dolphin') return SC.Art.dolphinPoints();
+    if (id === 'dolphin') return SC.Art.dolphinPoints(DolphinView.curled());
     return SC.Art.sidPoints(SidView.armed);
   };
 
@@ -145,12 +144,14 @@
     const [x, y] = PROFILE_XY[Math.max(0, slotOf(id))];
     return [x + 153, y + 117];
   }
+  // Which side of the slasher a worker's profile is on: -1 left, 1 right.
+  const sideOf = (id) => (cardCenter(id)[0] < enemyPoint('body')[0] ? -1 : 1);
   // Where the slasher's sprite sits on the stage: its top-left, and how many stage pixels one of
-  // its art pixels covers. A smooth sprite (Trollge) stands where the place puts it (data.js
-  // places, `stand`); the pixel-art ones stand at ENEMY_BOX.
+  // its art pixels covers. A smooth sprite (Trollge, Dolphin Man) stands where the place puts
+  // it (data.js places, `stand`); the pixel-art ones stand at ENEMY_BOX.
   function enemyBox() {
     const pts = enemyPoints();
-    const stand = pts.smooth && SC.DATA.places[placeId()].stand;
+    const stand = pts.smooth && (SC.DATA.places[placeId()].stand || {})[enemyId()];
     if (stand) {
       const scale = SCALE * stand[2];
       return { left: stand[0] - pts.feet[0] * scale, top: stand[1] - pts.feet[1] * scale, scale };
@@ -377,6 +378,7 @@
     P.danger.dataset.level = DANGER[S.danger] || 1;
     P.danger.textContent = S.danger;
     if (id === 'sid') SidView.reset();
+    else if (id === 'dolphin') DolphinView.reset();
     view().draw(performance.now(), true);
   }
 
@@ -769,31 +771,55 @@
     },
   };
 
-  // Dolphin Man moves like Trollge (the head bobs on its neck) but jerkier. He screams with his
-  // beak hanging open, spins round to show his back and tail for the Tail Whip, and curls up in
-  // Fetal Position (and when he's down).
+  // Dolphin Man: his head sways on his neck and twitches like something listening. He leans
+  // towards whoever he's hunting, lunges, cracks his tail out from behind him for the Tail Whip,
+  // shakes as he screams (his face stays as it is), and in Fetal Position (or when he's down)
+  // sits on the floor curled up with his back to you.
   const DolphinView = {
     override: null,
     since: 0,
     until: 0,
-    set(pose, ms) {
+    side: 1, // where his move goes: 1 towards the right of the screen, -1 the left
+    curl: 0, // 0 standing .. 1 curled up
+    last: 0,
+    set(pose, ms, side) {
       this.override = pose;
       this.since = performance.now();
       this.until = this.since + ms;
+      if (side) this.side = side;
       this.draw(this.since, true);
+    },
+    // A new fight: standing, not in the middle of anything.
+    reset() {
+      this.override = null;
+      this.curl = this.curled() ? 1 : 0;
+    },
+    curled() {
+      const s = UI.battle && UI.battle.enemy;
+      return !!(s && (s.status.fetal || s.status.stunned));
     },
     draw(now, force) {
       const b = UI.battle;
       const s = b && b.enemy;
+      const hunted = b && b.hunted();
       let pose = 'idle';
+      let side = this.side;
       if (s && s.status.stunned) pose = 'down';
       else if (s && s.status.fetal) pose = 'fetal';
-      if (this.override && now < this.until) pose = this.override;
-      // In step with the spin: his back shows while he's turned round (see SidView).
-      const k = (now - this.since) / 420;
-      if (pose === 'whip' && k >= 2 / 6 && k < 5 / 6) pose = 'back';
-      const eyes = s && s.flags.overflow ? 'sharp' : 'milky';
-      SC.Art.dolphin({ t: now, pose, eyes }).toCanvas(enemyCanvas);
+      else if (hunted) {
+        pose = 'hunt';
+        side = sideOf(hunted.id);
+      }
+      const acting = this.override && now < this.until;
+      if (acting) pose = this.override;
+      // Curling up on the floor (in Fetal Position, or when he's down), or getting up again,
+      // takes a moment.
+      const goal = this.curled() || (acting && pose === 'twitch') ? 1 : 0;
+      const dt = Math.min(100, Math.max(0, now - (this.last || now)));
+      this.last = now;
+      this.curl += Math.sign(goal - this.curl) * Math.min(Math.abs(goal - this.curl), dt / 320);
+      const k = acting ? (now - this.since) / Math.max(1, this.until - this.since) : 0;
+      SC.Art.dolphin(enemyCanvas, { t: now, pose, k, side, curl: this.curl, light: SC.DATA.places[placeId()].light });
       if (force) enemyCanvas.dataset.pose = pose;
     },
   };
@@ -1035,15 +1061,14 @@
           return T(160);
         }
         if (e.kind === 'hands') {
-          DolphinView.set('lunge', 700);
+          DolphinView.set('lunge', 700, sideOf(e.target));
           sfx('swing');
           await lunge(e.target, 220, 1.2);
           return T(60);
         }
         if (e.kind === 'whip') {
-          // He spins around, and the tail cracks across the profile.
-          DolphinView.set('whip', 600);
-          pulse(enemyWrap, 'spin', 420);
+          // He winds up, and his tail cracks out from behind him across the profile.
+          DolphinView.set('whip', 720, sideOf(e.target));
           sfx('whip');
           await T(200);
           const hitting = lunge(e.target, 160, 1.3);

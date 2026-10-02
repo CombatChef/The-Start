@@ -276,7 +276,7 @@ button:focus-visible {
     translate: 6px 0;
   }
 }
-/* Dolphin Man spins round for his Tail Whip. */
+/* Sid spins round to draw his Desert Eagle or put it away. */
 #enemy-wrap.spin #enemy {
   animation: spin 420ms steps(6) 1;
 }

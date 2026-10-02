@@ -18,13 +18,14 @@ effects on top, so only a few source edits live here:
     sid / sid_armed - Sid's card from the doc, with and without the Desert Eagle
     trollge         - Trollge's head, for the title screen
 
-SPRITES (assets/sprites/). Trollge's battle sprite is his render, cut out and kept smooth (full
-colour, not pixel art) so the game can light it to match the photo it stands in. The head is a
-separate layer so it can tilt and wobble on the skinny body, and the eyes and grin are a glow
-layer that shines out of the dark rooms. Sid's and Dolphin Man's are green-screen renders of
-their models, front and back, shrunk into dithered pixel art: Sid with and without the Desert
-Eagle (the gun is a layer of its own so it can twirl and kick), and Dolphin Man folded down into
-a crouch for Fetal Position.
+SPRITES (assets/sprites/). Trollge's and Dolphin Man's battle sprites are their renders, cut out
+and kept smooth (full colour, not pixel art) so the game can light them to match the photo they
+stand in. Their heads are separate layers so they can tilt and wobble on their necks, and glow
+layers (Trollge's eyes and grin, Dolphin Man's wet skin) shine out of the dark rooms. Dolphin
+Man's tail is a layer of its own for the Tail Whip, and Fetal Position is him sitting curled up
+with his back to you, built from his back render. Sid's are green-screen renders of his model,
+front and back, with and without the Desert Eagle, shrunk into dithered pixel art (the gun is a
+layer of its own so it can twirl and kick).
 
 ICONS (assets/icons/). halted.png, the red skull on a worker who is out of the fight.
 
@@ -400,35 +401,213 @@ def trollge():
     return meta
 
 
-# Dolphin Man: blue-grey dolphin skin from near-black to pale, the white of his belly, and the
-# reds of his open mouth.
-DOLPH = hexes(['#05070a', '#10141b', '#1b212b', '#272e3b', '#343c4b', '#444d5e', '#586274', '#707a8c', '#8e97a7',
-               '#b1b8c4', '#d3d8df', '#eef1f4', '#ffffff', '#3a0a0e', '#6e1419', '#a3272c', '#d0585a'])
-DOLPH_OUTLINE = (2, 3, 5, 255)
+# ---------------------------------------------------------------- Dolphin Man
+# Outlines on his renders (render pixels), traced by hand.
+# His head, cut off along the jaw (dolphin_front).
+DOLPH_HEAD = [(1003, 52), (1030, 55), (1055, 68), (1075, 95), (1083, 130), (1083, 170), (1080, 190), (1068, 205),
+              (1062, 213), (1051, 228), (1041, 245), (1033, 262), (1025, 275), (1012, 283), (1000, 282), (990, 276),
+              (983, 262), (975, 245), (966, 228), (960, 213), (957, 205), (950, 190), (945, 160), (948, 120), (960, 90),
+              (980, 62)]
+# His tail and its flukes, from the small of his back down (dolphin_back).
+DOLPH_TAIL = [(944, 560), (945, 620), (946, 660), (948, 700), (952, 730), (958, 750), (945, 757), (930, 766), (915, 776),
+              (900, 790), (885, 806), (870, 825), (858, 843), (848, 858), (845, 864), (856, 864), (872, 859), (890, 855),
+              (912, 852), (932, 846), (950, 839), (968, 830), (980, 815), (985, 806), (995, 817), (1010, 829),
+              (1025, 836), (1040, 842), (1045, 851), (1070, 849), (1090, 849), (1110, 850), (1128, 852), (1134, 848),
+              (1125, 836), (1110, 820), (1095, 805), (1080, 790), (1060, 777), (1040, 766), (1020, 757), (1000, 750),
+              (998, 730), (1001, 700), (1002, 660), (1002, 620), (1001, 560)]
+# From behind: the back of his head, and his forearms and hands (gone round the front of his
+# knees when he curls up), which end at rounded elbows.
+DOLPH_BACK_HEAD = [(1000, 25), (1030, 30), (1052, 50), (1062, 90), (1060, 130), (1052, 150), (1040, 158), (970, 158),
+                   (957, 150), (950, 130), (948, 90), (958, 50), (978, 30)]
+DOLPH_FOREARMS = [[(740, 405), (880, 405), (886, 440), (888, 470), (884, 535), (872, 545), (868, 562), (740, 562)],
+                  [(1140, 418), (1240, 418), (1240, 640), (1093, 640), (1093, 520), (1110, 470), (1140, 445)]]
+DOLPH_ELBOWS = [((806, 402), (36, 24)), ((1178, 416), (34, 24))]
 
 
-def fold(rgba, bands):
-    """Squash horizontal bands of a render, top to bottom: [(y0, y1, scale), ...]."""
-    parts = [cv2.resize(rgba[y0:y1], (rgba.shape[1], max(1, int(round((y1 - y0) * k)))), interpolation=cv2.INTER_AREA) for y0, y1, k in bands]
-    return np.vstack(parts)
+def soft_poly(shape, pts, blur=0.8):
+    """An anti-aliased polygon mask (0..1), drawn at 4x and shrunk."""
+    H, W = shape
+    m = np.zeros((H * 4, W * 4), np.uint8)
+    cv2.fillPoly(m, [np.round(np.array(pts, float) * 4).astype(np.int32)], 255)
+    m = cv2.resize(m, (W, H), interpolation=cv2.INTER_AREA).astype(float) / 255
+    return cv2.GaussianBlur(m, (0, 0), blur) if blur else m
+
+
+def clean_edges(rgba, inner=0.97, r=3):
+    """Semi-transparent edge pixels take the colour of the figure just inside them, so no pale
+    green-screen fringe is left round it."""
+    a = rgba[..., 3].astype(float) / 255
+    core = (a >= inner).astype(float)
+    col = rgba[..., :3].astype(float)
+    num = cv2.blur(col * core[..., None], (2 * r + 1, 2 * r + 1))
+    den = cv2.blur(core, (2 * r + 1, 2 * r + 1))[..., None]
+    edge = (a < inner) & (den[..., 0] > 0.02)
+    col[edge] = (num / np.maximum(den, 1e-6))[edge]
+    return np.dstack([col, a * 255]).clip(0, 255).astype(np.uint8)
+
+
+def premul(rgba, mask=None):
+    """uint8 RGBA (and an optional 0..1 mask) -> float RGBA, premultiplied."""
+    f = rgba.astype(float) / 255
+    if mask is not None:
+        f[..., 3] *= mask
+    f[..., :3] *= f[..., 3:4]
+    return f
+
+
+def warp(p, src, dst, size, ang=0.0, sx=1.0, sy=1.0, flip=False):
+    """Move a premultiplied piece so its point `src` lands on `dst` in a canvas of `size`, turned
+    `ang` degrees (anticlockwise on screen) and scaled (sx, sy) round that point."""
+    if flip:
+        p = p[:, ::-1]
+        src = (p.shape[1] - 1 - src[0], src[1])
+    c, s = np.cos(np.radians(ang)), np.sin(np.radians(ang))
+    R = np.array([[c, s], [-s, c]]) @ np.diag([sx, sy])
+    t = np.array(dst, float) - R @ np.array(src, float)
+    return cv2.warpAffine(p, np.hstack([R, t[:, None]]), size, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+                          borderValue=(0, 0, 0, 0))
+
+
+def over(dst, src):
+    dst[...] = src + dst * (1 - src[..., 3:4])
+
+
+def shade(dst, front, k, blur, dx=0, dy=0):
+    """What's already drawn darkens just round the piece about to go on top of it."""
+    h, w = dst.shape[:2]
+    a = cv2.warpAffine(front[..., 3], np.float32([[1, 0, dx], [0, 1, dy]]), (w, h))
+    dst[..., :3] *= 1 - cv2.GaussianBlur(a, (0, 0), blur)[..., None] * k
+
+
+def to_u8(p):
+    """Premultiplied float RGBA -> straight uint8 RGBA."""
+    a = p[..., 3:4]
+    return np.dstack([p[..., :3] / np.maximum(a, 1e-6), a]).clip(0, 1).__mul__(255).round().astype(np.uint8)
+
+
+def wet(rgba):
+    """The wet shine on his skin: the small, bright highlights (not his pale belly), which still
+    catch the light in a dark room."""
+    f = rgba[..., :3].astype(float) / 255
+    lum = f @ [0.299, 0.587, 0.114]
+    spec = np.clip((lum - cv2.GaussianBlur(lum, (0, 0), 6) - 0.05) / 0.16, 0, 1) * np.clip((lum - 0.5) / 0.25, 0, 1)
+    out = rgba.copy()
+    out[..., 3] = (rgba[..., 3] * spec).astype(np.uint8)
+    return out
 
 
 def dolphin():
-    """Dolphin Man's battle sprite, from green-screen renders of his model, made like Sid's: him
-    standing, his back (the dorsal fin and tail, for when he spins round to Tail Whip), and Fetal
-    Position, the front view folded down into a crouch with his head pulled into his shoulders.
+    """Dolphin Man's battle sprite, from green-screen renders of his model, made like Trollge's:
+    kept smooth (not pixel art) and in layers the game moves and lights to match each place.
+
+        body  - him standing, without his head; a neck is filled in behind his jaw so nothing
+                shows through when the head tilts
+        head  - his head, which sways and twitches on his neck
+        tail  - his tail and flukes (from the back view), hanging behind him between his legs
+                and on the floor; it swings out for the Tail Whip
+        fetal - Fetal Position: sitting curled up with his back to you, his arms round his
+                knees, head bowed and tail along the floor, made from the back view
+        glow, headGlow, fetalGlow - the wet shine on his skin, which shows in the dark
+
     His title card is the open-mouth screenshot, posterized like the workers' portraits."""
-    S = 0.21
-    front, back = green_screen('dolphin_front.webp'), green_screen('dolphin_back.webp')
-    fetal = fold(front, [(0, 250, 1.0), (250, 330, 0.35), (330, 640, 0.8), (640, 1104, 0.22)])
-    middle = torso_x(front)
-    views = {
-        'body': (front, (middle, 1103), S),
-        'back': (back, (torso_x(back), 949), S * 1.15),  # shot from further away
-        'fetal': (fetal, (middle, fetal.shape[0] - 1), S),
-    }
-    layers, at, size, cx, floor, on = lay_out(views, DOLPH, DOLPH_OUTLINE)
-    save_sprites('dolphin', layers)
+    R = 3
+    S = 0.22 * R  # front render -> sprite pixels
+    SB = S * 1.15  # the back view was shot from further away
+
+    def toned(rgba):  # out of the studio light, into the game's dimmer one
+        out = rgba.copy()
+        out[..., :3] = (255 * 0.93 * (rgba[..., :3].astype(float) / 255) ** 1.18).astype(np.uint8)
+        return out
+
+    front = toned(clean_edges(green_screen('dolphin_front.webp')))
+    back = toned(clean_edges(green_screen('dolphin_back.webp')))
+    H, W = front.shape[:2]
+    yy = np.mgrid[0:H, 0:W][0]
+    a = front[..., 3].astype(float) / 255
+
+    # ---- standing: the head, and the body with a neck behind the jaw
+    head_m = soft_poly((H, W), DOLPH_HEAD)
+    head = front.copy()
+    head[..., 3] = (a * head_m * 255).astype(np.uint8)
+    ramp = np.clip((yy - 196) / 10, 0, 1)  # above this, only the room is behind his head
+    body = front.copy()
+    body[..., 3] = (a * (1 - head_m * (1 - ramp)) * 255).astype(np.uint8)
+    hole = ((head_m > 0.02) & (ramp > 0) & (a > 0.5)).astype(np.uint8)
+    filled = cv2.inpaint(front[..., :3], hole, 14, cv2.INPAINT_TELEA)
+    k = (head_m * ramp)[..., None]
+    col = front[..., :3] * (1 - k) + filled * k
+    col *= 1 - 0.22 * np.clip((yy - 880) / 225, 0, 1)[..., None]  # darker down at the floor
+    body[..., :3] = col.astype(np.uint8)
+
+    # ---- the tail, off the back view: turned round to face the same way, and in his shadow
+    Hb, Wb = back.shape[:2]
+    by, bx = np.mgrid[0:Hb, 0:Wb]
+    tail_m = soft_poly((Hb, Wb), DOLPH_TAIL)
+    tail = back.copy()
+    tail[..., 3] = (back[..., 3] * tail_m).astype(np.uint8)
+    tail[..., :3] = (tail[..., :3] * 0.72).astype(np.uint8)
+
+    # ---- Fetal Position, from behind: his back hunched over, his head bowed below his
+    # shoulders, his forearms gone round the front of his knees, sitting on the floor with his
+    # tail out along it. Built on a canvas whose floor point (under him) is FP.
+    FW, FH, FP = 1000, 820, (500, 600)
+    seat_y = 612
+    arms = np.ones((Hb, Wb))
+    for poly, ((ex, ey), (rx, ry)) in zip(DOLPH_FOREARMS, DOLPH_ELBOWS):
+        cut = soft_poly((Hb, Wb), poly, 1.0) * (1 - np.clip((1 - (((bx - ex) / rx) ** 2 + ((by - ey) / ry) ** 2)) * 5, 0, 1))
+        arms *= 1 - cut
+    cy = seat_y - 70  # the bottom is rounded off at the corners, where he sits
+    se = np.where(by < cy, 0, (np.abs(bx - 985) / 112) ** 4 + ((by - cy) / 70) ** 4)
+    bhead_m = soft_poly((Hb, Wb), DOLPH_BACK_HEAD)
+    torso = premul(back, (1 - bhead_m) * arms * np.clip((1 - se) * 8, 0, 1))
+    dim = 1 - 0.55 * np.clip((by - (seat_y - 40)) / 40, 0, 1)  # in shadow where he sits
+    for (ex, ey), (rx, ry) in DOLPH_ELBOWS:  # ...and where his arms turn away round his knees
+        d = np.sqrt(((bx - ex) / (rx * 1.6)) ** 2 + ((by - ey) / (ry * 2.2)) ** 2)
+        dim *= 1 - 0.5 * np.clip(1 - d, 0, 1) * np.clip((by - ey + ry * 1.5) / (ry * 1.5), 0, 1)
+    torso[..., :3] *= dim[..., None]
+    fetal = np.zeros((FH, FW, 4))
+    over(fetal, warp(premul(back, bhead_m), (1005, 150), (FP[0], FP[1] - 300), (FW, FH), sx=1.0, sy=0.92))
+    curl = premul(back, tail_m * np.clip((by - 600) / 30, 0, 1))  # tucked in under him
+    curl[..., :3] *= 0.85
+    over(fetal, warp(curl, (975, 600), (FP[0] + 10, FP[1] - 8), (FW, FH), ang=4, sx=1.05, sy=0.42))
+    tor = warp(torso, (985, seat_y), FP, (FW, FH), sy=0.8)
+    shade(fetal, tor, 0.45, 10, dy=-6)
+    over(fetal, tor)
+    fetal = to_u8(fetal)
+
+    # ---- glows, then everything shrunk to sprite pixels
+    def crop(img, s):
+        ys, xs = np.where(img[..., 3] > 0)
+        box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
+        return smooth(img, s, box), box
+
+    layers = {}
+    for name, img, s in (('body', body, S), ('head', head, S), ('tail', tail[:, ::-1].copy(), SB), ('fetal', fetal, SB)):
+        layers[name] = crop(img, s)
+    # The glows are cut from the same boxes, so each lines up with its layer.
+    for name, src, s in (('glow', body, S), ('headGlow', head, S), ('fetalGlow', fetal, SB)):
+        box = layers[{'glow': 'body', 'headGlow': 'head', 'fetalGlow': 'fetal'}[name]][1]
+        layers[name] = (smooth(wet(src), s, box), box)
+
+    # One canvas round them all: room at the sides for the tail to swing out, and below his
+    # feet for it lying on the floor when he's curled up. Front-render pixels -> sprite pixels:
+    X0, Y0, pad = 640, -30, 6  # (room above his head for him to rear up)
+    on = lambda p: [int(round((p[0] - X0) * S)) + pad, int(round((p[1] - Y0) * S)) + pad]
+    feet = (1010, 1105)  # the floor under him (his front foot's sole)
+    seat = on((feet[0], feet[1] - 150))  # where he sits when he curls up: further back, so his tail shows
+    # the fetal canvas, its floor point on `seat`
+    fx0, fy0 = layers['fetal'][1][:2]
+    fetal_at = [int(round(seat[0] - (FP[0] - fx0) * SB)), int(round(seat[1] - (FP[1] - fy0) * SB))]
+    tx0, ty0 = layers['tail'][1][:2]  # (the tail was turned round: its x is mirrored)
+    tail_origin = [int(round(((Wb - 1 - 973) - tx0) * SB)), int(round((566 - ty0) * SB))]
+    bottom = max(on((0, H))[1], fetal_at[1] + layers['fetal'][0].shape[0])  # standing, or curled up
+    size = [int(np.ceil(((1380 - X0) * S + 2 * pad) / R)) * R, int(np.ceil((bottom + pad) / R)) * R]
+    os.makedirs(SPRITES, exist_ok=True)
+    for name, (img, _) in layers.items():
+        Image.fromarray(img).save(os.path.join(SPRITES, f'dolphin_{name}.png'), optimize=True)
+        print(f'wrote sprites/dolphin_{name}.png', img.shape[1], 'x', img.shape[0])
+    at = lambda name: on(layers[name][1][:2])
+    soles = [(905, 1102, 70, 14, 0.5), (1100, 958, 55, 11, 0.45), (1010, 1030, 200, 40, 0.22)]  # render px
 
     # Title-screen card: the open-mouth picture as a full frame, head to chest, posterized
     # like the workers' portraits. The room behind him is black; a faint smudge of it that
@@ -438,20 +617,27 @@ def dolphin():
     card[(lab != 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])) & (card > 0)] = 0
     save(card, GRAY + REDS, 'dolphin')
     return {
-        'size': size,
-        'at': at,  # where each layer's top-left goes on the canvas
-        'cx': cx,
-        'floor': floor,
-        # On the standing view. His head sways above `neck` (a canvas row: just under his beak).
-        'eyes': [on('body', (987, 167)), on('body', (1033, 168))],
-        'mouth': on('body', (1002, 266)),  # the tip of his beak
-        'neck': on('body', (1002, 280))[1],
-        'top': on('body', (1010, 60))[1],
-        'chest': on('body', (1040, 400)),
-        'handL': on('body', (895, 615)),
-        'handR': on('body', (1154, 633)),
-        'tail': on('back', (990, 800)),  # the flukes, on his back view
-        'fetalFace': on('fetal', (1005, 200)),  # his face when he's curled up
+        'res': R,
+        'size': size,  # sprite pixels (art pixels x res)
+        'bodyAt': at('body'),  # where each layer's top-left goes (glows go with their layers)
+        'headAt': at('head'),
+        'fetalAt': fetal_at,
+        'pivot': on((1012, 225)),  # his neck: the head turns round this point
+        'tailPivot': on((1010, 600)),  # where his tail starts, behind his hips...
+        'tailOrigin': tail_origin,  # ...and that point on tail.png
+        'seat': seat,  # the floor under him when he's curled up
+        'face': on((1012, 175)),
+        'mouth': on((1008, 278)),  # the tip of his beak
+        'chest': on((1030, 400)),
+        'feet': on(feet),
+        'clawL': on((890, 620)),
+        'clawR': on((1120, 665)),
+        'curled': [seat[0], seat[1] - int(round(230 * SB))],  # the middle of his back, curled up
+        # Shadows on the floor, [x, y, rx, ry, darkness] (sprite pixels): standing, and curled up.
+        'shadows': {
+            'stand': [on((x, y)) + [round(rx * S), round(ry * S), k] for x, y, rx, ry, k in soles],
+            'fetal': [seat + [round(150 * SB), round(26 * SB), 0.6], [seat[0], seat[1] + round(40 * SB), round(170 * SB), round(34 * SB), 0.3]],
+        },
     }
 
 
@@ -667,5 +853,5 @@ if __name__ == '__main__':
     bundle({
         'sid': {'layers': {k: f'sid_{k}.png' for k in ('front', 'armed', 'gun', 'back', 'backGun')}, 'meta': sid_sprite()},
         'trollge': {'layers': {k: f'trollge_{k}.png' for k in ('body', 'head', 'glow')}, 'meta': trollge()},
-        'dolphin': {'layers': {k: f'dolphin_{k}.png' for k in ('body', 'back', 'fetal')}, 'meta': dolphin()},
+        'dolphin': {'layers': {k: f'dolphin_{k}.png' for k in ('body', 'head', 'tail', 'fetal', 'glow', 'headGlow', 'fetalGlow')}, 'meta': dolphin()},
     })

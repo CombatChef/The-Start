@@ -774,7 +774,7 @@
   // Dolphin Man: his head sways on his neck and twitches like something listening. He leans
   // towards whoever he's hunting, lunges, cracks his tail out from behind him for the Tail Whip,
   // shakes as he screams (his face stays as it is), and in Fetal Position (or when he's down)
-  // sits on the floor curled up with his back to you.
+  // sits on the floor curled up, his head down on his knees.
   const DolphinView = {
     override: null,
     since: 0,

@@ -194,8 +194,8 @@
   // the place, then each frame the layers are drawn moving, over a shadow on the floor.
   //
   // light: { mult: the colour of the light, rim: [colour, 'left' | 'right', strength] a lamp to
-  //          one side, fog: [colour, amount] the haze, glow: how much the glow layers (a grin,
-  //          wet skin) show in the dark, shadow: how dark the shadow on the floor is }
+  //          one side, fog: [colour, amount] the haze, glow: how much a glow layer (Trollge's
+  //          grin) shows in the dark, shadow: how dark the shadow on the floor is }
   const NO_LIGHT = {};
   const litCache = new WeakMap(); // light -> { sprite id -> { layer -> canvas } }
 
@@ -356,12 +356,11 @@
   }
 
   // ------------------------------------------------------------------ Dolphin Man
-  // His renders, cut by tools/make_images.py into his body, head and tail standing, and Fetal
-  // Position: sitting curled up with his back to you, his arms round his knees and his tail
-  // along the floor. His head sways on his neck and every few seconds twitches, like something
-  // listening; his tail swings out from behind him for the Tail Whip; he shakes as he screams
-  // (his face stays as it is) and rocks when he's curled up. The glow layers are the wet shine
-  // on his skin, which catches what light there is in the dark.
+  // His renders, made matte and seen at eye level by tools/make_images.py, cut into his body,
+  // head and tail standing, and Fetal Position: facing you, sitting curled up over his knees
+  // with his head down. His head sways on his neck and every few seconds twitches, like
+  // something listening; his tail swings out from behind him for the Tail Whip; he shakes as he
+  // screams (his face stays as it is) and rocks when he's curled up.
   const dolphinAt = (S) => ({
     body: S.bodyAt,
     head: S.headAt,
@@ -458,9 +457,7 @@
       }
       put(ctx, K.tail, tailAt, S.tailPivot, tail);
       ctx.drawImage(K.body, S.bodyAt[0], S.bodyAt[1]);
-      if (L.glow) put(ctx, K.glow, S.bodyAt, S.feet, 0, 0, 0, null, null, L.glow);
       put(ctx, K.head, S.headAt, S.pivot, head, 0, headY, headS, headS * headSY);
-      if (L.glow) put(ctx, K.headGlow, S.headAt, S.pivot, head, 0, headY, headS, headS * headSY, L.glow);
       ctx.restore();
     }
 
@@ -478,7 +475,6 @@
       for (const [x, y, rx, ry, d] of S.shadows.fetal) floorShadow(ctx, x, y, rx, ry, d * shadow);
       const lift = (1 - curl) * 12; // settling down onto the floor
       put(ctx, K.fetal, S.fetalAt, S.seat, rock, dx, -lift, 1, breath);
-      if (L.glow) put(ctx, K.fetalGlow, S.fetalAt, S.seat, rock, dx, -lift, 1, breath, L.glow);
       ctx.restore();
     }
   }
@@ -602,7 +598,7 @@
           })
         )
         .concat(
-          // Every image layer of each sprite (body, head, glows, Sid's gun, Dolphin Man's tail and fetal).
+          // Every image layer of each sprite (body, head, Trollge's glow, Sid's gun, Dolphin Man's tail and fetal).
           Object.keys(sprites).map((name) => {
             const keys = Object.keys(sprites[name]).filter((k) => typeof sprites[name][k] === 'string');
             return Promise.all(keys.map((k) => loadPix(sprites[name][k]))).then((layers) => {

@@ -151,9 +151,9 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
 - **He hunts by sound.** A battery going in, glass breaking, a ringing phone, a blast, Captain Jim yelling about
   his locker: loud things anger him (more the angrier he already is), and he goes after whoever made them for 2
   turns, seeing them better (**HUNTED**). Camouflage doesn't hide you from him once he's hunting you.
-- **Fetal Position.** Now and then he sits down on the floor curled up, his back to you: he can't attack and his DEF
-  shoots up, but every noise angers him twice as much, and every hit is a noise. Use the time to heal, guard, buff
-  or run.
+- **Fetal Position.** Now and then he sits down on the floor curled up, his head down on his knees: he can't attack
+  and his DEF shoots up, but every noise angers him twice as much, and every hit is a noise. Use the time to heal,
+  guard, buff or run.
 
 ### Archived slashers
 
@@ -330,13 +330,15 @@ means not hitting him while he's curled up.
   Hall and the Gym, its grin glowing out of the dark rooms, and a soft shadow on the floor under its feet. It stands
   close to the camera on each room's floor (`stand`), so nothing in the room is ever in front of it. It freezes when
   it stares, its eyes glow red once it's a Fast Runner, and its head lolls and it sags when weakened.
-- **Dolphin Man** is made the same way as Trollge, from green-screen renders of his model (front and back): kept
-  smooth, lit by each place, with his shadow on the floor and the wet shine on his skin catching what light there is
-  in the dark rooms. His head sways on his neck and twitches every few seconds, like something listening, and he
-  leans towards whoever he's HUNTING. His tail hangs behind him, and for the *Tail Whip* it cracks out from behind
-  him towards whoever he's hitting. He shakes as he wails, his face staying as it is. In *Fetal Position* (and when
-  he's weakened) he sits on the floor curled up with his back to you, his arms round his knees, head bowed and tail
-  along the floor: there's no render of him sitting, so that pose is built from his back render.
+- **Dolphin Man** is made the same way as Trollge, from green-screen renders of his model, but simplified to sit in
+  the rooms' photos: his skin is plain and matte instead of the renders' wet studio shine, the renders' high camera
+  is brought down to eye level, he's lit from above like the rooms' ceiling lights, and he stands at his real size
+  on a clear patch of each room's floor (`stand`), with his shadow under him. His head sways on his neck and
+  twitches every few seconds, like something listening, and he leans towards whoever he's HUNTING. His tail hangs
+  behind him, and for the *Tail Whip* it cracks out from behind him towards whoever he's hitting. He shakes as he
+  wails, his face staying as it is. In *Fetal Position* (and when he's weakened) he sits on the floor facing you,
+  his forearms crossed over his knees and his head down on them: there's no render of him sitting, so that pose is
+  put together from pieces of his front render.
 - **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). Trollge and
   Dolphin Man are lit to match each one (above); Sid's pixel sprite is just dimmed in the dark ones (`tone`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;

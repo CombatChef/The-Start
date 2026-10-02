@@ -1,0 +1,517 @@
+<!doctype html>
+<!--
+  Dolphin Man's 3D model, for his battle sprite (tools/dolphin/render.js renders it). He's a
+  signed-distance model, ray-marched in a WebGL fragment shader: his body, dolphin head (the
+  rounded melon over a long beak, eyes under heavy brows), dorsal fin and tail with its flukes
+  are smooth shapes blended together and posed by a skeleton (poses.js). Slate-grey skin, darker
+  on his back, with a white belly from his throat to his groin; lit softly from above, like the
+  school's ceiling lights. The game lights the result to match each room.
+-->
+<html><head><meta charset="utf-8"><title>Dolphin Man model</title></head>
+<body>
+<canvas id="c"></canvas>
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+precision highp int;
+out vec4 outColor;
+uniform vec2 u_res;
+uniform vec3 u_cam;
+uniform vec3 u_target;
+uniform float u_fov;
+uniform vec3 u_j[32];
+uniform vec3 u_headUp;
+uniform vec3 u_bodyFwd;
+uniform vec3 u_palmL;
+uniform vec3 u_palmR;
+uniform float u_curl;
+uniform vec3 u_flukeSide;
+uniform int u_parts; // 1 body, 2 head, 4 tail, 8 fin
+uniform int u_shade; // parts that cast shadows and occlusion
+uniform int u_ss;    // supersampling (per axis)
+
+// ---- joints
+#define PELVIS u_j[0]
+#define WAIST u_j[1]
+#define CHEST u_j[2]
+#define NECK u_j[3]
+#define SKULL u_j[4]
+#define BEAK u_j[5]
+#define SHL u_j[6]
+#define ELL u_j[7]
+#define WRL u_j[8]
+#define HNL u_j[9]
+#define SHR u_j[10]
+#define ELR u_j[11]
+#define WRR u_j[12]
+#define HNR u_j[13]
+#define HIPL u_j[14]
+#define KNL u_j[15]
+#define ANL u_j[16]
+#define TOEL u_j[17]
+#define HIPR u_j[18]
+#define KNR u_j[19]
+#define ANR u_j[20]
+#define TOER u_j[21]
+#define T0 u_j[22]
+#define T1 u_j[23]
+#define T2 u_j[24]
+#define T3 u_j[25]
+#define FIN0 u_j[26]
+#define FIN1 u_j[27]
+
+float smin(float a, float b, float k) {
+  float h = max(k - abs(a - b), 0.0) / k;
+  return min(a, b) - h * h * k * 0.25;
+}
+float smax(float a, float b, float k) { return -smin(-a, -b, k); }
+
+// Round cone (tapered capsule) from a (radius r1) to b (radius r2). After Inigo Quilez.
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
+  vec3 ba = b - a;
+  float l2 = dot(ba, ba);
+  float rr = r1 - r2;
+  float a2 = l2 - rr * rr;
+  float il2 = 1.0 / l2;
+  vec3 pa = p - a;
+  float y = dot(pa, ba);
+  float z = y - l2;
+  vec3 xv = pa * l2 - ba * y;
+  float x2 = dot(xv, xv);
+  float y2 = y * y * l2;
+  float z2 = z * z * l2;
+  float k = sign(rr) * rr * rr * x2;
+  if (sign(z) * a2 * z2 > k) return sqrt(x2 + z2) * il2 - r2;
+  if (sign(y) * a2 * y2 < k) return sqrt(x2 + y2) * il2 - r1;
+  return (sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+float sdEllipsoid(vec3 p, vec3 r) {
+  float k0 = length(p / r);
+  float k1 = length(p / (r * r));
+  return k0 * (k0 - 1.0) / k1;
+}
+// Ellipsoid with axes along the frame (X, Y, Z), centred at c.
+float sdEll(vec3 p, vec3 c, vec3 X, vec3 Y, vec3 Z, vec3 r) {
+  vec3 q = p - c;
+  return sdEllipsoid(vec3(dot(q, X), dot(q, Y), dot(q, Z)), r);
+}
+mat3 frame(vec3 fwd, vec3 up) {
+  vec3 Z = normalize(fwd);
+  vec3 X = normalize(cross(up, Z));
+  vec3 Y = cross(Z, X);
+  return mat3(X, Y, Z);
+}
+
+// ---- hand: palm and four curled claw-fingers and a thumb.
+float sdHand(vec3 p, vec3 wr, vec3 kn, vec3 palmN, float side) {
+  vec3 dir = normalize(kn - wr);
+  vec3 N = normalize(palmN - dir * dot(palmN, dir));
+  vec3 S = cross(dir, N) * side;
+  vec3 pc = (wr + kn) * 0.5;
+  float d = sdEll(p, pc, S, N, dir, vec3(0.04, 0.016, 0.055));
+  if (length(p - pc) > 0.19) return d;
+  for (int i = 0; i < 4; i++) {
+    float o = (float(i) - 1.5) * 0.021;
+    vec3 a = kn + S * o + dir * 0.004;
+    float l1 = 0.05 - abs(o) * 0.25;
+    vec3 b = a + normalize(dir + N * u_curl * 0.6) * l1;
+    vec3 c = b + normalize(dir + N * u_curl * 1.6) * (l1 * 0.85);
+    d = smin(d, sdRoundCone(p, a, b, 0.0105, 0.009), 0.012);
+    d = smin(d, sdRoundCone(p, b, c, 0.009, 0.0045), 0.006);
+  }
+  vec3 ta = wr + dir * 0.02 + S * 0.035 + N * 0.006;
+  vec3 tb = ta + normalize(dir * 0.6 + S * 0.5 + N * 0.5) * 0.045;
+  vec3 tc = tb + normalize(dir * 0.7 + N * 0.6) * 0.035;
+  d = smin(d, sdRoundCone(p, ta, tb, 0.012, 0.009), 0.012);
+  d = smin(d, sdRoundCone(p, tb, tc, 0.009, 0.005), 0.006);
+  return d;
+}
+
+// ---- foot: heel, sole and toes.
+float sdFoot(vec3 p, vec3 an, vec3 toe) {
+  vec3 dir = toe - an;
+  vec3 fl = normalize(vec3(dir.x, 0.0, dir.z));
+  vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), fl));
+  vec3 mid = vec3((an.x + toe.x) * 0.5, 0.035, (an.z + toe.z) * 0.5) + fl * 0.01;
+  float d = sdEll(p, mid, side, vec3(0.0, 1.0, 0.0), fl, vec3(0.048, 0.035, 0.115));
+  d = smin(d, sdRoundCone(p, an, an - fl * 0.035 + vec3(0.0, -0.045, 0.0), 0.04, 0.036), 0.03);
+  if (length(p - toe) < 0.12) {
+    for (int i = 0; i < 4; i++) {
+      float o = (float(i) - 1.3) * 0.022;
+      vec3 a = vec3(toe.x, 0.022, toe.z) + side * o - fl * 0.035;
+      vec3 b = a + fl * 0.04 + vec3(0.0, -0.006, 0.0);
+      d = smin(d, sdRoundCone(p, a, b, 0.0125, 0.01), 0.012);
+    }
+  }
+  return d;
+}
+
+// The torso alone (chest, waist, pelvis and chest muscles), for colouring.
+float sdTorso(vec3 p) {
+  mat3 T = frame(u_bodyFwd, normalize(CHEST - PELVIS));
+  vec3 X = T[0];
+  vec3 Y = T[1];
+  vec3 Z = T[2];
+  float d = sdEll(p, CHEST, X, Y, Z, vec3(0.19, 0.16, 0.115));
+  d = smin(d, sdEll(p, WAIST, X, Y, Z, vec3(0.145, 0.15, 0.1)), 0.07);
+  d = smin(d, sdEll(p, PELVIS, X, Y, Z, vec3(0.135, 0.1, 0.1)), 0.07);
+  return d;
+}
+
+// ---- body: torso, neck, arms and hands, legs and feet.
+float sdBody(vec3 p) {
+  mat3 T = frame(u_bodyFwd, normalize(CHEST - PELVIS));
+  vec3 X = T[0];
+  vec3 Y = T[1];
+  vec3 Z = T[2];
+  float d = sdEll(p, CHEST, X, Y, Z, vec3(0.19, 0.16, 0.115));
+  d = smin(d, sdEll(p, WAIST, X, Y, Z, vec3(0.145, 0.15, 0.1)), 0.07);
+  d = smin(d, sdEll(p, PELVIS, X, Y, Z, vec3(0.135, 0.1, 0.1)), 0.07);
+  // chest muscles, shoulder blades, buttocks
+  d = smin(d, sdEll(p, CHEST + Y * 0.06 + Z * 0.055 + X * 0.075, X, Y, Z, vec3(0.095, 0.055, 0.045)), 0.05);
+  d = smin(d, sdEll(p, CHEST + Y * 0.06 + Z * 0.055 - X * 0.075, X, Y, Z, vec3(0.095, 0.055, 0.045)), 0.05);
+  d = smin(d, sdEll(p, PELVIS - Z * 0.05 + X * 0.06 - Y * 0.02, X, Y, Z, vec3(0.065, 0.075, 0.055)), 0.05);
+  d = smin(d, sdEll(p, PELVIS - Z * 0.05 - X * 0.06 - Y * 0.02, X, Y, Z, vec3(0.065, 0.075, 0.055)), 0.05);
+  // neck (thick, as dolphins' are) up into the head
+  d = smin(d, sdRoundCone(p, NECK - Y * 0.05, SKULL - normalize(u_headUp) * 0.035, 0.1, 0.088), 0.07);
+  // shoulders and arms
+  d = smin(d, sdRoundCone(p, NECK + (SHL - NECK) * 0.25 - Y * 0.03, SHL, 0.07, 0.06), 0.06);
+  d = smin(d, sdRoundCone(p, NECK + (SHR - NECK) * 0.25 - Y * 0.03, SHR, 0.07, 0.06), 0.06);
+  d = smin(d, smin(sdRoundCone(p, SHL, ELL, 0.052, 0.036), sdRoundCone(p, ELL, WRL, 0.036, 0.025), 0.025), 0.04);
+  d = smin(d, smin(sdRoundCone(p, SHR, ELR, 0.052, 0.036), sdRoundCone(p, ELR, WRR, 0.036, 0.025), 0.025), 0.04);
+  d = smin(d, sdHand(p, WRL, HNL, u_palmL, 1.0), 0.015);
+  d = smin(d, sdHand(p, WRR, HNR, u_palmR, -1.0), 0.015);
+  // a little muscle: deltoids, biceps, the lines of his stomach
+  d = smin(d, sdEll(p, SHL + (ELL - SHL) * 0.12, X, Y, Z, vec3(0.062, 0.075, 0.06)), 0.04);
+  d = smin(d, sdEll(p, SHR + (ELR - SHR) * 0.12, X, Y, Z, vec3(0.062, 0.075, 0.06)), 0.04);
+  d = smin(d, sdRoundCone(p, SHL + (ELL - SHL) * 0.3 + Z * 0.01, SHL + (ELL - SHL) * 0.72 + Z * 0.006, 0.044, 0.026), 0.04);
+  d = smin(d, sdRoundCone(p, SHR + (ELR - SHR) * 0.3 + Z * 0.01, SHR + (ELR - SHR) * 0.72 + Z * 0.006, 0.044, 0.026), 0.04);
+  for (int i = 0; i < 2; i++) {
+    float yy = 0.15 - float(i) * 0.07;
+    d = smin(d, sdEll(p, WAIST + Y * yy + Z * 0.078 + X * 0.032, X, Y, Z, vec3(0.03, 0.03, 0.015)), 0.045);
+    d = smin(d, sdEll(p, WAIST + Y * yy + Z * 0.078 - X * 0.032, X, Y, Z, vec3(0.03, 0.03, 0.015)), 0.045);
+  }
+  // legs and feet
+  d = smin(d, smin(sdRoundCone(p, HIPL, KNL, 0.078, 0.047), sdRoundCone(p, KNL, ANL, 0.047, 0.03), 0.03), 0.05);
+  d = smin(d, smin(sdRoundCone(p, HIPR, KNR, 0.078, 0.047), sdRoundCone(p, KNR, ANR, 0.047, 0.03), 0.03), 0.05);
+  vec3 cL = normalize(ANL - KNL);
+  vec3 cR = normalize(ANR - KNR);
+  d = smin(d, sdRoundCone(p, KNL + cL * 0.06 - Z * 0.01, KNL + cL * 0.24 - Z * 0.004, 0.05, 0.026), 0.05); // calves
+  d = smin(d, sdRoundCone(p, KNR + cR * 0.06 - Z * 0.01, KNR + cR * 0.24 - Z * 0.004, 0.05, 0.026), 0.05);
+  d = smin(d, sdFoot(p, ANL, TOEL), 0.025);
+  d = smin(d, sdFoot(p, ANR, TOER), 0.025);
+  return d;
+}
+
+// ---- the dorsal fin, rising from his upper back and swept back down it: a thin curved
+// blade in the plane of his spine, its root along his back from FIN0, its tip at FIN1.
+float sdTri2(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
+  vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
+  vec2 v0 = p - p0, v1 = p - p1, v2 = p - p2;
+  vec2 pq0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
+  vec2 pq1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
+  vec2 pq2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
+  float s = sign(e0.x * e2.y - e0.y * e2.x);
+  vec2 d = min(min(vec2(dot(pq0, pq0), s * (v0.x * e0.y - v0.y * e0.x)), vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x))), vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x)));
+  return -sqrt(d.x) * sign(d.y);
+}
+float sdFin(vec3 p) {
+  vec3 up = normalize(NECK - PELVIS);
+  vec3 Z = normalize(u_bodyFwd - up * dot(u_bodyFwd, up));
+  vec3 X = cross(up, Z);
+  // 2D frame in the plane of the spine: u down his back, v out from it
+  vec3 U = -up;
+  vec3 V = -Z;
+  vec3 q = p - FIN0;
+  vec2 uv = vec2(dot(q, U), dot(q, V));
+  vec2 tip = vec2(dot(FIN1 - FIN0, U), dot(FIN1 - FIN0, V));
+  // the root runs down his back; the leading edge bows out to the tip, the trailing edge back in
+  float d2 = sdTri2(uv, vec2(-0.02, -0.03), vec2(0.17, -0.03), tip);
+  d2 = smin(d2, sdTri2(uv, vec2(-0.02, -0.03), tip * 0.55 + vec2(-0.03, 0.035), tip), 0.02);
+  float thick = mix(0.014, 0.004, clamp(uv.y / max(tip.y, 0.01), 0.0, 1.0));
+  return smax(d2 - 0.006, abs(dot(q, X)) - thick, 0.006);
+}
+
+// ---- the head: a dolphin's, the melon (forehead) rounded over a long beak.
+float sdHead(vec3 p) {
+  vec3 F = normalize(BEAK - SKULL);
+  mat3 H = frame(F, u_headUp);
+  vec3 X = H[0];
+  vec3 Y = H[1];
+  vec3 Z = H[2];
+  float d = sdEll(p, SKULL + Y * 0.02 - Z * 0.01, X, Y, Z, vec3(0.112, 0.13, 0.14));
+  vec3 base = SKULL + Z * 0.09 - Y * 0.03;
+  d = smin(d, sdRoundCone(p, base, BEAK, 0.07, 0.032), 0.08);
+  // lower jaw, a little under the beak
+  d = smin(d, sdRoundCone(p, SKULL + Z * 0.045 - Y * 0.07, BEAK - Y * 0.014 - Z * 0.012, 0.058, 0.025), 0.05);
+  // eye sockets
+  vec3 eL = SKULL + Z * 0.082 + Y * 0.005 + X * 0.08;
+  vec3 eR = SKULL + Z * 0.082 + Y * 0.005 - X * 0.08;
+  d = smin(d, sdEll(p, eL + Y * 0.022 - Z * 0.004, X, Y, Z, vec3(0.03, 0.012, 0.03)), 0.02); // brows
+  d = smin(d, sdEll(p, eR + Y * 0.022 - Z * 0.004, X, Y, Z, vec3(0.03, 0.012, 0.03)), 0.02);
+  d = smax(d, -(length(p - eL) - 0.025), 0.014);
+  d = smax(d, -(length(p - eR) - 0.025), 0.014);
+  d = min(d, length(p - eL) - 0.019);
+  d = min(d, length(p - eR) - 0.019);
+  return d;
+}
+
+// ---- the tail and its flukes.
+float sdTail(vec3 p) {
+  float d = sdRoundCone(p, T0, T1, 0.062, 0.046);
+  d = smin(d, sdRoundCone(p, T1, T2, 0.05, 0.035), 0.03);
+  d = smin(d, sdRoundCone(p, T2, T3, 0.035, 0.022), 0.02);
+  vec3 dir = normalize(T3 - T2);
+  vec3 side = normalize(u_flukeSide - dir * dot(u_flukeSide, dir));
+  vec3 up = normalize(cross(side, dir));
+  for (int s = -1; s <= 1; s += 2) {
+    float fs = float(s);
+    vec3 sd = side * fs;
+    vec3 c = T3 + sd * 0.13 + dir * 0.055;
+    vec3 ax = normalize(sd + dir * 0.5);
+    d = smin(d, sdEll(p, c, ax, up, normalize(cross(ax, up)), vec3(0.155, 0.014, 0.06)), 0.035);
+  }
+  return d;
+}
+
+bool useBody() { return (u_parts & 1) != 0; }
+bool useHead() { return (u_parts & 2) != 0; }
+bool useTail() { return (u_parts & 4) != 0; }
+bool useFin() { return (u_parts & 8) != 0; }
+
+float mapParts(vec3 p, int parts) {
+  float d = 1e3;
+  bool b = (parts & 1) != 0;
+  if (b) d = sdBody(p);
+  if ((parts & 8) != 0) d = smin(d, sdFin(p), 0.03);
+  if ((parts & 2) != 0) d = b ? smin(d, sdHead(p), 0.05) : min(d, sdHead(p));
+  if ((parts & 4) != 0) d = b ? smin(d, sdTail(p), 0.05) : min(d, sdTail(p));
+  return d;
+}
+float map(vec3 p) { return mapParts(p, u_parts); }
+float mapShade(vec3 p) { return mapParts(p, u_parts | u_shade); }
+
+vec3 calcNormal(vec3 p) {
+  const float e = 0.0008;
+  vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy * map(p + k.xyy * e) + k.yyx * map(p + k.yyx * e) + k.yxy * map(p + k.yxy * e) + k.xxx * map(p + k.xxx * e));
+}
+
+float calcAO(vec3 p, vec3 n) {
+  float occ = 0.0;
+  float sca = 1.0;
+  for (int i = 0; i < 6; i++) {
+    float h = 0.01 + 0.035 * float(i);
+    float d = mapShade(p + h * n);
+    occ += (h - d) * sca;
+    sca *= 0.8;
+  }
+  return clamp(1.0 - 2.2 * occ, 0.0, 1.0);
+}
+
+float softShadow(vec3 ro, vec3 rd) {
+  float res = 1.0;
+  float t = 0.02;
+  for (int i = 0; i < 48; i++) {
+    float h = mapShade(ro + rd * t);
+    res = min(res, 10.0 * h / t);
+    t += clamp(h, 0.01, 0.12);
+    if (res < 0.02 || t > 2.5) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+// Skin colour at a point: dark slate on his back and the tops of things, paler on his sides,
+// the white of his throat and belly, black eyes.
+vec3 skin(vec3 p, vec3 n) {
+  vec3 dark = pow(vec3(0.27, 0.31, 0.37), vec3(2.2));
+  vec3 grey = pow(vec3(0.44, 0.48, 0.55), vec3(2.2));
+  vec3 white = pow(vec3(0.84, 0.84, 0.82), vec3(2.2));
+  mat3 T = frame(u_bodyFwd, normalize(CHEST - PELVIS));
+  float facing = dot(n, T[2]);
+  vec3 col = mix(dark, grey, smoothstep(-0.6, 0.4, facing));
+  float db = useBody() ? sdBody(p) : 1e3;
+  float dh = useHead() ? sdHead(p) : 1e3;
+  bool onHead = dh < db;
+  // the white belly, throat to groin, widest across the chest: on the front of his torso
+  // (and up his throat), measured from the line of his spine
+  if (useBody() && !onHead) {
+    vec3 up = normalize(NECK - PELVIS);
+    vec3 Z = normalize(u_bodyFwd - up * dot(u_bodyFwd, up));
+    vec3 X = cross(up, Z);
+    float len = length(NECK - PELVIS);
+    float ly = dot(p - PELVIS, up);
+    vec3 off = p - PELVIS - up * ly;
+    float lx = dot(off, X);
+    float lz = dot(off, Z);
+    float top = len + 0.07;
+    float t = clamp(ly / top, 0.0, 1.0);
+    float w = mix(0.035, 0.085, smoothstep(0.05, 0.55, t)) * mix(1.0, 0.75, smoothstep(0.8, 1.0, t));
+    float onTorso = 1.0 - smoothstep(0.004, 0.02, sdTorso(p) - min(sdTorso(p), 0.0));
+    float neckFront = smoothstep(0.75, 0.9, t);
+    float inBelly = (1.0 - smoothstep(w - 0.012, w + 0.012, abs(lx))) * smoothstep(-0.06, 0.02, ly) * (1.0 - smoothstep(top - 0.02, top + 0.02, ly))
+      * smoothstep(0.02, 0.06, lz) * (1.0 - smoothstep(0.17, 0.2, lz)) * max(onTorso, neckFront);
+    col = mix(col, white, inBelly);
+  }
+  if (onHead) {
+    vec3 F = normalize(BEAK - SKULL);
+    mat3 H = frame(F, u_headUp);
+    vec3 q = p - SKULL;
+    float hy = dot(q, H[1]);
+    float hz = dot(q, H[2]);
+    // pale throat and underside of the jaw
+    float under = (1.0 - smoothstep(-0.06, -0.02, hy)) * smoothstep(-0.02, 0.06, hz);
+    col = mix(col, mix(grey, white, 0.75), under * 0.8);
+    // the eyes
+    vec3 eL = SKULL + H[2] * 0.082 + H[1] * 0.005 + H[0] * 0.08;
+    vec3 eR = SKULL + H[2] * 0.082 + H[1] * 0.005 - H[0] * 0.08;
+    float e = min(length(p - eL), length(p - eR));
+    col = mix(col * 0.35, col, smoothstep(0.019, 0.034, e)); // shadowed sockets
+    col = mix(vec3(0.004, 0.004, 0.005), col, smoothstep(0.019, 0.022, e));
+    // the line of his mouth along the beak
+    vec3 B0 = SKULL + H[2] * 0.07 - H[1] * 0.05;
+    vec3 B1 = BEAK - H[1] * 0.014;
+    vec3 ba = B1 - B0;
+    float hh = clamp(dot(p - B0, ba) / dot(ba, ba), 0.0, 1.0);
+    float m = length(p - B0 - ba * hh);
+    col = mix(col * 0.45, col, smoothstep(0.004, 0.009, abs(m - (0.052 - 0.028 * hh))));
+  }
+  return col;
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy;
+  vec3 acc = vec3(0.0);
+  float cov = 0.0;
+  vec3 ww = normalize(u_target - u_cam);
+  vec3 uu = normalize(cross(ww, vec3(0.0, 1.0, 0.0)));
+  vec3 vv = cross(uu, ww);
+  float f = 1.0 / tan(radians(u_fov) * 0.5);
+  for (int sy = 0; sy < 4; sy++) {
+    if (sy >= u_ss) break;
+    for (int sx = 0; sx < 4; sx++) {
+      if (sx >= u_ss) break;
+      vec2 o = (vec2(float(sx), float(sy)) + 0.5) / float(u_ss) - 0.5;
+      vec2 uv = (2.0 * (frag + o) - u_res) / u_res.y;
+      vec3 rd = normalize(uv.x * uu + uv.y * vv + f * ww);
+      vec3 ro = u_cam;
+      float t = 0.0;
+      bool hit = false;
+      // start near the figure
+      float tmin = max(0.0, length(u_target - u_cam) - 2.5);
+      t = tmin;
+      for (int i = 0; i < 220; i++) {
+        vec3 p = ro + rd * t;
+        float d = map(p);
+        if (d < 0.0004 * t) { hit = true; break; }
+        t += d * 0.9;
+        if (t > tmin + 5.0) break;
+      }
+      if (!hit) continue;
+      vec3 p = ro + rd * t;
+      vec3 n = calcNormal(p);
+      vec3 alb = skin(p, n);
+      float ao = calcAO(p, n);
+      // soft overhead light, like the rooms' ceiling lights, with a fill and a little rim
+      vec3 L = normalize(vec3(-0.35, 0.85, 0.55));
+      float dif = clamp(dot(n, L), 0.0, 1.0) * softShadow(p + n * 0.003, L);
+      float fil = clamp(dot(n, normalize(vec3(0.6, 0.2, 0.7))), 0.0, 1.0);
+      float sky = 0.5 + 0.5 * n.y;
+      float rim = pow(clamp(1.0 + dot(n, rd), 0.0, 1.0), 3.0) * clamp(n.y * 0.5 + 0.6, 0.0, 1.0);
+      vec3 h = normalize(L - rd);
+      float spe = pow(clamp(dot(n, h), 0.0, 1.0), 20.0) * dif * 0.1;
+      vec3 lin = vec3(1.0, 0.97, 0.93) * dif * 1.1 + vec3(0.55, 0.6, 0.7) * sky * 0.5 * ao + vec3(0.9) * fil * 0.2 * ao + vec3(0.8, 0.85, 0.95) * rim * 0.25 * ao;
+      vec3 col = alb * lin + spe * 0.5;
+      col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
+      acc += col;
+      cov += 1.0;
+    }
+  }
+  float n2 = float(u_ss * u_ss);
+  outColor = cov > 0.0 ? vec4(acc / cov, cov / n2) : vec4(0.0);
+}
+</script>
+<script>
+const canvas = document.getElementById('c');
+let gl, prog, loc = {};
+function init() {
+  gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: true, antialias: false });
+  const vs = `#version 300 es
+in vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }`;
+  const mk = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  };
+  prog = gl.createProgram();
+  gl.attachShader(prog, mk(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, 'a');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+}
+// Render one image: params { w, h, cam, target, fov, joints[32][3], headUp, bodyFwd, palmL, palmR, curl, parts, ss, tile }
+window.renderImage = function (P) {
+  if (!gl) init();
+  canvas.width = P.w;
+  canvas.height = P.h;
+  gl.viewport(0, 0, P.w, P.h);
+  const u = (n) => gl.getUniformLocation(prog, n);
+  gl.uniform2f(u('u_res'), P.w, P.h);
+  gl.uniform3fv(u('u_cam'), P.cam);
+  gl.uniform3fv(u('u_target'), P.target);
+  gl.uniform1f(u('u_fov'), P.fov);
+  const J = new Float32Array(32 * 3);
+  P.joints.forEach((j, i) => J.set(j, i * 3));
+  gl.uniform3fv(u('u_j'), J);
+  gl.uniform3fv(u('u_headUp'), P.headUp);
+  gl.uniform3fv(u('u_bodyFwd'), P.bodyFwd);
+  gl.uniform3fv(u('u_palmL'), P.palmL);
+  gl.uniform3fv(u('u_palmR'), P.palmR);
+  gl.uniform1f(u('u_curl'), P.curl);
+  gl.uniform3fv(u('u_flukeSide'), P.flukeSide || [1, 0, 0]);
+  gl.uniform1i(u('u_parts'), P.parts);
+  gl.uniform1i(u('u_shade'), P.shade || 0);
+  gl.uniform1i(u('u_ss'), P.ss || 2);
+  gl.clearColor(0, 0, 0, 0);
+  gl.disable(gl.SCISSOR_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.SCISSOR_TEST);
+  const T = P.tile || 128;
+  for (let y = 0; y < P.h; y += T) {
+    for (let x = 0; x < P.w; x += T) {
+      gl.scissor(x, y, T, T);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.finish();
+    }
+  }
+  gl.disable(gl.SCISSOR_TEST);
+  return canvas.toDataURL('image/png');
+};
+// Where 3D points land on the image (pixels, y down), for anchors.
+window.project = function (P, pts) {
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(...a); return [a[0] / l, a[1] / l, a[2] / l]; };
+  const ww = norm(sub(P.target, P.cam));
+  const uu = norm(cross(ww, [0, 1, 0]));
+  const vv = cross(uu, ww);
+  const f = 1 / Math.tan((P.fov * Math.PI) / 180 / 2);
+  return pts.map((p) => {
+    const d = sub(p, P.cam);
+    const z = dot(d, ww);
+    const x = dot(d, uu) / z * f;
+    const y = dot(d, vv) / z * f;
+    return [(x * P.h + P.w) / 2, P.h - (y * P.h + P.h) / 2];
+  });
+};
+</script>
+</body></html>

@@ -356,11 +356,11 @@
   }
 
   // ------------------------------------------------------------------ Dolphin Man
-  // His renders, made matte and seen at eye level by tools/make_images.py, cut into his body,
-  // head and tail standing, and Fetal Position: facing you, sitting curled up over his knees
-  // with his head down. His head sways on his neck and every few seconds twitches, like
-  // something listening; his tail swings out from behind him for the Tail Whip; he shakes as he
-  // screams (his face stays as it is) and rocks when he's curled up.
+  // Renders of his 3D model (tools/dolphin): his body, head and tail standing, and Fetal
+  // Position, side on, sitting hugging his knees with his head down. His head sways on his
+  // neck and every few seconds twitches, like something listening; his tail swings out from
+  // behind him for the Tail Whip; he shakes as he screams (his face stays as it is) and rocks
+  // when he's curled up.
   const dolphinAt = (S) => ({
     body: S.bodyAt,
     head: S.headAt,
@@ -489,8 +489,8 @@
       h: S.size[1] / S.res,
       res: S.res,
       smooth: true,
-      head: curled ? [back[0], back[1] - 20] : A(S.face),
-      mouth: curled ? [back[0], back[1] - 22] : A(S.mouth),
+      head: A(curled ? S.curledHead : S.face),
+      mouth: A(curled ? S.curledHead : S.mouth),
       body: curled ? back : A(S.chest),
       feet: A(S.feet),
       clawL: A(S.clawL),

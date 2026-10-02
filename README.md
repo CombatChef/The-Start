@@ -330,21 +330,22 @@ means not hitting him while he's curled up.
   Hall and the Gym, its grin glowing out of the dark rooms, and a soft shadow on the floor under its feet. It stands
   close to the camera on each room's floor (`stand`), so nothing in the room is ever in front of it. It freezes when
   it stares, its eyes glow red once it's a Fast Runner, and its head lolls and it sags when weakened.
-- **Dolphin Man** is made the same way as Trollge, from green-screen renders of his model, but simplified to sit in
-  the rooms' photos: his skin is plain and matte instead of the renders' wet studio shine, the renders' high camera
-  is brought down to eye level, he's lit from above like the rooms' ceiling lights, and he stands at his real size
-  on a clear patch of each room's floor (`stand`), with his shadow under him. His head sways on his neck and
-  twitches every few seconds, like something listening, and he leans towards whoever he's HUNTING. His tail hangs
-  behind him, and for the *Tail Whip* it cracks out from behind him towards whoever he's hitting. He shakes as he
-  wails, his face staying as it is. In *Fetal Position* (and when he's weakened) he sits on the floor facing you,
-  his forearms crossed over his knees and his head down on them: there's no render of him sitting, so that pose is
-  put together from pieces of his front render.
+- **Dolphin Man** is a 3D model of him (`tools/dolphin`), modelled on renders of his in-game model: a ray-marched
+  model in a WebGL shader, posed by a skeleton and rendered into layers like Trollge's. He has the dolphin head (the
+  rounded melon over a long beak, eyes under heavy brows), slate-grey skin with a white belly from his throat to his
+  groin, clawed hands, the dorsal fin on his back, and his tail curled out behind him with its flukes on the floor.
+  He stands upright, big and close like Trollge, lit by each place. His head sways on his neck and twitches every
+  few seconds, like something listening, and he leans towards whoever he's HUNTING. For the *Tail Whip* his tail
+  cracks out from behind him towards whoever he's hitting. He shakes as he wails, his face staying as it is. In
+  *Fetal Position* (and when he's weakened) he sits on the floor side on, hugging his knees with his head down on
+  them.
 - **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). Trollge and
   Dolphin Man are lit to match each one (above); Sid's pixel sprite is just dimmed in the dark ones (`tone`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless
-  pillow`, then `python3 tools/make_images.py`.
+  pillow`, then `python3 tools/make_images.py`. Dolphin Man's model is rendered first, with Playwright:
+  `node tools/dolphin/render.js` (his skeleton's poses are in `tools/dolphin/poses.js`).
 
 ## Files
 
@@ -361,6 +362,7 @@ js/audio.js           the music (soundtrack, or your own files) and the synthesi
 js/main.js            title → battle → end loop
 tests/simulate.js     headless balance and crash test
 tools/make_images.py  builds the portraits and sprites
+tools/dolphin/        Dolphin Man's 3D model and the script that renders it
 assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), the soundtrack (audio/), the places (places/),
                       portraits, sprites, icons, source images
 ```

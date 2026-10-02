@@ -188,67 +188,155 @@
   }
 
   // ------------------------------------------------------------------ Trollge
-  // Made from its render by tools/make_images.py: a body layer and a separate head layer, so
-  // "the large head wobbles on its skinny body". Rows of the head slide sideways more the
-  // further they are above the neck, which swings it like a heavy pendulum.
+  // Its render, cut by tools/make_images.py into a body, a head and the glow of its face, and
+  // kept smooth so that it stands in the places' screenshots: it's lit to match each one
+  // (data.js places, `light`) and casts a shadow on the floor. "The large head wobbles on its
+  // skinny body": the head turns on its neck like a heavy pendulum.
   const TROLL_EYES = {
-    white: [hex('#ffffff'), hex('#b8a8e8')],
-    red: [hex('#ff4040'), hex('#9a1020')],
-    dim: [hex('#8a8098'), hex('#3a3346')],
+    white: ['rgba(255,255,255,1)', 'rgba(200,186,255,0.45)'],
+    red: ['rgba(255,70,70,1)', 'rgba(220,20,40,0.6)'],
+    dim: ['rgba(150,140,165,0.8)', 'rgba(70,62,84,0.3)'],
   };
-
-  // o: { t (ms), pose: 'idle' | 'stare' | 'fast' | 'glance' | 'lunge' | 'down', eyes: 'white' | 'red' | 'dim' }
-  function trollge(o) {
+  let trollgeKit = null; // its layers as canvases, and two more to light it on
+  function trollgeCanvases() {
+    if (trollgeKit) return trollgeKit;
+    const L = spritePix.trollge;
+    if (!L) return null;
     const S = SC.SPRITES.trollge;
-    const layers = spritePix.trollge;
-    const px = new Pix(layers.body.w, layers.body.h);
-    px.blit(layers.body, 0, 0);
-    const head = layers.head;
-    const t = o.t || 0;
-    let amp = Math.sin(t / 430) * 2.6;
-    let dy = Math.round(Math.sin(t / 900) * 0.8);
-    if (o.pose === 'stare') {
-      amp = 0; // it goes perfectly still
-      dy = 0;
-    } else if (o.pose === 'fast') amp = Math.sin(t / 90) * 3.2;
-    else if (o.pose === 'glance') amp = -7;
-    else if (o.pose === 'lunge') amp = 5;
-    else if (o.pose === 'down') {
-      amp = 9 + Math.sin(t / 700);
-      dy = 4;
-    }
-    const [hx, hy] = S.headAt;
-    const span = Math.max(1, S.pivot[1] - hy);
-    const shift = (row) => Math.round(amp * clamp01((S.pivot[1] - row) / span));
-    for (let y = 0; y < head.h; y++) {
-      const dx = shift(hy + y);
-      for (let x = 0; x < head.w; x++) {
-        const i = (y * head.w + x) * 4;
-        if (head.d[i + 3]) px.set(hx + x + dx, hy + y + dy, [head.d[i], head.d[i + 1], head.d[i + 2], 255]);
-      }
-    }
-    // The glints in its big black eyes.
-    const [c0, c1] = TROLL_EYES[o.eyes] || TROLL_EYES.white;
-    for (const [ex, ey] of S.eyes) {
-      const x = hx + ex + shift(hy + ey);
-      const y = hy + ey + dy;
-      if (o.pose === 'stare') {
-        px.rect(x - 1, y - 1, 4, 4, c1);
-        px.rect(x, y, 2, 2, c0);
-      } else {
-        px.rect(x, y, 2, 2, c0);
-        px.set(x + 2, y - 1, c1);
-      }
-    }
-    return px;
+    const blank = () => {
+      const c = root.document.createElement('canvas');
+      c.width = S.size[0];
+      c.height = S.size[1];
+      return c;
+    };
+    trollgeKit = { body: L.body.toCanvas(), head: L.head.toCanvas(), glow: L.glow.toCanvas(), shape: blank(), lit: blank() };
+    return trollgeKit;
   }
 
-  // Anchor points on the Trollge sprite (in sprite pixels), for effects and targeting.
+  // Draws Trollge onto its canvas (SC.SPRITES.trollge.size).
+  // o: { t (ms), pose: 'idle' | 'stare' | 'fast' | 'glance' | 'lunge' | 'down', eyes: 'white' | 'red' | 'dim', light }
+  function trollge(cv, o) {
+    const S = SC.SPRITES.trollge;
+    const K = trollgeCanvases();
+    const ctx = cv.getContext('2d');
+    const w = cv.width;
+    const h = cv.height;
+    ctx.clearRect(0, 0, w, h);
+    if (!K) return;
+    const t = o.t || 0;
+    // How far its head is turned on its neck (radians), and how far it sinks.
+    let turn = Math.sin(t / 430) * 0.05;
+    let sink = Math.round(Math.sin(t / 900) * 1.5);
+    if (o.pose === 'stare') {
+      turn = 0; // it goes perfectly still
+      sink = 0;
+    } else if (o.pose === 'fast') turn = Math.sin(t / 90) * 0.07;
+    else if (o.pose === 'glance') turn = -0.14;
+    else if (o.pose === 'lunge') turn = 0.1;
+    else if (o.pose === 'down') {
+      turn = 0.18 + Math.sin(t / 700) * 0.02;
+      sink = 12;
+    }
+    const [px, py] = S.pivot;
+    const withHead = (g, img) => {
+      g.save();
+      g.translate(px, py + sink);
+      g.rotate(turn);
+      g.drawImage(img, S.headAt[0] - px, S.headAt[1] - py);
+      g.restore();
+    };
+    // Its shape...
+    const shape = K.shape.getContext('2d');
+    shape.clearRect(0, 0, w, h);
+    shape.drawImage(K.body, S.bodyAt[0], S.bodyAt[1]);
+    withHead(shape, K.head);
+    // ...lit like the place: the colour of its light, a lamp to one side, the haze, then cut back
+    // to its shape. Its grin and the highlights on its face still show in the dark.
+    const L = o.light || {};
+    const lit = K.lit.getContext('2d');
+    lit.globalCompositeOperation = 'source-over';
+    lit.globalAlpha = 1;
+    lit.fillStyle = '#000'; // on black, so its soft edges don't pick up the light's colour
+    lit.fillRect(0, 0, w, h);
+    lit.drawImage(K.shape, 0, 0);
+    if (L.mult) {
+      lit.globalCompositeOperation = 'multiply';
+      lit.fillStyle = L.mult;
+      lit.fillRect(0, 0, w, h);
+    }
+    if (L.rim) {
+      const [color, side, k] = L.rim;
+      const g = lit.createLinearGradient(side === 'left' ? 0 : w, 0, side === 'left' ? w : 0, 0);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      lit.globalCompositeOperation = 'screen';
+      lit.globalAlpha = k;
+      lit.fillStyle = g;
+      lit.fillRect(0, 0, w, h);
+    }
+    if (L.fog) {
+      lit.globalCompositeOperation = 'source-over';
+      lit.globalAlpha = L.fog[1];
+      lit.fillStyle = L.fog[0];
+      lit.fillRect(0, 0, w, h);
+    }
+    lit.globalAlpha = 1;
+    lit.globalCompositeOperation = 'destination-in';
+    lit.drawImage(K.shape, 0, 0);
+    lit.globalCompositeOperation = 'source-over';
+    if (L.glow) {
+      lit.globalAlpha = L.glow;
+      withHead(lit, K.glow);
+      lit.globalAlpha = 1;
+    }
+    // On the floor: its shadow, then it.
+    const [a, b] = S.soles;
+    const rx = (b[0] - a[0]) / 2 + 60;
+    ctx.save();
+    ctx.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    ctx.scale(1, 13 / rx);
+    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    sh.addColorStop(0, `rgba(0,0,0,${L.shadow == null ? 0.5 : L.shadow})`);
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh;
+    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
+    ctx.restore();
+    ctx.drawImage(K.lit, 0, 0);
+    // The glints in its big black eyes, turning with its head.
+    const [c0, c1] = TROLL_EYES[o.eyes] || TROLL_EYES.white;
+    const r = o.pose === 'stare' ? 6 : 4;
+    for (const [ex, ey] of S.eyes) {
+      const dx = ex - px;
+      const dy = ey - py;
+      const x = px + dx * Math.cos(turn) - dy * Math.sin(turn);
+      const y = py + sink + dx * Math.sin(turn) + dy * Math.cos(turn);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+      g.addColorStop(0, c0);
+      g.addColorStop(0.4, c0);
+      g.addColorStop(0.55, c1);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r * 2.4, y - r * 2.4, r * 4.8, r * 4.8);
+    }
+  }
+
+  // Anchor points on the Trollge sprite in art pixels (the sprite is `res` times finer), for
+  // effects, targeting and where it stands.
   function trollgePoints() {
     const S = SC.SPRITES.trollge;
-    const b = spritePix.trollge.body;
-    const face = [S.headAt[0] + S.mouth[0], S.headAt[1] + S.mouth[1] - 8];
-    return { w: b.w, h: b.h, head: face, body: S.chest, feet: S.feet, clawL: S.clawL, clawR: S.clawR, muzzle: S.clawR };
+    const A = (p) => [p[0] / S.res, p[1] / S.res];
+    return {
+      w: S.size[0] / S.res,
+      h: S.size[1] / S.res,
+      res: S.res,
+      smooth: true,
+      head: A(S.face),
+      body: A(S.chest),
+      feet: A(S.feet),
+      clawL: A(S.clawL),
+      clawR: A(S.clawR),
+      muzzle: A(S.clawR),
+    };
   }
 
   // ------------------------------------------------------------------ Dolphin Man

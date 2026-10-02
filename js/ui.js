@@ -131,8 +131,8 @@
     const bg = $('#bg');
     bg.style.backgroundImage = `url("${P.image}")`;
     bg.style.backgroundPosition = `${P.focus}% 50%`;
-    enemyWrap.style.filter = P.tone || '';
     stage.dataset.place = id;
+    placeEnemy(); // it stands, and is lit, differently in each place
   }
   const enemyPoints = () => {
     const id = enemyId();
@@ -145,11 +145,24 @@
     const [x, y] = PROFILE_XY[Math.max(0, slotOf(id))];
     return [x + 153, y + 117];
   }
+  // Where the slasher's sprite sits on the stage: its top-left, and how many stage pixels one of
+  // its art pixels covers. A smooth sprite (Trollge) stands where the place puts it (data.js
+  // places, `stand`); the pixel-art ones stand at ENEMY_BOX.
+  function enemyBox() {
+    const pts = enemyPoints();
+    const stand = pts.smooth && SC.DATA.places[placeId()].stand;
+    if (stand) {
+      const scale = SCALE * stand[2];
+      return { left: stand[0] - pts.feet[0] * scale, top: stand[1] - pts.feet[1] * scale, scale };
+    }
+    const b = ENEMY_BOX[enemyId()];
+    return { left: b.left, top: b.top, scale: SCALE };
+  }
   function enemyPoint(name) {
     const pts = enemyPoints();
     const p = pts[name] || pts.body;
-    const box = ENEMY_BOX[enemyId()];
-    return [box.left + p[0] * SCALE, box.top + p[1] * SCALE];
+    const box = enemyBox();
+    return [box.left + p[0] * box.scale, box.top + p[1] * box.scale];
   }
   function stageRect(elem) {
     const r = elem.getBoundingClientRect();
@@ -345,15 +358,18 @@
     const id = enemyId();
     const S = enemyDef();
     const pts = enemyPoints();
-    const box = ENEMY_BOX[id];
+    const box = enemyBox();
     stage.dataset.enemy = id;
-    enemyCanvas.width = pts.w;
-    enemyCanvas.height = pts.h;
+    enemyCanvas.width = pts.w * (pts.res || 1);
+    enemyCanvas.height = pts.h * (pts.res || 1);
+    enemyCanvas.classList.toggle('px', !pts.smooth); // pixel art stays crisp; Trollge is smooth
     Object.assign(enemyWrap.style, {
       left: box.left + 'px',
       top: box.top + 'px',
-      width: pts.w * SCALE + 'px',
-      height: pts.h * SCALE + 'px',
+      width: pts.w * box.scale + 'px',
+      height: pts.h * box.scale + 'px',
+      // A smooth sprite is lit in its canvas; the pixel ones get the place's tone.
+      filter: pts.smooth ? '' : SC.DATA.places[placeId()].tone || '',
     });
     const P = UI.plate;
     P.name.textContent = `[${S.title}]`;
@@ -748,7 +764,7 @@
       else if (s && s.flags.overflow) pose = 'fast';
       if (this.override && now < this.until) pose = this.override;
       const eyes = pose === 'down' ? 'dim' : s && s.flags.overflow ? 'red' : 'white';
-      SC.Art.trollge({ t: now, pose, eyes }).toCanvas(enemyCanvas);
+      SC.Art.trollge(enemyCanvas, { t: now, pose, eyes, light: SC.DATA.places[placeId()].light });
       if (force) enemyCanvas.dataset.pose = pose;
     },
   };
@@ -1960,6 +1976,18 @@
     if (at + 1 < UI.party.length) swapWithBench(UI.party[at + 1]);
   }
 
+  // The title screen's buttons. SLASHER only when there's more than one to pick from.
+  function titleButtons() {
+    return [
+      ['t-start', 'DEPLOY'],
+      ...(SC.DATA.enemies.length > 1 ? [['t-foe', 'SLASHER ▸']] : []),
+      ['t-place', 'PLACE ▸'],
+      ['t-swap', 'SWAP ▸'],
+      ['t-music', 'MUSIC'],
+      ['t-help', 'HOW TO PLAY'],
+    ];
+  }
+
   function titleHtml() {
     const S = enemyDef();
     const P = SC.DATA.places[UI.place];
@@ -1979,7 +2007,9 @@
       <div class="versus"><span class="vs">VS</span><span data-p="${enemyId()}" data-foe="1"></span><span class="who"><b>[${esc(S.title)}]</b><span>${esc(
         S.class
       )} · <span style="color: var(--danger-${DANGER[S.danger] || 1})">${esc(S.danger)}</span></span><span class="where">${esc(where)}</span></span></div>
-      <button class="go" id="t-start">DEPLOY</button><button class="go" id="t-foe">SLASHER ▸</button><button class="go" id="t-place">PLACE ▸</button><button class="go" id="t-swap">SWAP ▸</button><button class="go" id="t-music">MUSIC</button><button class="go" id="t-help">HOW TO PLAY</button>
+      ${titleButtons()
+        .map(([id, label]) => `<button class="go" id="${id}">${label}</button>`)
+        .join('')}
       <div class="keys">Z / ENTER: CONFIRM · ARROWS: MOVE · F: FAST TEXT · M: MUTE</div>
     </div>`;
   }
@@ -1989,7 +2019,6 @@
     // Back from a fight: the title screen shows what's picked now, not the last fight.
     if (UI.battle) {
       UI.battle = null;
-      placeEnemy();
       showPlace();
     }
     if (SC.Audio) {
@@ -2000,9 +2029,10 @@
     for (;;) {
       const o = overlay('screen', 'title', titleHtml());
       o.querySelectorAll('[data-p]').forEach((s) => s.replaceWith(portraitCanvas(s.dataset.p, !!s.dataset.foe)));
+      const ids = titleButtons().map(([id]) => id);
       const ask = {
-        opts: ['#t-start', '#t-foe', '#t-place', '#t-swap', '#t-music', '#t-help'].map((sel) => ({ el: $(sel, o), enabled: true })),
-        columns: 6,
+        opts: ids.map((id) => ({ el: $('#' + id, o), enabled: true })),
+        columns: ids.length,
         back: false,
         initial: at,
         noCursor: true,
@@ -2028,11 +2058,12 @@
         continue;
       }
       at = res.button;
-      if (at === 0) {
+      const pressed = ids[at];
+      if (pressed === 't-start') {
         closeOverlay('screen');
         return;
       }
-      if (at === 1) {
+      if (pressed === 't-foe') {
         // Next slasher.
         const list = SC.DATA.enemies;
         UI.enemy = list[(list.indexOf(UI.enemy) + 1) % list.length];
@@ -2044,7 +2075,7 @@
         placeEnemy();
         continue;
       }
-      if (at === 2) {
+      if (pressed === 't-place') {
         // Next place: RANDOM, then each one.
         const list = ['random'].concat(Object.keys(SC.DATA.places));
         UI.place = list[(list.indexOf(UI.place) + 1) % list.length];
@@ -2056,12 +2087,12 @@
         showPlace();
         continue;
       }
-      if (at === 3) {
+      if (pressed === 't-swap') {
         cycleSwap();
         continue;
       }
       closeOverlay('screen');
-      if (at === 4) await showMusic();
+      if (pressed === 't-music') await showMusic();
       else await showHelp();
     }
   }
@@ -2225,7 +2256,6 @@
     } catch (e) {
       /* convenience only */
     }
-    placeEnemy();
     showPlace();
 
     $('#log').addEventListener('click', () => {
@@ -2285,7 +2315,6 @@
     $('#log-lines').innerHTML = '';
     UI.lastAction = {};
     buildCards();
-    placeEnemy();
     showPlace();
     // The slasher's own themes, after the sting for its danger level.
     if (SC.Audio) {

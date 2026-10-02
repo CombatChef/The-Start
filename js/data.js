@@ -45,25 +45,64 @@
     party: ['mel', 'john', 'mysti', 'jim'],
     bench: 'purpl',
     enemy: 'trollge', // the default fight
-    enemies: ['trollge', 'sid', 'dolphin'], // picked on the title screen
+    enemies: ['trollge'], // the slashers you can fight (SLASHER on the title screen, when there's more than one)
+    // Out of the fight for now. Their stats, skills, art and sounds are all still here: put one
+    // back in `enemies` to bring it back.
+    archived: ['sid', 'dolphin'],
 
     // Where the fight happens: picked on the title screen (PLACE), or at random. `image` is a
     // screenshot from SlashCo VR, shown as it is behind the fight; `focus` is which part of it
-    // the 4:3 stage shows (0 its left edge, 100 its right), and `tone` lights the slasher's
-    // sprite to match (a CSS filter). In `dark` places everyone's HIT RATE drops by
-    // `balance.darkHit`, except whoever has Shadowborn.
+    // the 4:3 stage shows (0 its left edge, 100 its right). In `dark` places everyone's HIT RATE
+    // drops by `balance.darkHit`, except whoever has Shadowborn.
+    // `stand` is where the slasher stands in the picture: its feet's x and y on the stage, and
+    // its size (1 = 2 stage pixels per art pixel). `light` is how the place lights it: `mult` the
+    // colour of the light, `rim` a lamp to one side [colour, side, strength], `fog` haze
+    // [colour, amount], `glow` how much its grin shows in the dark, `shadow` how dark its shadow
+    // is on the floor. (`tone` lights the archived slashers' pixel sprites instead.)
     places: {
-      hallway: { name: 'Hallway', image: 'assets/places/hallway.webp', focus: 50, dark: false },
-      cafeteria: { name: 'Cafeteria', image: 'assets/places/cafeteria.webp', focus: 45, dark: false },
+      hallway: {
+        name: 'Hallway',
+        image: 'assets/places/hallway.webp',
+        focus: 50,
+        dark: false,
+        stand: [580, 780, 1.3],
+        light: { mult: '#cdd1da', fog: ['#a0a6b2', 0.05], shadow: 0.55 },
+      },
+      cafeteria: {
+        name: 'Cafeteria',
+        image: 'assets/places/cafeteria.webp',
+        focus: 45,
+        dark: false,
+        stand: [600, 780, 1.3],
+        light: { mult: '#bcc2cd', fog: ['#7d8592', 0.06], shadow: 0.5 },
+      },
       generator: {
         name: 'Generator Hall',
         image: 'assets/places/generator-hall.webp',
         focus: 0,
         dark: true,
+        stand: [640, 780, 1.3],
+        light: { mult: '#7a4448', rim: ['#ff2a1a', 'left', 0.3], glow: 0.35, shadow: 0.35 },
         tone: 'brightness(0.82) sepia(0.25) hue-rotate(-20deg) saturate(1.25)',
       },
-      gym: { name: 'Gym', image: 'assets/places/gym.webp', focus: 85, dark: true, tone: 'brightness(0.78) saturate(0.8)' },
-      lockers: { name: 'Locker Room', image: 'assets/places/locker-room.webp', focus: 40, dark: true, tone: 'brightness(0.72) saturate(0.7)' },
+      gym: {
+        name: 'Gym',
+        image: 'assets/places/gym.webp',
+        focus: 85,
+        dark: true,
+        stand: [470, 780, 1.3],
+        light: { mult: '#4a5068', rim: ['#ff3020', 'right', 0.22], glow: 0.45, shadow: 0.3 },
+        tone: 'brightness(0.78) saturate(0.8)',
+      },
+      lockers: {
+        name: 'Locker Room',
+        image: 'assets/places/locker-room.webp',
+        focus: 40,
+        dark: true,
+        stand: [560, 780, 1.3],
+        light: { mult: '#363c50', glow: 0.6, shadow: 0.25 },
+        tone: 'brightness(0.72) saturate(0.7)',
+      },
     },
 
     // ------------------------------------------------------------------

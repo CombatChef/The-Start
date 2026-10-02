@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Headless battle simulator.
- *   node tests/simulate.js                -> fuzz + balance report, every slasher
+ *   node tests/simulate.js                -> fuzz + balance report, every slasher (archived ones too)
  *   node tests/simulate.js 2000           -> more battles
  *   node tests/simulate.js 600 trollge    -> one slasher only
  *   SHOW_LOG=smart node tests/simulate.js -> also print one battle log per slasher
@@ -18,7 +18,7 @@ require(path.join(__dirname, '..', 'js', 'battle.js'));
 const SC = globalThis.SC;
 
 const N = Number(process.argv[2]) || 600;
-const ENEMIES = process.argv[3] ? [process.argv[3]] : SC.DATA.enemies;
+const ENEMIES = process.argv[3] ? [process.argv[3]] : SC.DATA.enemies.concat(SC.DATA.archived || []);
 const MAX_TURNS = 80;
 
 function makeIo(rng) {
@@ -290,7 +290,8 @@ async function main() {
     ['random', randomPolicy],
   ];
   for (const enemy of ENEMIES) {
-    console.log(`\n######## vs ${SC.DATA.slashers[enemy].name.toUpperCase()}`);
+    const archived = (SC.DATA.archived || []).includes(enemy) ? ' (archived)' : '';
+    console.log(`\n######## vs ${SC.DATA.slashers[enemy].name.toUpperCase()}${archived}`);
     for (const [name, policy] of POLICIES) {
       const results = [];
       for (let i = 0; i < N; i++) {

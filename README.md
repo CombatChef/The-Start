@@ -3,8 +3,8 @@
 A turn-based battle based on [SlashCo VR](https://slashco-vr.fandom.com/wiki/SlashCo_VR_Wiki), with a black-and-white
 HUD styled after the game's own. **Mel, John, Bravo Team Mysti and Captain Jim** are backed into a corner somewhere
 in the school against **Trollge** [DEVASTATING]. **Purpl Lady** waits on the bench and can swap in for anyone.
-Switch slashers on the title screen: **Sid** [CONSIDERABLE] and **Dolphin Man** [CONSIDERABLE] are the other two
-fights. Every stat, skill, passive, weapon and item comes from the *Slasher Statistics* doc.
+**Sid** and **Dolphin Man** are archived for now (see [Archived slashers](#archived-slashers)). Every stat, skill,
+passive, weapon and item comes from the *Slasher Statistics* doc.
 
 ![Battle screen](docs/screenshot-battle.png)
 
@@ -21,7 +21,7 @@ Open `index.html` in a browser. There is nothing to install or build, and it wor
 | Fuel check | Tap Q / E (or ← / →) | Tap a side of the box |
 | Battery check | Space, Z, Enter | Tap |
 | Swap the squad | SWAP ▸ on the title screen | Click a portrait on the title screen |
-| Change slasher | SLASHER ▸ on the title screen | |
+| Change slasher | SLASHER ▸ on the title screen (when more than one is in) | |
 | Change place | PLACE ▸ on the title screen | |
 | Your own music | MUSIC on the title screen | |
 | Battle log | L | LOG button |
@@ -43,7 +43,8 @@ different one each fight. The place's name is in SLASHERBOY's title bar.
 | Locker Room | Pitch dark | Everyone's HIT RATE −15% |
 
 "Everyone" means the slasher too. Only *Shadowborn* (John: "darkness does not affect HIT RATE") sees in the dark, so
-he loses nothing. The penalty is `balance.darkHit` in `data.js`, and the places are `places` there.
+he loses nothing. The penalty is `balance.darkHit` in `data.js`, and the places are `places` there: each has its
+picture, whether it's dark, where the slasher stands on its floor (`stand`) and how the room lights it (`light`).
 
 ## The HUD
 
@@ -135,14 +136,20 @@ Mel's *Fuel Skill Check* and John's *Battery Skill Check* are drawn after SlashC
   that happens, or hold on until the heli.
 - Mysti's *Tactical Stab* is "extremely effective against Trollge".
 
-### Sid [CONSIDERABLE]
+### Archived slashers
+
+Sid and Dolphin Man are out of the fight for now: they aren't in the list you pick from (`enemies` in `data.js`),
+but everything about them is still here (stats, skills, AI, sprites, sounds) and the simulator still tests them.
+Moving one from `archived` back into `enemies` brings it back, along with SLASHER ▸ on the title screen.
+
+#### Sid [CONSIDERABLE]
 
 - **ANGER** rises every turn and whenever he's hurt, and he hits harder the angrier he gets. From 60 he follows
   his move with a second attack every turn. At 80 he draws his Desert Eagle and can no longer eat cookies to
   calm down. If anyone on your team eats a Cookie, his ANGER jumps by 35 (METH Addict).
 - GUARD whoever John flags as the **TARGET**, heal them first, or have Captain Jim set a *Bear Trap* at their feet.
 
-### Dolphin Man [CONSIDERABLE]
+#### Dolphin Man [CONSIDERABLE]
 
 ![Dolphin Man's Loud Wail](docs/screenshot-dolphin.png)
 
@@ -225,21 +232,21 @@ and bench (`bench`). The doc's text is quoted word for word in `doc:` fields and
 item menus. Save and refresh. The skill checks' physics (how fast the fuel arrow falls, how far a tap moves it,
 how fast the clips move) are at the top of `js/checks.js`.
 
-`npm test` (or `node tests/simulate.js`) plays hundreds of battles against each slasher with three play styles,
-with the default squad and with Purpl Lady swapped in for each worker in turn. It checks for crashes and broken
-states and prints win rates:
+`npm test` (or `node tests/simulate.js`) plays hundreds of battles against each slasher (the archived ones too)
+with three play styles, with the default squad and with Purpl Lady swapped in for each worker in turn. It checks
+for crashes and broken states and prints win rates:
 
 | | careful play | casual play | button mashing |
 | --- | --- | --- | --- |
-| Trollge | 85% | 37% | 35% |
-| Trollge, Purpl Lady in for Mel | 97% | 62% | 36% |
-| Trollge, Purpl Lady in for John | 99% | 60% | 50% |
-| Trollge, Purpl Lady in for Mysti | 81% | 35% | 39% |
-| Trollge, Purpl Lady in for Captain Jim | 95% | 36% | 25% |
-| Sid | 98% | 71% | 39% |
-| Sid, with Purpl Lady in | 98–100% | 67–94% | 31–57% |
-| Dolphin Man | 99% | 65% | 49% |
-| Dolphin Man, with Purpl Lady in | 99–100% | 52–92% | 40–73% |
+| Trollge | 82% | 41% | 35% |
+| Trollge, Purpl Lady in for Mel | 96% | 64% | 44% |
+| Trollge, Purpl Lady in for John | 98% | 64% | 56% |
+| Trollge, Purpl Lady in for Mysti | 75% | 38% | 44% |
+| Trollge, Purpl Lady in for Captain Jim | 91% | 38% | 31% |
+| Sid (archived) | 98% | 68% | 45% |
+| Sid, with Purpl Lady in | 100% | 69–93% | 38–62% |
+| Dolphin Man (archived) | 99% | 63% | 48% |
+| Dolphin Man, with Purpl Lady in | 99–100% | 49–91% | 39–71% |
 
 Against Trollge with the default squad, someone dies in most casual battles. Careful play against Dolphin Man
 means not hitting him while he's curled up.
@@ -311,20 +318,23 @@ means not hitting him while he's curled up.
   effects go on top: sweat, blood, cracks, Zzz. Mel's no-glasses face (after *Toss Glasses*) and John's sleeping
   face (*Nap*) are edited versions.
 - **Sid** is made from green-screen renders of his model, standing in front of you with and without the Desert
-  Eagle and seen from behind, each shrunk into dithered pixel art like Trollge. His head sways, his googly eyes
+  Eagle and seen from behind, each shrunk into dithered pixel art. His head sways, his googly eyes
   rattle round, and the gun is a layer of its own: it hangs at his side, twirls round his finger (*Desert Eagle*),
   comes up to aim and kicks when he fires, and swings up for a pistol-whip. At 80 ANGER he turns his back to draw
   it, and turns round again to put it away. He munches his cookie, shakes his head as he rambles, and drops to one
   knee, dizzy, when he's weakened.
-- **Trollge** is its render shrunk into dithered pixel art, with the head on a separate layer so "the large head
-  wobbles on its skinny body". It freezes when it stares, its eyes glow red once it's a Fast Runner, and it folds
-  up when weakened.
-- **Dolphin Man** is made the same way from green-screen renders of his model, front and back: his head bobs and
+- **Trollge** is its render, kept smooth and detailed (not pixel art) so it sits in the photos of the school. The
+  head is a separate layer that tilts on its neck, so "the large head wobbles on its skinny body". Each place lights
+  it (`light` in `data.js` `places`): the room's colour over its body, a red rim from the beacon in the Generator
+  Hall and the Gym, its grin glowing out of the dark rooms, and a soft shadow on the floor under its feet. It stands
+  close to the camera on each room's floor (`stand`), so nothing in the room is ever in front of it. It freezes when
+  it stares, its eyes glow red once it's a Fast Runner, and its head lolls and it sags when weakened.
+- **Dolphin Man** is made like Sid, from green-screen renders of his model, front and back: his head bobs and
   twitches on his neck like Trollge's, his beak gapes open while he wails, he spins round to show his back, fin
   and tail for the Tail Whip, and his eyes clear up at 80 ANGER. In Fetal Position (and when he's weakened) he
   crouches down small, his head pulled into his shoulders: the front view, folded.
-- **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). In the dark
-  ones the slasher's sprite is dimmed to match (`tone` in `data.js` `places`).
+- **The places** are screenshots from SlashCo VR, shown as they are behind the fight (not pixelated). Trollge is
+  lit to match each one (above); the archived slashers' pixel sprites are just dimmed in the dark ones (`tone`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless

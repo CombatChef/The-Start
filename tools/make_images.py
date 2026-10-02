@@ -18,11 +18,13 @@ effects on top, so only a few source edits live here:
     sid / sid_armed - Sid's card from the doc, with and without the Desert Eagle
     trollge         - Trollge's head, for the title screen
 
-SPRITES (assets/sprites/). Trollge's battle sprite is his render, shrunk into dithered pixel
-art. The head is a separate layer so the game can make it wobble on the skinny body. Sid's and
-Dolphin Man's are green-screen renders of their models, front and back, made the same way: Sid
-with and without the Desert Eagle (the gun is a layer of its own so it can twirl and kick), and
-Dolphin Man folded down into a crouch for Fetal Position.
+SPRITES (assets/sprites/). Trollge's battle sprite is his render, cut out and kept smooth (full
+colour, not pixel art) so the game can light it to match the photo it stands in. The head is a
+separate layer so it can tilt and wobble on the skinny body, and the eyes and grin are a glow
+layer that shines out of the dark rooms. Sid's and Dolphin Man's are green-screen renders of
+their models, front and back, shrunk into dithered pixel art: Sid with and without the Desert
+Eagle (the gun is a layer of its own so it can twirl and kick), and Dolphin Man folded down into
+a crouch for Fetal Position.
 
 ICONS (assets/icons/). halted.png, the red skull on a worker who is out of the fight.
 
@@ -306,15 +308,26 @@ def outlined(idx, pal=None, line=None):
     return out
 
 
+def smooth(rgba, s, box):
+    """Area-average (alpha-premultiplied) down by `s`: a smooth cut-out, kept in full colour."""
+    x0, y0, x1, y1 = box
+    src = rgba[y0:y1, x0:x1].astype(float)
+    w, h = int(round((x1 - x0) * s)), int(round((y1 - y0) * s))
+    a = src[..., 3] / 255
+    col = cv2.resize(src[..., :3] * a[..., None], (w, h), interpolation=cv2.INTER_AREA)
+    a = cv2.resize(a, (w, h), interpolation=cv2.INTER_AREA)
+    col /= np.maximum(a[..., None], 1e-4)
+    return np.dstack([np.clip(col, 0, 255), a * 255]).astype(np.uint8)
+
+
 def trollge():
+    """Trollge's battle sprite: its render cut into a body and a head, so "the large head wobbles
+    on its skinny body". It stays smooth and detailed (not pixel art) so that it can stand in the
+    places' screenshots, and the game lights it to match each one (data.js places). `glow` is the
+    bright part of its face (the grin, its highlights), which still shows in the dark. Also its
+    title card: the head, as pixel art."""
     im = load('trollge.webp', 'RGBA')
-    rgb = im[..., :3]
-    for _ in range(2):
-        rgb = cv2.bilateralFilter(rgb, 9, 40, 9)
     a = im[..., 3]
-    # Lift the shadows a touch so the near-black body still reads against the hallway.
-    rgb = (255 * (rgb.astype(float) / 255) ** 0.8).astype(np.uint8)
-    base = np.dstack([rgb, a])
     # The head is the only thick part: opening the silhouette with a big disc erases the
     # stick limbs and leaves it.
     fig = (a > 100).astype(np.uint8)
@@ -322,45 +335,55 @@ def trollge():
     _, lab, stats, _ = cv2.connectedComponentsWithStats(opened)
     head = cv2.dilate((lab == 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])).astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
 
-    scale, head_scale, pad = 0.18, 0.225, 4  # the head is drawn a little larger: it is heavy
+    R = 3  # sprite pixels per art pixel (the stage shows art pixels at 2x, so this is a little sharper)
+    S = 0.18 * R
     ys, xs = np.where(a > 20)
-    X0, Y0 = xs.min(), ys.min()
-    body = base.copy()
+    X0, Y0, X1, Y1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+    body = im.copy()
     body[head, 3] = 0
-    b = shrink(body, scale, (X0, Y0, xs.max() + 1, ys.max() + 1))
+    hd_body = smooth(body, S, (X0, Y0, X1, Y1))
     hy, hx = np.where(head & (a > 20))
     HX, HY = hx.min(), hy.min()
-    h = shrink(base * head[..., None], head_scale, (HX, HY, hx.max() + 1, hy.max() + 1))
+    hd_head = smooth(im * head[..., None], S, (HX, HY, hx.max() + 1, hy.max() + 1))
+    lum = hd_head[..., :3].astype(float) @ [0.299, 0.587, 0.114] / 255
+    hd_glow = hd_head.copy()
+    hd_glow[..., 3] = (hd_head[..., 3] * np.clip((lum - 0.45) / 0.3, 0, 1)).astype(np.uint8)
 
-    # Place the head so the neck stays put, growing the canvas if the head sticks out.
-    neck = np.array([690.0, 398.0])
-    head_at = np.round((neck - [X0, Y0]) * scale + pad - (neck - [HX, HY]) * head_scale).astype(int)
-    grow = np.maximum(0, 2 - head_at)
-    H, W = b.shape
-    canvas = np.full((H + pad * 2 + grow[1], W + pad * 2 + grow[0]), -1, int)
-    canvas[pad + grow[1]:pad + grow[1] + H, pad + grow[0]:pad + grow[0] + W] = b
-    head_at += grow
-
-    # Anchor points for the game (+1 for the outline margin added by outlined()).
-    on_body = lambda p: [int(v) + 1 for v in np.round((np.array(p, float) - [X0, Y0]) * scale + pad + grow)]
-    on_head = lambda p: [int(v) + 1 for v in np.round((np.array(p, float) - [HX, HY]) * head_scale)]
-    body_img, head_img = outlined(canvas), outlined(h)
-    meta = {
-        'headAt': [int(v) for v in head_at],  # where head.png's top-left goes on body.png
-        'pivot': on_body(neck),  # the head wobbles around this point
-        'eyes': [on_head((484, 189)), on_head((576, 116))],  # on head.png
-        'mouth': on_head((600, 290)),
-        'face': on_body((565, 205)),
-        'clawL': on_body((190, 760)),
-        'clawR': on_body((1250, 560)),
-        'chest': on_body((700, 560)),
-        'feet': on_body((700, 1070)),
-    }
+    # One canvas, a whole number of art pixels across, with room round it.
+    H, W = hd_body.shape[:2]
+    pad = 12
+    size = [int(np.ceil((W + pad * 2) / R)) * R, int(np.ceil((H + pad * 2) / R)) * R]
+    on = lambda p: [int(round((p[0] - X0) * S)) + pad, int(round((p[1] - Y0) * S)) + pad]  # render -> sprite
+    # Where its feet touch the floor: the lowest point of each foot.
+    low = a[Y1 - 30:Y1] > 20
+    cols = np.where(low.any(0))[0]
+    gap = np.argmax(np.diff(cols)) if len(cols) > 1 else 0
+    left, right = cols[:gap + 1], cols[gap + 1:]
     os.makedirs(SPRITES, exist_ok=True)
-    Image.fromarray(body_img).save(os.path.join(SPRITES, 'trollge_body.png'))
-    Image.fromarray(head_img).save(os.path.join(SPRITES, 'trollge_head.png'))
-    print('wrote sprites/trollge_body.png', body_img.shape[1], 'x', body_img.shape[0])
-    print('wrote sprites/trollge_head.png', head_img.shape[1], 'x', head_img.shape[0])
+    for name, img in (('body', hd_body), ('head', hd_head), ('glow', hd_glow)):
+        Image.fromarray(img).save(os.path.join(SPRITES, f'trollge_{name}.png'), optimize=True)
+        print(f'wrote sprites/trollge_{name}.png', img.shape[1], 'x', img.shape[0])
+    meta = {
+        'res': R,
+        'size': size,  # sprite pixels (art pixels x res)
+        'bodyAt': [pad, pad],  # where body.png's top-left goes
+        'headAt': on((HX, HY)),  # ...and head.png's (and glow.png's)
+        'pivot': on((690, 398)),  # its neck: the head wobbles round this point
+        'eyes': [on((484, 189)), on((576, 116))],
+        'mouth': on((600, 290)),
+        'face': on((565, 205)),
+        'clawL': on((190, 760)),
+        'clawR': on((1250, 560)),
+        'chest': on((700, 560)),
+        'feet': on((700, Y1)),
+        'soles': [on((left.mean(), Y1)), on(((right if len(right) else left).mean(), Y1))],  # where each foot touches the floor
+    }
+
+    # The title card is pixel art, from the head with its shadows lifted a little.
+    rgb = im[..., :3]
+    for _ in range(2):
+        rgb = cv2.bilateralFilter(rgb, 9, 40, 9)
+    base = np.dstack([(255 * (rgb.astype(float) / 255) ** 0.8).astype(np.uint8), a])
 
     # Title-screen card: just the head, a little bigger, with its eyes lit.
     s = 118 / max(hx.max() + 1 - HX, hy.max() + 1 - HY)
@@ -509,8 +532,8 @@ def save_sprites(prefix, layers):
 
 def sid_sprite():
     """Sid's battle sprite, from green-screen renders of his model: standing in front of you with
-    and without the Desert Eagle, and from behind. Each view is shrunk into dithered pixel art
-    like Trollge's, on one canvas. The gun comes off the armed view as a layer of its own, so it
+    and without the Desert Eagle, and from behind. Each view is shrunk into dithered pixel art,
+    on one canvas. The gun comes off the armed view as a layer of its own, so it
     can twirl round his finger, come up to aim and kick when he fires; the back views are for
     turning round to draw it or put it away."""
     S = 0.24
@@ -598,8 +621,9 @@ def halted_icon():
 
 
 def uri(path):
+    kind = 'webp' if path.endswith('.webp') else 'png'
     with open(path, 'rb') as f:
-        return 'data:image/png;base64,' + base64.b64encode(f.read()).decode('ascii')
+        return f'data:image/{kind};base64,' + base64.b64encode(f.read()).decode('ascii')
 
 
 def bundle(sprites):
@@ -642,6 +666,6 @@ if __name__ == '__main__':
     halted_icon()
     bundle({
         'sid': {'layers': {k: f'sid_{k}.png' for k in ('front', 'armed', 'gun', 'back', 'backGun')}, 'meta': sid_sprite()},
-        'trollge': {'layers': {'body': 'trollge_body.png', 'head': 'trollge_head.png'}, 'meta': trollge()},
+        'trollge': {'layers': {k: f'trollge_{k}.png' for k in ('body', 'head', 'glow')}, 'meta': trollge()},
         'dolphin': {'layers': {k: f'dolphin_{k}.png' for k in ('body', 'back', 'fetal')}, 'meta': dolphin()},
     })

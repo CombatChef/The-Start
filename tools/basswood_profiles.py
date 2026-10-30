@@ -5,8 +5,8 @@ black, in flat black, grey and white, in a white frame, like the doc's Mel, John
     python3 tools/basswood_profiles.py
 
 reads the sheet of six ink drawings (assets/source/basswood_faces.jpg) and writes
-assets/profiles/basswood_1.png .. basswood_6.png (540x540, in reading order) and sheet.png (all six,
-for a look). Give a sheet and a folder to read and write others.
+assets/profiles/basswood_1.png .. basswood_6.png: six separate 540x540 profiles, one face each, in
+reading order. Give a sheet and a folder to read and write others.
 """
 import os
 import sys
@@ -113,12 +113,7 @@ if __name__ == '__main__':
     outdir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'assets', 'profiles')
     os.makedirs(outdir, exist_ok=True)
     sheet = np.asarray(Image.open(src).convert('L'))
-    outs = [profile(sheet, box) for box in BOXES]
-    for i, out in enumerate(outs):
+    for i, box in enumerate(BOXES):
+        out = profile(sheet, box)
         Image.fromarray(out).save(os.path.join(outdir, f'basswood_{i + 1}.png'))
         print(f'wrote basswood_{i + 1}.png')
-    small = [cv2.resize(o, (360, 360), interpolation=cv2.INTER_AREA) for o in outs]
-    gap = np.full((360, 12), 255, np.uint8)
-    rows = [np.hstack([small[j], gap, small[j + 1], gap, small[j + 2]]) for j in (0, 3)]
-    Image.fromarray(np.vstack([rows[0], np.full((12, rows[0].shape[1]), 255, np.uint8), rows[1]])).save(os.path.join(outdir, 'sheet.png'))
-    print('wrote sheet.png')

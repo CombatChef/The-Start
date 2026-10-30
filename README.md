@@ -343,10 +343,10 @@ means not hitting him while he's curled up.
   Dolphin Man are lit to match each one (above); Sid's pixel sprite is just dimmed in the dark ones (`tone`).
 - **Type:** Russo One for the big words (FIGHT, ATTACK, SLASHCO), the closest free match to the SLASHCO logo;
   Silkscreen for the bracketed HUD text, like the game's; VT323 for SLASHERBOY's screen. All three are bundled.
-- **Basswood County profiles** (`assets/profiles/`): six faces from Basswood County's ink drawings, made into
-  profiles like the doc's Mel, John, Jim and Mysti (lit white on black in flat black, grey and white, in a white
-  frame). They aren't in the game yet. `python3 tools/basswood_profiles.py` makes them from
-  `assets/source/basswood_faces.jpg`.
+- **Basswood County profiles** (`assets/profiles/basswood_1.png` to `basswood_6.png`): six faces from Basswood
+  County's ink drawings, each made into its own profile like the doc's Mel, John, Jim and Mysti (lit white on black
+  in flat black, grey and white, in a white frame). They aren't in the game yet. `python3 tools/basswood_profiles.py`
+  makes them from `assets/source/basswood_faces.jpg`.
 - To rebuild the portraits and sprites after changing a source image: `pip install numpy opencv-python-headless
   pillow`, then `python3 tools/make_images.py`. Dolphin Man's model is rendered first, with Playwright:
   `node tools/dolphin/render.js` (his skeleton's poses are in `tools/dolphin/poses.js`).

@@ -201,6 +201,37 @@ img {
 .timer.final {
   display: none;
 }
+/* MERCY: at 100% it will leave, if Crispy lets it */
+.mercy {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #f3e3a0;
+}
+.mercy .bar {
+  flex: 1;
+  height: 10px;
+  margin: 0 4px;
+  background: #3a3218;
+}
+.mercy .bar i {
+  width: 0;
+  background: repeating-linear-gradient(90deg, #ffe27a 0 8px, #d9b54a 8px 10px);
+}
+.mercy b {
+  min-width: 42px;
+  text-align: right;
+  font-weight: 600;
+}
+#foe.spareable .foe-name,
+#foe.spareable .mercy {
+  color: var(--gold);
+}
+#foe.spareable .mercy b {
+  animation: blink 0.9s steps(2) infinite;
+}
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -333,6 +364,29 @@ img {
 .pilot.out .flame {
   background: #3a3a3a;
   animation: none;
+}
+/* where his family is: upstairs, the kitchen, or safe in the car */
+.family {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 14px;
+  color: #d6d0c3;
+}
+.family .house {
+  width: 13px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: var(--house) center / contain no-repeat;
+  mask: var(--house) center / contain no-repeat;
+  --house: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 6' shape-rendering='crispEdges'%3E%3Crect x='3' width='1' height='1'/%3E%3Crect x='2' y='1' width='3' height='1'/%3E%3Crect x='1' y='2' width='5' height='1'/%3E%3Crect y='3' width='7' height='1'/%3E%3Crect x='1' y='4' width='2' height='2'/%3E%3Crect x='4' y='4' width='2' height='2'/%3E%3C/svg%3E");
+}
+.family.moving {
+  color: #ffd26b;
+}
+.family.safe {
+  color: #8dffc4;
 }
 
 /* ------------------------------------------------------------------ the battle log, and the menus */
@@ -595,6 +649,37 @@ img {
 #screen.lose h1 {
   color: var(--foe);
   font-size: 80px;
+}
+/* the quiet endings: black, a breath, and one line */
+#screen.calm {
+  background: #000;
+}
+#screen.calm .quiet {
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: #6f6a60;
+  opacity: 0;
+  animation: appear 2.4s steps(6) 0.6s forwards;
+}
+#screen.calm .go {
+  opacity: 0;
+  font-size: 22px;
+  padding: 6px 20px 6px 44px;
+  color: #8f8a7e;
+  box-shadow: 0 0 0 3px #3a352c;
+  animation: appear 1.2s steps(4) 2.6s forwards;
+}
+#screen.calm .go::before {
+  left: 14px;
+  top: 9px;
+  width: 16px;
+  height: 18px;
+  background: #8f8a7e;
+}
+@keyframes appear {
+  to {
+    opacity: 1;
+  }
 }
 #screen .tally {
   margin-top: 16px;

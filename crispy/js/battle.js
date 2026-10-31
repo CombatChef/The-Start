@@ -6,6 +6,9 @@
  * A round: Crispy picks a command; whoever is faster goes first; then the end of the round
  * (poison, effects wearing off, a little SP back). NUTCRACKAAAA!!! can be used twice in one
  * turn: after the first, the battle waits (`awaiting === 'again'`) for a second one or a pass.
+ *
+ * It ends one of four ways (`over`): 'win' (Andy is beaten), 'spare' (MERCY reached 100 and
+ * Crispy let it leave), 'flee' (the family got out, then so did he), or 'lose'.
  */
 (function (root) {
   const DATA = root.CRISPY_DATA || (typeof require !== 'undefined' ? require('./data.js') : null);
@@ -50,6 +53,9 @@
       this.foeActed = false;
       this.over = null;
       this.lights = 0; // rounds the lights stay up
+      this.mercy = 0; // 0..100: at 100 it can be SPARED
+      this.family = 0; // how far the family has got: DATA.family
+      this.door = false; // the front door is open
     }
 
     // ------------------------------------------------------------ stats
@@ -116,7 +122,19 @@
       else if (h.nutThisTurn >= sp.perTurn) why = 'Twice a turn';
       skills.push({ id: 'nut', name: sp.name, sp: sp.sp, doc: sp.doc, ok: !why, why, special: true });
       const items = DATA.items.map((i) => ({ id: i.id, name: i.name, doc: i.doc, count: h.items[i.id], ok: h.items[i.id] > 0, why: h.items[i.id] > 0 ? '' : 'None left' }));
-      return { skills, items, acts: DATA.acts.map((a) => ({ id: a.id, name: a.name, doc: a.doc, ok: true })), mercy: DATA.mercy.map((m) => ({ ...m, ok: true })) };
+      const acts = DATA.acts.map((a) => {
+        let why = '';
+        if (a.id === 'door' && this.door) why = 'It’s already open';
+        if (a.id === 'family' && this.family >= 3) why = 'They’re already out';
+        return { id: a.id, name: a.name, doc: a.doc, ok: !why, why, free: !!a.free };
+      });
+      const ready = this.mercy >= DATA.mercyRules.full;
+      const safe = this.family >= 3;
+      const mercy = [
+        { id: 'flee', name: 'FLEE', ok: true, special: safe, doc: safe ? 'Run for the car. The family is already in it.' : 'Run. (He won’t leave without his family: get them out first.)' },
+        { id: 'spare', name: 'SPARE', ok: true, special: ready, doc: ready ? 'Let it leave. It’s ready.' : `Show it mercy. (MERCY ${this.mercy}%: it isn’t ready.)` },
+      ];
+      return { skills, items, acts, mercy };
     }
     adjustIn() {
       return this.stage.final ? null : DATA.foe.adjustOn - this.foe.turns;
@@ -135,6 +153,7 @@
         this.finishRound(ev);
         return ev;
       }
+      if (cmd.type === 'act' && cmd.id === 'check') return this.check();
       this.foeActed = false;
       if (this.foeFirst()) {
         this.foeTurn(ev);
@@ -207,6 +226,7 @@
         ev.push({ t: 'fx', name: h.real ? 'realSlash' : 'swing' });
         const hit = this.heroHit(DATA.attack.power * (h.real ? DATA.skills.find((s) => s.id === 'taste').mult : 1), ev, { kind: h.real ? 'real' : 'foam' });
         if (hit !== null) this.gainSp(DATA.attack.sp, ev);
+        this.addMercy(-DATA.mercyRules.hurt, ev);
         return;
       }
       if (cmd.type === 'skill' || cmd.type === 'special') {
@@ -214,7 +234,11 @@
         h.sp -= s.sp;
         h.last = s.name;
         ev.push({ t: 'sp', value: h.sp });
-        return this['skill_' + s.id](s, cmd, ev);
+        this['skill_' + s.id](s, cmd, ev);
+        // hurting it costs MERCY
+        if (['trash', 'rg', 'slice', 'nut'].includes(s.id)) this.addMercy(-DATA.mercyRules.hurt, ev);
+        if (s.id === 'early' || (s.id === 'authority' && cmd.target === 'foe')) this.addMercy(-DATA.mercyRules.sting, ev);
+        return;
       }
       if (cmd.type === 'act') return this['act_' + cmd.id](DATA.acts.find((a) => a.id === cmd.id), ev);
       if (cmd.type === 'item') {
@@ -405,6 +429,93 @@
         ev.push(this.addMod(this.foe, { atk: a.foe.atk }, a.foe.turns, 'UNSETTLED'));
         ev.push({ t: 'log', text: 'It hesitates. Its attack drops.', tone: 'good' });
       }
+      this.addMercy(a.mercy[i], ev);
+    }
+
+    // ------------------------------------------------------------ the other ways out
+    addMercy(n, ev) {
+      const before = this.mercy;
+      this.mercy = Math.max(0, Math.min(DATA.mercyRules.full, this.mercy + n));
+      if (this.mercy === before) return;
+      ev.push({ t: 'mercy', value: this.mercy, delta: this.mercy - before });
+      if (this.mercy >= DATA.mercyRules.full && before < DATA.mercyRules.full) ev.push({ t: 'log', text: 'It isn’t fighting back anymore. It could be SPARED.', tone: 'special' });
+    }
+    // ACT: Check. A look at it, its stats from the doc, and how things stand. Not a turn.
+    check() {
+      const st = this.stage;
+      const s = st.stats;
+      const ev = [{ t: 'fx', name: 'check' }];
+      ev.push({ t: 'log', text: `${st.final ? 'ANDY' : `THE CREATURE (${st.tag.toUpperCase()})`}. ATK ${s.atk} · DEF ${s.def} · SPD ${s.spd} · CHM ${s.chm}.`, tone: 'sys' });
+      ev.push({ t: 'log', text: ['It’s wearing a body it doesn’t understand yet.', 'It’s learning faces. Mostly yours.', 'It cries like a person now. It isn’t one.', 'It has your build. Your posture. Your hands.', 'He’s wearing your hoodie. He thinks he lives here.'][this.foe.stage], tone: 'foe' });
+      let hint = this.mercy >= DATA.mercyRules.full ? 'It could be SPARED now.' : this.foe.stage < 2 ? 'Words don’t reach it yet. They will.' : 'The more human it gets, the more it listens.';
+      if (this.family >= 3) hint += ' The family is safe: Crispy could FLEE.';
+      ev.push({ t: 'log', text: `MERCY ${this.mercy}%. ${hint}`, tone: 'good' });
+      return ev;
+    }
+    act_photos(a, ev) {
+      const i = this.foe.stage;
+      const lines = [
+        'It tilts its head at the frames. It doesn’t understand pictures yet.',
+        'It stares at the photos. Its mouth opens, but nothing comes out.',
+        'It touches its own face, then looks at the photos again. It’s comparing.',
+        'It looks at the photos for a long time. "That’s... not me."',
+        'Andy looks at them for a long time. "I just wanted one of those."',
+      ];
+      ev.push({ t: 'log', text: i === 4 ? 'Crispy points at the photos. "That’s MY family."' : 'Crispy points at the family photos on the wall.', tone: 'hero' });
+      ev.push({ t: 'fx', name: 'photos' });
+      ev.push({ t: 'log', text: lines[i], tone: 'foe' });
+      this.addMercy(a.mercy[i], ev);
+    }
+    act_door(a, ev) {
+      this.door = true;
+      ev.push({ t: 'log', text: 'Crispy props the front door open. The night air pours in.', tone: 'hero' });
+      ev.push({ t: 'fx', name: 'door' });
+      ev.push({ t: 'door' });
+      ev.push({ t: 'log', text: this.stage.final ? 'Andy glances at the door. "You want me to go?"' : 'It turns towards the open door. It hadn’t thought of leaving.', tone: 'foe' });
+      this.addMercy(a.mercy, ev);
+    }
+    act_family(a, ev) {
+      const say = (text, tone = 'hero') => ev.push({ t: 'log', text, tone });
+      const step = this.family;
+      const f = this.foe;
+      if (step >= 3) return say('Everyone’s already out. Now it’s his turn: FLEE.', 'sys');
+      let chance = a.chance[step];
+      if (step === 1 && (f.distracted || f.mods.some((m) => m.label === 'EXPOSED'))) chance = 1; // it's looking the other way
+      if (step === 2 && this.door) chance = Math.max(chance, 0.9);
+      const fx = { t: 'fx', name: 'family', step, ok: true };
+      ev.push(fx);
+      if (step === 0) {
+        say('Crispy texts upstairs: "WAKE UP. STAY QUIET. DON’T COME DOWN YET."');
+        say('Three dots... "ok. we’re up."', 'good');
+      } else if (this.rand() > chance) {
+        fx.ok = false;
+        if (step === 1) {
+          say('Crispy waves them down the stairs behind its back—');
+          say('A stair creaks. Its head snaps towards the stairs.', 'bad');
+        } else {
+          say('Crispy signals them to the back door—');
+          say('The back door sticks. It rattles. It heard that.', 'bad');
+        }
+        // it goes for them, and he puts himself in the way
+        say('It lunges for them! Crispy throws himself in its path.', 'foe');
+        const dmg = Math.round(a.caught * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
+        ev.push({ t: 'foe', move: 'lunge' });
+        ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'lunge' });
+        this.hurtHero(dmg, ev);
+        if (this.over) return;
+        f.mods = f.mods.filter((m) => m.label !== 'HUNTING');
+        const { turns, ...stats } = a.hunting;
+        ev.push(this.addMod(f, stats, turns, 'HUNTING'));
+        return;
+      } else if (step === 1) {
+        say('Crispy keeps himself between it and the stairs. The family creeps down behind its back.');
+        say('They make it to the kitchen.', 'good');
+      } else {
+        say('Crispy signals them to the back door. They slip out to the car.');
+        say('They’re safe. Now Crispy can FLEE.', 'special');
+      }
+      this.family++;
+      ev.push({ t: 'family', value: this.family });
     }
 
     item_choc(it, ev) {
@@ -433,7 +544,21 @@
       ev.push({ t: 'tag', who: 'foe', text: 'DISTRACTED', good: true });
     }
     mercy_flee(ev) {
-      ev.push({ t: 'log', text: 'Crispy turns to run— but his family is upstairs. He can’t leave them.', tone: 'hero' });
+      if (this.family >= 3) {
+        ev.push({ t: 'log', text: 'Crispy backs towards the door... and RUNS for the car.', tone: 'hero' });
+        if (!this.door && !this.foe.distracted) {
+          ev.push({ t: 'log', text: 'It swipes at him on the way out!', tone: 'foe' });
+          const dmg = Math.round(DATA.fleeHit * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
+          ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'claw' });
+          this.hurtHero(dmg, ev);
+          if (this.over) return;
+        }
+        this.over = 'flee';
+        ev.push({ t: 'log', text: 'The engine turns over on the first try. They’re gone.', tone: 'special' });
+        ev.push({ t: 'flee' });
+        return;
+      }
+      ev.push({ t: 'log', text: this.family ? 'Crispy turns to run— but his family is still inside. He can’t leave them.' : 'Crispy turns to run— but his family is upstairs. He can’t leave them.', tone: 'hero' });
       ev.push({ t: 'fx', name: 'flee' });
       ev.push({ t: 'log', text: 'It catches him with his back turned!', tone: 'foe' });
       const dmg = Math.round(0.6 * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
@@ -443,7 +568,20 @@
     mercy_spare(ev) {
       ev.push({ t: 'fx', name: 'spare' });
       ev.push({ t: 'log', text: 'Crispy lowers his sword and offers it mercy.', tone: 'hero' });
-      ev.push({ t: 'log', text: this.stage.final ? 'Andy laughs. "Spare me? I’m YOU."' : 'It doesn’t know what that means. It doesn’t care.', tone: 'foe' });
+      if (this.mercy >= DATA.mercyRules.full) {
+        if (!this.door) {
+          this.door = true;
+          ev.push({ t: 'log', text: 'He opens the front door wide.', tone: 'hero' });
+          ev.push({ t: 'door' });
+        }
+        ev.push({ t: 'log', text: this.stage.final ? 'Andy looks at the family photos one last time. "Okay."' : 'It looks at Crispy. At the photos. At the open door.', tone: 'foe' });
+        ev.push({ t: 'log', text: this.stage.final ? 'He walks out the front door, into the dark. He doesn’t look back.' : 'It unfolds itself and walks out into the night. It doesn’t look back.', tone: 'special' });
+        this.over = 'spare';
+        ev.push({ t: 'spare' });
+        return;
+      }
+      ev.push({ t: 'log', text: this.stage.final ? 'Andy laughs. "Spare me? I’m YOU."' : 'It doesn’t know what that means yet.', tone: 'foe' });
+      ev.push({ t: 'log', text: `It isn’t ready to leave. (MERCY ${this.mercy}%)`, tone: 'sys' });
     }
 
     healHero(n, ev) {
@@ -517,6 +655,12 @@
       if (!this.stage.final && f.turns >= this.D.foe.adjustOn) {
         ev.push({ t: 'log', text: 'It goes very still. Something under its skin moves.', tone: 'foe' });
         this.adjust(ev, false);
+        return;
+      }
+      // the more MERCY, the more often it can't bring itself to attack
+      if (this.rand() < this.mercy * DATA.mercyRules.hesitate) {
+        ev.push({ t: 'foe', move: 'hesitate' });
+        ev.push({ t: 'log', text: this.door ? 'It raises its claws... then looks at the open door, and lowers them.' : 'It raises its claws... and stops. It’s looking at the photos.', tone: 'good' });
         return;
       }
       this.foeMove(ev);

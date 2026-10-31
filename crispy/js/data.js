@@ -120,6 +120,14 @@
     },
 
     acts: [
+      { id: 'check', name: 'Check', free: true, doc: "Look at it. Really look. (Doesn't use up his turn.)" },
+      {
+        id: 'talk',
+        name: 'Talk',
+        foe: { atk: 0.85, turns: 2 },
+        mercy: [6, 9, 13, 18, 26], // by stage: the more human it gets, the more it listens
+        doc: 'Say something to it. The more human it gets, the more it listens. (MERCY up)',
+      },
       {
         id: 'lights',
         name: 'Turn the lights brighter',
@@ -136,12 +144,25 @@
         doc: "Plant your feet. Nothing gets past you. (Defense up, attack up a little, and you can't be scared.)",
       },
       {
-        id: 'talk',
-        name: 'Talk',
-        foe: { atk: 0.85, turns: 2 },
-        doc: 'Say something to it. The more human it gets, the more it listens.',
+        id: 'photos',
+        name: 'Show it the photos',
+        mercy: [3, 6, 10, 15, 24],
+        doc: 'Point at the family photos on the wall. Show it whose house this is. (MERCY up, more the more human it is)',
+      },
+      { id: 'door', name: 'Open the front door', mercy: 15, doc: 'Prop the front door open and show it the way out. (MERCY up, once. And a clear run for the door.)' },
+      {
+        id: 'family',
+        name: 'Get the family out',
+        chance: [1, 0.45, 0.55], // waking them; down the stairs behind its back; out the back door
+        hunting: { atk: 1.3, turns: 2 }, // if it hears them
+        caught: 1.0, // ...it goes for them, and Crispy takes the hit in their place
+        doc: 'Quietly get everyone out of the house, one step at a time: it must not hear them. (The car alarm or the lights help.) Once they are out, he can FLEE.',
       },
     ],
+    // MERCY: at 100 it can be SPARED. Hurting it costs some back; the higher it is, the more
+    // often it hesitates instead of attacking.
+    mercyRules: { full: 100, hurt: 10, sting: 5, hesitate: 0.003 },
+    family: ['ASLEEP UPSTAIRS', 'AWAKE UPSTAIRS', 'IN THE KITCHEN', 'SAFE IN THE CAR'],
 
     items: [
       { id: 'choc', name: '70% Dark Chocolate', count: 3, heal: 0.22, doc: 'Bittersweet. Heals lightly.' },
@@ -154,6 +175,8 @@
       { id: 'flee', name: 'FLEE', doc: 'Run.' },
       { id: 'spare', name: 'SPARE', doc: 'Show it mercy.' },
     ],
+    // a parting swipe as he runs, if the door's shut and it isn't distracted
+    fleeHit: 0.6,
 
     // ------------------------------------------------------------------ THE CREATURE
     // "ADJUST - To look like them. To look LIKE YOU. Transforms to the follow-up stage. Changing
@@ -247,6 +270,7 @@
         grab: { name: 'Grab', power: 1.4, acc: 0.8 },
         smile: { name: 'Smile', debuff: { atk: 0.8, turns: 2 }, afraid: 2, acc: 1 },
         pat: { name: 'Pat on the Back', power: 0.8, acc: 0.95 },
+        hesitate: { name: 'Hesitate' },
         adjust: { name: 'ADJUST' },
       },
     },

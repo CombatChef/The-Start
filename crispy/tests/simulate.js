@@ -58,6 +58,36 @@ const POLICIES = {
     if (r < 0.38 && ok('early')) return { type: 'skill', id: 'early' };
     return { type: 'attack' };
   },
+  // Never hurts it: talks it down, shows it the photos and the door, heals, then SPAREs it.
+  pacifist(b) {
+    const h = b.hero;
+    if (b.awaiting === 'again') return { type: 'pass' };
+    if (b.mercy >= 100) return { type: 'mercy', id: 'spare' };
+    if (h.hp < h.hpMax * 0.35) {
+      if (h.items.cheese) return { type: 'item', id: 'cheese' };
+      if (h.items.choc) return { type: 'item', id: 'choc' };
+      if (h.sp < 100 && b.rand() < 0.5) return { type: 'skill', id: 'wine' };
+    }
+    if (!b.door) return { type: 'act', id: 'door' };
+    if (h.items.keys && b.foe.stage >= 3) return { type: 'item', id: 'keys' };
+    if (!h.mods.some((m) => m.label === 'FEARLESS') && b.rand() < 0.2) return { type: 'act', id: 'stance' };
+    const st = b.foe.stage;
+    const talk = DATA.acts.find((a) => a.id === 'talk').mercy[st];
+    const photos = DATA.acts.find((a) => a.id === 'photos').mercy[st];
+    return { type: 'act', id: talk >= photos ? 'talk' : 'photos' };
+  },
+  // Gets the family out, then runs.
+  runner(b) {
+    const h = b.hero;
+    if (b.awaiting === 'again') return { type: 'pass' };
+    if (b.family >= 3) return b.door ? { type: 'mercy', id: 'flee' } : { type: 'act', id: 'door' };
+    if (h.hp < h.hpMax * 0.35) {
+      if (h.items.cheese) return { type: 'item', id: 'cheese' };
+      if (h.items.choc) return { type: 'item', id: 'choc' };
+    }
+    if (b.family === 1 && h.items.keys) return { type: 'item', id: 'keys' }; // the alarm covers the stairs
+    return { type: 'act', id: 'family' };
+  },
   // Only ever presses ATTACK.
   mash(b) {
     if (b.awaiting === 'again') return { type: 'pass' };
@@ -65,10 +95,11 @@ const POLICIES = {
   },
 };
 
-const KNOWN = new Set(['log', 'fx', 'hit', 'miss', 'block', 'heal', 'sp', 'tag', 'adjust', 'revive', 'win', 'lose', 'again', 'round', 'lights', 'sword', 'foe']);
+const KNOWN = new Set(['log', 'fx', 'hit', 'miss', 'block', 'heal', 'sp', 'tag', 'adjust', 'revive', 'win', 'lose', 'again', 'round', 'lights', 'sword', 'foe', 'mercy', 'family', 'door', 'spare', 'flee']);
 let bad = 0;
 for (const [name, policy] of Object.entries(POLICIES)) {
   let wins = 0, rounds = 0, andy = 0, revived = 0, ko = 0, nuts = 0, forced = 0, timed = 0, hpLeft = 0;
+  const ends = { win: 0, spare: 0, flee: 0, lose: 0 };
   const reached = [0, 0, 0, 0, 0];
   for (let i = 0; i < N; i++) {
     const b = new Battle(1000 + i * 7919);
@@ -89,11 +120,12 @@ for (const [name, policy] of Object.entries(POLICIES)) {
     if (!b.over) { bad++; console.log('NEVER ENDED', name, i); }
     reached[b.foe.stage]++;
     if (b.foe.stage === 4) andy++;
-    if (b.over === 'win') { wins++; hpLeft += b.hero.hp / b.hero.hpMax; }
+    ends[b.over]++;
+    if (b.over !== 'lose') { wins++; hpLeft += b.hero.hp / b.hero.hpMax; }
     rounds += b.round;
   }
   const p = (n) => ((100 * n) / N).toFixed(1) + '%';
-  console.log(`${name.padEnd(7)} win ${p(wins)}  rounds ${(rounds / N).toFixed(1)}  saw Andy ${p(andy)}  revived ${p(revived)}  KO ${p(ko)}  nut/fight ${(nuts / N).toFixed(2)}  adjust forced/timed ${(forced / N).toFixed(2)}/${(timed / N).toFixed(2)}  hp left on a win ${wins ? ((100 * hpLeft) / wins).toFixed(0) : 0}%  ended at stage ${reached.map((r) => p(r)).join(' ')}`);
+  console.log(`${name.padEnd(8)} survived ${p(wins)} (fight ${p(ends.win)}, spare ${p(ends.spare)}, flee ${p(ends.flee)})  rounds ${(rounds / N).toFixed(1)}  saw Andy ${p(andy)}  revived ${p(revived)}  KO ${p(ko)}  nut/fight ${(nuts / N).toFixed(2)}  adjust forced/timed ${(forced / N).toFixed(2)}/${(timed / N).toFixed(2)}  hp left on a win ${wins ? ((100 * hpLeft) / wins).toFixed(0) : 0}%  ended at stage ${reached.map((r) => p(r)).join(' ')}`);
 }
 if (bad) {
   console.log(bad + ' problems');

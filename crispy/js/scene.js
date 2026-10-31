@@ -29,7 +29,11 @@
     popups: [],
     splats: [], // blood on the screen while it ADJUSTS
     real: false, // the sword is real
-    hero: { shake: 0, flash: 0, dx: 0, gold: 0, afraid: false, critical: false, down: 0 }, // his portrait's state
+    door: 0, // the front door, 0 shut .. 1 open: the night comes in
+    beam: 0, // the car's headlights through the blinds, when they get away
+    beamX: 0,
+    doorTarget: 0,
+    hero: { shake: 0, flash: 0, dx: 0, gold: 0, afraid: false, critical: false, down: 0, away: 0 }, // his portrait's state
   };
   window.SCENE = S;
 
@@ -71,6 +75,23 @@
     bird2: {
       pal: { b: '#7a5136', o: '#f08a2e', k: '#15171a', y: '#f2c230' },
       rows: ['......bb..', '...bbbb...', '..bkbbb...', 'ybbbbbbbb.', '..oooobbbb', '...b.b....'],
+    },
+    // the family, sneaking out in the dark (lit at the edges by the windows)
+    adult: {
+      pal: { k: '#1d222b', r: '#7d8ea6' },
+      rows: ['..rrr..', '.rkkkr.', '.rkkkr.', '..rkr..', '.rkkkr.', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', '.kkkkk.', '.kkkkk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.rr.rr.'],
+    },
+    kid: {
+      pal: { k: '#1d222b', r: '#7d8ea6' },
+      rows: ['.rrr.', 'rkkkr', '.rkr.', 'rkkkr', 'rkkkr', 'rkkkr', '.kkk.', '.k.k.', '.k.k.', '.k.k.', '.r.r.'],
+    },
+    phone: {
+      pal: { k: '#1b1c1f', s: '#3f8fd8', S: '#d6f0ff', g: '#6b6f76' },
+      rows: ['kkkkkkk', 'kSSSSSk', 'kSsssSk', 'kssssSk', 'kSSSssk', 'ksssssk', 'kSSSSsk', 'ksssssk', 'kkkgkkk', 'kkkkkkk'],
+    },
+    heart: {
+      pal: { r: '#ffb0a0', R: '#ff6b5a' },
+      rows: ['.rr.rr.', 'rRRrRRr', 'rRRRRRr', '.rRRRr.', '..rRr..', '...r...'],
     },
     flag: {
       pal: { p: '#8a6a4a', w: '#f2f2f2', W: '#c9ccd0' },
@@ -737,6 +758,119 @@
         S.hero.dx = -Math.sin(Math.PI * p) * 140;
       });
     },
+    // ACT: Check. A thermostat's read-out: brackets close in round it and a line scans it.
+    check() {
+      sfx('check');
+      const [, hy] = C().point('head');
+      const [fx, fy] = C().point('feet');
+      const top = hy - 90;
+      return add(1100, (ctx, p) => {
+        const a = 1 - clamp((p - 0.8) / 0.2, 0, 1);
+        const k = 1 - ease(Math.min(1, p * 3.5));
+        const x0 = fx - 150 - k * 120;
+        const x1 = fx + 150 + k * 120;
+        const y0 = top - k * 60;
+        const y1 = Math.min(fy, 740) + k * 30;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#9fe6ff';
+        const L = 42;
+        const T = PX * 2;
+        for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+          ctx.fillRect(sx > 0 ? x : x - L, sy > 0 ? y : y - T, L, T);
+          ctx.fillRect(sx > 0 ? x : x - T, sy > 0 ? y : y - L, T, L);
+        }
+        if (p > 0.25) {
+          const yy = y0 + (y1 - y0) * ((p - 0.25) / 0.75);
+          ctx.globalAlpha = a * 0.7;
+          ctx.fillRect(x0, yy, x1 - x0, PX);
+          ctx.globalAlpha = a * 0.18;
+          ctx.fillRect(x0, y0, x1 - x0, yy - y0);
+        }
+        ctx.restore();
+        bigText(ctx, 'CHECK', x0 + 72, y0 + 34, 34, '#9fe6ff', { alpha: a });
+      });
+    },
+    // ACT: Show it the photos. The frames on the wall glow, and it looks.
+    photos() {
+      sfx('photos');
+      C().act('distracted');
+      const frames = [[930, 270, 1000, 350], [1060, 268, 1185, 398]];
+      const hearts = particles(6, 0, 0, (i, a, b) => ({ f: i % 2, dx: (a - 0.5) * 70, at: b * 0.4 }));
+      return add(1800, (ctx, p) => {
+        const a = Math.sin(Math.PI * p);
+        ctx.save();
+        for (const [x0, y0, x1, y1] of frames) {
+          ctx.globalAlpha = a;
+          ctx.strokeStyle = '#ffd36b';
+          ctx.lineWidth = PX * 2;
+          const g = PX * 3 + Math.round(Math.sin(S.t * 6)) * PX;
+          ctx.strokeRect(x0 - g, y0 - g, x1 - x0 + g * 2, y1 - y0 + g * 2);
+        }
+        ctx.restore();
+        for (const h of hearts) {
+          const q = clamp((p - h.at) / 0.5, 0, 1);
+          if (!q) continue;
+          const [x0, y0, x1, y1] = frames[h.f];
+          drawSprite(ctx, 'heart', (x0 + x1) / 2 + h.dx * 0.6, (y0 + y1) / 2 - q * 80, PX * 2, { alpha: 1 - q });
+        }
+      });
+    },
+    // ACT: Open the front door (at the right of the room). Cold air and leaves blow in.
+    door() {
+      sfx('door');
+      C().act('distracted');
+      S.doorTarget = 1;
+      const leaves = particles(14, W, 0, (i, a, b, c) => ({ y0: 480 + a * 280, vx: -(500 + b * 600), wob: c * 6, at: i * 0.04 }));
+      return add(1600, (ctx, p) => {
+        for (const l of leaves) {
+          const q = p - l.at;
+          if (q <= 0) continue;
+          const x = W + 20 + l.vx * q;
+          const y = l.y0 + Math.sin(q * 8 + l.wob) * 30 + q * 80;
+          ctx.fillStyle = l.wob > 3 ? '#6b4a2a' : '#8a6a3a';
+          ctx.fillRect(x, y, PX * 3, PX * 2);
+        }
+      });
+    },
+    // ACT: Get the family out. 0: texting them upstairs; 1: down the stairs behind its back
+    // (at the left of the room); 2: out the back door. If it hears them, they freeze.
+    family(o = {}) {
+      const step = o.step || 0;
+      const ok = o.ok !== false;
+      if (step === 0) {
+        sfx('phone');
+        const [x, y] = S.heroPoint('head');
+        return add(1700, (ctx, p) => {
+          const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
+          const buzz = p < 0.45 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
+          drawSprite(ctx, 'phone', x + 200 + buzz, y - 40, PX * 4, { alpha: a });
+          if (p < 0.45) {
+            ctx.fillStyle = '#d6f0ff';
+            for (const s of [-1, 1]) ctx.fillRect(x + 200 + s * 30 - PX, y - 60 + Math.round(Math.sin(S.t * 30)) * PX, PX, PX * 6);
+          } else bigText(ctx, 'ok', x + 245, y - 120, 40, '#8dffc4', { alpha: a });
+        });
+      }
+      sfx('sneak');
+      if (!ok) sfx('creak', 700);
+      // three of them: from the top of the stairs down to the kitchen, or from the kitchen out
+      const path = step === 1 ? [[318, 395], [165, 492]] : [[200, 476], [-80, 476]];
+      return add(1900, (ctx, p) => {
+        const stop = ok ? 1 : 0.4; // heard: they freeze where they are
+        const q = Math.min(p, stop);
+        const a = 1 - clamp((p - 0.88) / 0.12, 0, 1);
+        ['adult', 'kid', 'adult'].forEach((k, i) => {
+          const qq = clamp(q * 1.3 - i * 0.15, 0, 1);
+          const x = path[0][0] + (path[1][0] - path[0][0]) * qq + i * 26;
+          const y = path[0][1] + (path[1][1] - path[0][1]) * qq + (p < stop && Math.sin(S.t * 9 + i) > 0 ? -PX : 0);
+          drawSprite(ctx, k, x, y, PX * 2, { ay: 1, alpha: a, sx: i === 2 ? 0.9 : 1 });
+        });
+        if (!ok && p > 0.42) {
+          const s = 1 + (1 - ease(Math.min(1, (p - 0.42) * 6))) * 0.6;
+          bigText(ctx, step === 1 ? 'CREAK' : 'RATTLE', path[0][0] + 40, path[0][1] - 150, 56 * s, '#ffd36b', { stroke: '#2a1a00', rot: -0.08, alpha: a });
+        }
+      });
+    },
     spare() {
       sfx('spare');
       return add(1500, (ctx, p) => {
@@ -780,7 +914,16 @@
     grab: () => (sfx('grab', 500), hands(1200)),
     smile: () => (sfx('smile'), stareFx(1700, true)),
     pat: () => (sfx('pat'), patFx(1000)),
+    hesitate: () => (sfx('hesitate'), dots(1500)),
   };
+  // it stops short: a '...' over its head
+  function dots(dur) {
+    const [x, y] = C().point('head');
+    return add(dur, (ctx, p) => {
+      const n = Math.min(3, 1 + Math.floor(p * 5));
+      bigText(ctx, '.'.repeat(n).padEnd(3, ' '), x + 70, y - 80, 60, '#ffffff', { alpha: 1 - clamp((p - 0.8) / 0.2, 0, 1) });
+    });
+  }
   function heroClaw(dur, n, at = 0.2) {
     const [x, y] = S.heroPoint('chest');
     return add(dur, (ctx, p) => {
@@ -998,25 +1141,42 @@
 
   S.setLights = (on) => (S.lightsTarget = on ? 1 : 0);
 
-  // Confetti, for the birthday.
-  S.confetti = function () {
-    const bits = [];
-    for (let i = 0; i < 160; i++) bits.push({ x: Math.random() * W, y: -Math.random() * H, vy: 120 + Math.random() * 160, vx: (Math.random() - 0.5) * 60, s: 8 + Math.random() * 8, c: ['#ffd23f', '#ff5a8a', '#4ad6ff', '#7dff6b', '#ffffff', '#ff8a3c'][i % 6], spin: Math.random() * 6 });
-    return add(30000, (ctx, p) => {
-      const tt = p * 30;
-      for (const b of bits) {
-        const y = ((b.y + b.vy * tt) % (H + 40)) - 20;
-        const x = b.x + b.vx * tt + Math.sin(tt * 2 + b.spin) * 20;
-        ctx.fillStyle = b.c;
-        ctx.fillRect(x, y, b.s, b.s * (0.4 + 0.6 * Math.abs(Math.sin(tt * 4 + b.spin))));
+  S.setDoor = (open) => (S.doorTarget = open ? 1 : 0);
+
+  // FLEE, with the family safe: Crispy is out of the frame, then the car's headlights sweep
+  // the blinds and the engine pulls away. The creature turns to watch.
+  S.escape = function () {
+    sfx('flee');
+    sfx('engine', 700);
+    return add(4200, (ctx, p) => {
+      const T = p * 4.2;
+      S.hero.away = ease(Math.min(1, T / 0.7));
+      if (T > 1.2 && !S.turned) {
+        S.turned = true;
+        C().act('distracted');
       }
-    }, { top: true });
+      if (T < 1.2) return;
+      // the headlights sweep across the room (drawn with the room, in S.draw)
+      const q = (T - 1.2) / 3;
+      S.beam = Math.sin(Math.PI * Math.min(1, q));
+      S.beamX = 1150 - q * 1000;
+    });
   };
 
+  // The end: everything fades to black, in pixels.
+  S.fadeOut = function (ms) {
+    const total = 600000;
+    return add(total, (ctx, p) => {
+      ctx.fillStyle = `rgba(0,0,0,${clamp((p * total) / ms, 0, 1)})`;
+      ctx.fillRect(0, 0, W, H);
+    }, { top: true }) && ms;
+  };
   // ------------------------------------------------------------------ every frame
   S.update = function (dt) {
     S.t += dt;
     S.lights += (S.lightsTarget - S.lights) * Math.min(1, dt * 3);
+    S.door += (S.doorTarget - S.door) * Math.min(1, dt * 1.5);
+    S.beam = Math.max(0, S.beam - dt * 0.3); // (the escape keeps it up while it runs)
     C().lights = S.lights;
     S.shake *= Math.pow(0.02, dt);
     if (S.shake < 0.3) S.shake = 0;
@@ -1081,6 +1241,47 @@
     const dark = 0.42 * (1 - 0.65 * lit) + Math.max(0, Math.sin(S.t * 0.7) * Math.sin(S.t * 2.3)) * 0.05;
     ctx.fillStyle = `rgba(0,0,0,${dark})`;
     ctx.fillRect(-8, -8, W + 16, H + 16);
+    // the front door open: cold night light from the doorway at the right, across the floor
+    if (S.door > 0.01) {
+      const d = S.door * (0.9 + Math.sin(S.t * 1.3) * 0.05);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.save();
+      ctx.translate(1290, 516);
+      ctx.scale(0.42, 1);
+      const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 300);
+      g.addColorStop(0, `rgba(90,120,170,${0.4 * d})`);
+      g.addColorStop(1, 'rgba(90,120,170,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-300, -300, 600, 600);
+      ctx.restore();
+      const f = ctx.createRadialGradient(1260, 790, 10, 1260, 790, 420);
+      f.addColorStop(0, `rgba(80,110,160,${0.28 * d})`);
+      f.addColorStop(1, 'rgba(80,110,160,0)');
+      ctx.fillStyle = f;
+      ctx.beginPath();
+      ctx.ellipse(1180, 800, 420, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // the headlights, through the blinds and across the walls
+    if (S.beam > 0.01) {
+      ctx.globalCompositeOperation = 'lighter';
+      const a = S.beam;
+      for (const [x0, y0, x1, y1] of [[330, 268, 476, 520], [684, 262, 870, 505]]) {
+        const g = ctx.createLinearGradient(S.beamX - 300, 0, S.beamX + 300, 0);
+        g.addColorStop(0, 'rgba(255,240,200,0)');
+        g.addColorStop(0.5, `rgba(255,240,200,${0.6 * a})`);
+        g.addColorStop(1, 'rgba(255,240,200,0)');
+        ctx.fillStyle = g;
+        for (let yy = y0; yy < y1; yy += 12) ctx.fillRect(x0, yy, x1 - x0, 6);
+      }
+      const g = ctx.createRadialGradient(S.beamX, 420, 20, S.beamX, 420, 560);
+      g.addColorStop(0, `rgba(255,236,190,${0.24 * a})`);
+      g.addColorStop(1, 'rgba(255,236,190,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-8, -8, W + 16, H + 16);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.restore();
 
     // the creature, at a third of the resolution
@@ -1124,7 +1325,7 @@
     if (!pic) return;
     const h = S.hero;
     const k = 5; // his pixels, on screen
-    let x = h.dx;
+    let x = h.dx - h.away * 300;
     const y = (Math.sin(S.t * 2.4) > 0.3 ? -k : 0) + h.down * 240;
     if (h.shake > 0.5) x += Math.round(((Math.random() - 0.5) * h.shake * 2) / k) * k;
     if (h.afraid) x += Math.round(Math.random() - 0.5) * k;
@@ -1147,6 +1348,8 @@
     S.effects = [];
     S.popups = [];
     S.lights = S.lightsTarget = 0;
-    S.hero.gold = S.hero.flash = S.hero.down = S.hero.dx = 0;
+    S.hero.gold = S.hero.flash = S.hero.down = S.hero.dx = S.hero.away = 0;
+    S.door = S.doorTarget = S.beam = 0;
+    S.turned = false;
   };
 })();

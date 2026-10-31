@@ -413,25 +413,56 @@
       [392, 349, 311, 262, 196].forEach((f, i) => tone('triangle', f, i * 0.35, 0.6, 0.1));
       tone('sawtooth', [80, 40], 1.6, 2, 0.08, { filter: ['lowpass', 300] });
     },
-    // Happy Birthday, on a music box
-    birthday: () => {
-      const C = [262, 294, 330, 349, 392, 440, 494, 523, 587, 659, 698];
-      const n = (k) => C[k];
-      const song = [
-        [4, 0.75], [4, 0.25], [5, 1], [4, 1], [7, 1], [6, 2],
-        [4, 0.75], [4, 0.25], [5, 1], [4, 1], [8, 1], [7, 2],
-        [4, 0.75], [4, 0.25], [11, 1], [9, 1], [7, 1], [6, 1], [5, 2],
-        [10, 0.75], [10, 0.25], [9, 1], [7, 1], [8, 1], [7, 2.5],
-      ];
-      const beat = 0.42;
-      let t = 0.2;
-      for (const [k, d] of song) {
-        const f = (k > 10 ? 784 : n(k)) * 2;
-        tone('sine', f, t, d * beat + 0.6, 0.12);
-        tone('triangle', f * 2, t, 0.25, 0.03);
-        t += d * beat;
-      }
-      return t;
+    // MERCY going up (a soft rising pair) or down (a dull drop)
+    mercyUp: () => chime(0, [659, 988], 0.09, 0.06, 'triangle', 0.5),
+    mercyDown: () => tone('triangle', [330, 196], 0, 0.25, 0.07),
+    // ACT: Check, a thermostat's beep
+    check: () => {
+      tone('square', 2093, 0, 0.05, 0.05);
+      tone('square', 2093, 0.1, 0.05, 0.05);
+      tone('sine', [700, 1400], 0.2, 0.3, 0.04);
+    },
+    // the family photos: a quiet music box
+    photos: () => chime(0, [784, 659, 523, 587, 659], 0.22, 0.05, 'sine', 1.1),
+    // the front door: the latch, the hinge, the night outside
+    door: () => {
+      click(0, 0.35, 1800);
+      tone('sawtooth', [180, 260], 0.12, 0.9, 0.05, { filter: ['bandpass', 900, 6], vibrato: [11, 30] });
+      noise(0.3, 2.4, 0.08, { type: 'bandpass', f: [300, 700], q: 0.8, attack: 0.8 });
+    },
+    // a phone buzzing upstairs, then a reply
+    phone: () => {
+      for (let i = 0; i < 2; i++) tone('sawtooth', 150, i * 0.32, 0.22, 0.08, { filter: ['lowpass', 400] });
+      chime(1.1, [1568, 2093], 0.08, 0.05, 'sine', 0.25);
+    },
+    // footsteps, trying to be quiet
+    sneak: () => {
+      for (let i = 0; i < 5; i++) thump(i * 0.28, 90, 0.18, 0.09);
+    },
+    // a stair creaking
+    creak: () => {
+      tone('sawtooth', [220, 140], 0, 0.6, 0.09, { filter: ['bandpass', 700, 7], vibrato: [17, 25] });
+      tone('sawtooth', [160, 120], 0.15, 0.45, 0.05, { filter: ['bandpass', 500, 5], vibrato: [9, 18] });
+    },
+    // the creature can't bring itself to do it
+    hesitate: () => tone('sine', [196, 185], 0, 1.2, 0.06, { attack: 0.3 }),
+    // its footsteps as it leaves, slow and heavy
+    leave: () => {
+      for (let i = 0; i < 6; i++) thump(0.2 + i * 0.55, 70, 0.4 - i * 0.05, 0.3);
+      noise(0, 3.6, 0.06, { type: 'bandpass', f: [400, 250], q: 0.7, attack: 1 });
+    },
+    // the car starting, the headlights, driving away
+    engine: () => {
+      for (let i = 0; i < 3; i++) noise(i * 0.12, 0.1, 0.18, { type: 'bandpass', f: 300, q: 3 }); // the starter
+      tone('sawtooth', [40, 55], 0.4, 1.4, 0.12, { filter: ['lowpass', 220], attack: 0.1 });
+      tone('sawtooth', [55, 90], 1.6, 2.2, 0.1, { filter: ['lowpass', 260], attack: 0.2 });
+      noise(1.6, 2.4, 0.08, { f: [500, 150], attack: 0.3 });
+    },
+    // the end: one long, calm breath in, and out
+    breath: () => {
+      noise(0, 1.9, 0.09, { type: 'bandpass', f: [280, 900], q: 0.9, attack: 1.5 });
+      noise(2.1, 2.9, 0.1, { type: 'bandpass', f: [800, 220], q: 0.8, attack: 0.25 });
+      for (const [f, d] of [[131, 0], [196, 4], [262, -3]]) tone('sine', f, 0.6, 5, 0.04, { detune: d, attack: 2 });
     },
   };
   A.S = S;

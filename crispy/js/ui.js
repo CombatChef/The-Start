@@ -88,22 +88,19 @@
     await say('The Creature stands between Crispy and the stairs!', 'foe');
     main();
   }
-  function end(win) {
+  // The three good endings close the same way: a breath, black, and one quiet line.
+  const QUIET = {
+    win: 'The house is quiet again.',
+    spare: 'The door clicks shut. The house is quiet again.',
+    flee: 'They watch the sun come up from the car.',
+  };
+  function end(how) {
     UI.mode = 'end';
     $('#hud').style.visibility = 'hidden';
-    const st = UI.stats;
-    const secs = Math.round((Date.now() - st.t0) / 1000);
-    const line = `ROUND ${UI.b.round} · ${st.dealt} DAMAGE DEALT · ${st.taken} TAKEN · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-    if (win)
-      screen(
-        'win',
-        `<div class="kicker">THE HOUSE IS QUIET AGAIN</div>
-         <h1>HAPPY BIRTHDAY, DAD!</h1>
-         <p>Crispy Soto stood his ground and protected his family.</p>
-         <div class="tally">${line}</div>
-         <button class="go" id="again">PLAY AGAIN</button>`
-      );
-    else
+    if (how === 'lose') {
+      const st = UI.stats;
+      const secs = Math.round((Date.now() - st.t0) / 1000);
+      const line = `ROUND ${UI.b.round} · ${st.dealt} DAMAGE DEALT · ${st.taken} TAKEN · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
       screen(
         'lose',
         `<div class="kicker">THE LIGHTS GO OUT</div>
@@ -112,11 +109,20 @@
          <div class="tally">${line}</div>
          <button class="go" id="again">TRY AGAIN</button>`
       );
+    } else screen('calm', `<p class="quiet">${QUIET[how] || QUIET.win}</p><button class="go" id="again">PLAY AGAIN</button>`);
     $('#again').addEventListener('click', () => {
       A().play('confirm');
       if (!A().music.paused) A().music.currentTime = 0;
       start();
     });
+  }
+  // A calming breath, and everything fades to black.
+  async function calm(how) {
+    A().stopMusic(2.5);
+    await wait(500);
+    A().play('breath');
+    await wait(S().fadeOut(4200) + 600);
+    end(how);
   }
 
   // ------------------------------------------------------------------ the HUD
@@ -158,6 +164,13 @@
     timer.classList.toggle('soon', n === 1);
     $('#foe-turns').textContent = n === 1 ? 'NEXT TURN' : `${n} TURNS`;
     tags('#foe-tags', foeTags(b));
+    $('#mercy-fill').style.width = `${b.mercy}%`;
+    $('#mercy-num').textContent = `${b.mercy}%`;
+    $('#foe').classList.toggle('spareable', b.mercy >= DATA.mercyRules.full);
+    const fam = $('#family');
+    fam.classList.toggle('moving', b.family > 0 && b.family < 3);
+    fam.classList.toggle('safe', b.family >= 3);
+    $('#family-word').textContent = `FAMILY · ${DATA.family[Math.min(b.family, DATA.family.length - 1)]}`;
     $('#round').textContent = `ROUND ${String(b.round).padStart(2, '0')}`;
   }
   // The stage's doc profile, made small so it shows in pixels like everything else.
@@ -472,30 +485,57 @@
           break;
         case 'again':
           break;
-        case 'win': {
+        case 'mercy': {
+          refresh();
+          const up = e.delta > 0;
+          A().play(up ? 'mercyUp' : 'mercyDown');
+          const [x, y] = C().point('head');
+          S().popup(`MERCY ${up ? '+' : ''}${e.delta}%`, x - 30, y - 130, { color: up ? '#ffe27a' : '#b9a98a', size: up ? 34 : 26, dur: 1.3 });
+          await wait(up ? 420 : 200);
+          break;
+        }
+        case 'family': {
+          refresh();
+          const [x, y] = S().heroPoint('head');
+          S().popup(DATA.family[e.value], x + 60, y - 160, { color: e.value >= 3 ? '#8dffc4' : '#ffd26b', size: 30, dur: 1.6 });
+          await wait(500);
+          break;
+        }
+        case 'door':
+          S().setDoor(true);
+          break;
+        // the endings: Andy falls, it walks out of the front door, or they drive away
+        case 'win':
           refresh();
           A().stopMusic(2.5);
           A().play('bones');
           await wait(C().die());
-          S().setLights(true);
-          A().play('birthday');
-          S().confetti();
-          await wait(600);
-          end(true);
-          return;
-        }
+          break;
+        case 'spare':
+          refresh();
+          A().stopMusic(4);
+          S().setDoor(true);
+          A().play('leave');
+          await wait(C().leave() + 300);
+          break;
+        case 'flee':
+          refresh();
+          A().stopMusic(4);
+          await wait(S().escape());
+          break;
         case 'lose': {
           refresh();
           A().stopMusic(2);
           A().play('lose');
           S().hero.down = 1;
           await wait(2200);
-          end(false);
+          end('lose');
           return;
         }
       }
     }
     refresh();
+    if (UI.b.over) await calm(UI.b.over);
   }
 
   UI.refresh = refresh;

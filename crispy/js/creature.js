@@ -166,6 +166,23 @@
         o.lean = 14 * out;
         o.sway = 0;
         break;
+      case 'hesitate': {
+        // it raises its claws... and lets them down again, slowly
+        const rise = p < 0.25 ? p / 0.25 : Math.max(0, 1 - (p - 0.25) / 0.75);
+        o.armL = 0.75 * rise;
+        o.armR = 0.4 * rise;
+        o.lean = -6 * rise + 8 * Math.max(0, p - 0.4);
+        break;
+      }
+      case 'leave': {
+        // walking away: arms swinging, a sway with each step
+        const step = Math.sin(C.t * 3.4);
+        o.armL = step * 0.12;
+        o.armR = -step * 0.12;
+        o.sway = step * 2.5;
+        o.lean = 4;
+        break;
+      }
       case 'adjust': {
         const conv = p < 0.75 ? Math.min(1, p / 0.4) : Math.max(0, 1 - (p - 0.75) / 0.25);
         o.shake = 5 * conv;
@@ -182,7 +199,7 @@
   }
 
   C.act = function (type) {
-    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, adjust: 3.6 }[type] || 0.8;
+    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, adjust: 3.6 }[type] || 0.8;
     C.action = { type, t0: C.t, dur };
     return dur * 1000;
   };
@@ -191,6 +208,13 @@
     C.from = C.stage;
     C.adjustTo = to;
     return C.act('adjust');
+  };
+  // SPARED: it walks out of the front door (at the right of the room) and into the dark.
+  const LEAVE = 4.8;
+  C.leave = function () {
+    C.action = { type: 'leave', t0: C.t, dur: LEAVE };
+    C.leaving = { t0: C.t };
+    return LEAVE * 1000;
   };
   C.die = function () {
     C.action = null;
@@ -201,6 +225,7 @@
     C.stage = 0;
     C.action = null;
     C.dissolve = null;
+    C.leaving = null;
     C.blood = [];
     C.stains = [];
     C.lights = 0;
@@ -262,7 +287,7 @@
   // ------------------------------------------------------------------ drawing
   // One form into the buffer, posed. `rowFilter` (while it tears) picks the rows to draw.
   function render(f, o, rowFilter) {
-    const lit0 = 1 + C.lights * 0.6;
+    const lit0 = (1 + C.lights * 0.6) * (C.leaving ? 1 - 0.55 * clamp((C.t - C.leaving.t0) / LEAVE, 0, 1) : 1);
     const pivots = { [-1]: [f.cx - f.core, f.armpit - 14], [1]: [f.cx + f.core, f.armpit - 14] };
     // turned on screen by +armL (out to the left) and -armR (out to the right)
     const ang = { [-1]: o.armL, [1]: -o.armR };
@@ -363,25 +388,45 @@
     }
     bctx.putImageData(img, 0, 0);
 
+    // walking out: across the room and smaller as it goes, to the door, then out of sight
+    let wx = 0;
+    let wy = 0;
+    let wk = 1;
+    let alpha = 1;
+    if (C.leaving) {
+      const p = clamp((C.t - C.leaving.t0) / LEAVE, 0, 1);
+      const q = clamp(p / 0.78, 0, 1);
+      const e = q * q * (3 - 2 * q);
+      wx = (1262 - C.x) * e;
+      wy = (772 - C.y) * e - Math.abs(Math.sin(C.t * 3.4)) * 6 * (1 - p);
+      wk = 1 - 0.46 * e;
+      alpha = 1 - clamp((p - 0.7) / 0.28, 0, 1);
+      if (alpha <= 0) return;
+    }
     // on whole pixels of its own, so it stays crisp
     const snap = (v) => Math.round(v / SCALE) * SCALE;
-    const sx = snap(C.x + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
-    const sy = snap(C.y + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
-    const sc = SCALE * o.scale;
+    const sx = snap(C.x + wx + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
+    const sy = snap(C.y + wy + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
+    const sc = SCALE * o.scale * wk;
     ctx.save();
     // its shadow on the floor, and the blood it's left there
-    const g = ctx.createRadialGradient(sx, sy + 2, 4, sx, sy + 2, 160 * o.scale);
-    g.addColorStop(0, 'rgba(0,0,0,0.6)');
+    const sh = o.scale * wk;
+    const g = ctx.createRadialGradient(sx, sy + 2, 4, sx, sy + 2, 160 * sh);
+    g.addColorStop(0, `rgba(0,0,0,${0.6 * alpha})`);
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(sx, sy + 2, 160 * o.scale, 32 * o.scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 2, 160 * sh, 32 * sh, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(70, 4, 8, 0.85)';
     for (const st of C.stains) ctx.fillRect(Math.round(C.x + st.x * SCALE), Math.round(C.y + st.d), Math.round(st.w * SCALE), 3);
     ctx.imageSmoothingEnabled = false;
     if (C.dissolve) drawDissolve(ctx, sx, sy, sc);
-    else ctx.drawImage(canvas, Math.round(sx - FX * sc), Math.round(sy - FY * sc), BW * sc, BH * sc);
+    else {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(canvas, Math.round(sx - FX * sc), Math.round(sy - FY * sc), BW * sc, BH * sc);
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   };
 

@@ -2,7 +2,8 @@
  * The creature: its five forms (stages 1-4, then Andy) as pixel-art sprites, brought to life a
  * pixel at a time. It sways from its ankles, breathes, swings its arms, twitches its head; the
  * wound in its chest pulses and drips; it reaches for Crispy with an arm that stretches far too
- * long; it convulses and tears itself apart to ADJUST into the next form. It's lit by the lamp
+ * long; it convulses and tears itself apart to ADJUST into the next form. Spared, it's simply
+ * not there any more when Crispy opens his eyes (`gone`). It's lit by the lamp
  * above it and falls into the dark towards its feet.
  *
  * Each frame is drawn into a small buffer (one pixel per sprite pixel) and scaled up with no
@@ -215,15 +216,6 @@
         o.lean = -6 * rise + 8 * Math.max(0, p - 0.4);
         break;
       }
-      case 'leave': {
-        // walking away: arms swinging, a sway with each step
-        const step = Math.sin(C.t * 3.4);
-        o.armL = step * 0.12;
-        o.armR = -step * 0.12;
-        o.sway = step * 2.5;
-        o.lean = 4;
-        break;
-      }
       case 'adjust': {
         const conv = p < 0.75 ? Math.min(1, p / 0.4) : Math.max(0, 1 - (p - 0.75) / 0.25);
         o.shake = 5 * conv;
@@ -250,13 +242,6 @@
     C.adjustTo = to;
     return C.act('adjust');
   };
-  // SPARED: it walks out of the front door (at the right of the room) and into the dark.
-  const LEAVE = 4.8;
-  C.leave = function () {
-    C.action = { type: 'leave', t0: C.t, dur: LEAVE };
-    C.leaving = { t0: C.t };
-    return LEAVE * 1000;
-  };
   C.die = function () {
     C.action = null;
     C.dissolve = { t0: C.t, bits: null };
@@ -266,7 +251,7 @@
     C.stage = 0;
     C.action = null;
     C.dissolve = null;
-    C.leaving = null;
+    C.gone = false;
     C.blood = [];
     C.stains = [];
     C.lights = 0;
@@ -328,7 +313,7 @@
   // ------------------------------------------------------------------ drawing
   // One form into the buffer, posed. `rowFilter` (while it tears) picks the rows to draw.
   function render(f, o, rowFilter) {
-    const lit0 = (1 + C.lights * 0.6) * (C.leaving ? 1 - 0.55 * clamp((C.t - C.leaving.t0) / LEAVE, 0, 1) : 1);
+    const lit0 = 1 + C.lights * 0.6;
     const pivots = { [-1]: [f.cx - f.core, f.armpit - 14], [1]: [f.cx + f.core, f.armpit - 14] };
     // turned on screen by +armL (out to the left) and -armR (out to the right)
     const ang = { [-1]: o.armL, [1]: -o.armR };
@@ -394,7 +379,7 @@
           r *= pulse * 1.15;
           g *= pulse;
         }
-        const l = o.flash === 1 ? 2.5 : lit;
+        const l = o.flash === 1 ? 1.5 : lit;
         const k = (y * BW + x) * 4;
         buf[k] = clamp(r * l * (o.flash === 2 ? 1.6 : 1), 0, 255);
         buf[k + 1] = clamp(g * l * (o.flash === 2 ? 0.5 : 0.97), 0, 255);
@@ -429,32 +414,24 @@
     }
     bctx.putImageData(img, 0, 0);
 
-    // walking out: across the room and smaller as it goes, to the door, then out of sight
-    let wx = 0;
-    let wy = 0;
-    let wk = 1;
-    let alpha = 1;
-    if (C.leaving) {
-      const p = clamp((C.t - C.leaving.t0) / LEAVE, 0, 1);
-      const q = clamp(p / 0.78, 0, 1);
-      const e = q * q * (3 - 2 * q);
-      wx = (1262 - C.x) * e;
-      wy = (772 - C.y) * e - Math.abs(Math.sin(C.t * 3.4)) * 6 * (1 - p);
-      wk = 1 - 0.46 * e;
-      alpha = 1 - clamp((p - 0.7) / 0.28, 0, 1);
-      if (alpha <= 0) return;
-    }
     // on whole pixels of its own, so it stays crisp
     const snap = (v) => Math.round(v / SCALE) * SCALE;
-    const sx = snap(C.x + wx + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
-    const floorY = snap(C.y + wy);
-    const sy = snap(C.y + wy + o.dy + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
-    const sc = SCALE * o.scale * wk;
+    const sx = snap(C.x + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
+    const floorY = snap(C.y);
+    const sy = snap(C.y + o.dy + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
+    const sc = SCALE * o.scale;
     ctx.save();
+    if (C.gone) {
+      // only the blood it left on the floor
+      ctx.fillStyle = 'rgba(70, 4, 8, 0.85)';
+      for (const st of C.stains) ctx.fillRect(Math.round(C.x + st.x * SCALE), Math.round(C.y + st.d), Math.round(st.w * SCALE), 3);
+      ctx.restore();
+      return;
+    }
     // its shadow on the floor, and the blood it's left there
-    const sh = o.scale * wk;
+    const sh = o.scale;
     const g = ctx.createRadialGradient(sx, floorY + 2, 4, sx, floorY + 2, 160 * sh);
-    g.addColorStop(0, `rgba(0,0,0,${0.6 * alpha})`);
+    g.addColorStop(0, 'rgba(0,0,0,0.6)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -464,11 +441,7 @@
     for (const st of C.stains) ctx.fillRect(Math.round(C.x + st.x * SCALE), Math.round(C.y + st.d), Math.round(st.w * SCALE), 3);
     ctx.imageSmoothingEnabled = false;
     if (C.dissolve) drawDissolve(ctx, sx, sy, sc);
-    else {
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(canvas, Math.round(sx - FX * sc), Math.round(sy - FY * sc), BW * sc, BH * sc);
-      ctx.globalAlpha = 1;
-    }
+    else ctx.drawImage(canvas, Math.round(sx - FX * sc), Math.round(sy - FY * sc), BW * sc, BH * sc);
     ctx.restore();
   };
 

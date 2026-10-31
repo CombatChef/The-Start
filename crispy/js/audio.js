@@ -400,14 +400,33 @@
       thump(1.9, 70, 0.7, 0.5);
       noise(1.9, 0.4, 0.3, { f: [800, 200] }); // squelch
     },
-    // when Crispy's health runs out the first time
-    revive: () => {
-      for (let i = 0; i < 3; i++) {
-        thump(i * 0.7, 60, 0.8, 0.18);
-        thump(i * 0.7 + 0.18, 55, 0.6, 0.18);
+    // when Crispy's health runs out the first time: he hits the floor; his heart, slow; a memory
+    // at a time, like a music box running down; then he gets back up
+    fall: () => {
+      thump(0, 60, 0.9, 0.5);
+      noise(0, 0.5, 0.3, { f: [900, 120] });
+      tone('sine', [220, 110], 0.1, 1.6, 0.05, { attack: 0.2 });
+    },
+    heartbeat: () => {
+      for (let i = 0; i < 6; i++) {
+        thump(i * 0.85, 58, 0.7, 0.16);
+        thump(i * 0.85 + 0.2, 52, 0.5, 0.16);
       }
-      for (const [f, d] of [[262, 0], [330, 3], [392, -4], [523, 5]]) tone('sine', f, 2.0, 2.2, 0.06, { detune: d, attack: 0.8 });
-      chime(2.4, [523, 659, 784, 1047, 1319, 1568], 0.08, 0.07, 'triangle', 0.6);
+    },
+    memory: () => {
+      const f = [523, 587, 659, 784][Math.floor(Math.random() * 4)];
+      tone('sine', f, 0, 1.4, 0.05, { detune: -25, vibrato: [5, 6] });
+      tone('triangle', f / 2, 0.02, 1.0, 0.03, { detune: -30 });
+      noise(0, 0.6, 0.03, { type: 'bandpass', f: 3000, q: 0.5, attack: 0.2 });
+    },
+    rise: () => {
+      for (const [f, d] of [[110, 0], [165, 4], [220, -3], [277, 6]]) tone('sawtooth', f, 0, 2.6, 0.035, { detune: d, attack: 0.9, filter: ['lowpass', 700] });
+      thump(0.1, 70, 0.5, 0.4);
+    },
+    // a blink: the room goes away for a second
+    blink: () => {
+      noise(0, 0.4, 0.05, { type: 'bandpass', f: [600, 200], q: 0.8, attack: 0.15 });
+      tone('sine', [70, 60], 0.3, 1.4, 0.08, { attack: 0.3 });
     },
     lose: () => {
       [392, 349, 311, 262, 196].forEach((f, i) => tone('triangle', f, i * 0.35, 0.6, 0.1));
@@ -446,11 +465,6 @@
     },
     // the creature can't bring itself to do it
     hesitate: () => tone('sine', [196, 185], 0, 1.2, 0.06, { attack: 0.3 }),
-    // its footsteps as it leaves, slow and heavy
-    leave: () => {
-      for (let i = 0; i < 6; i++) thump(0.2 + i * 0.55, 70, 0.4 - i * 0.05, 0.3);
-      noise(0, 3.6, 0.06, { type: 'bandpass', f: [400, 250], q: 0.7, attack: 1 });
-    },
     // the car starting, the headlights, driving away
     engine: () => {
       for (let i = 0; i < 3; i++) noise(i * 0.12, 0.1, 0.18, { type: 'bandpass', f: 300, q: 3 }); // the starter

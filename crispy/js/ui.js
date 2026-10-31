@@ -46,6 +46,9 @@
     $('#lcd').addEventListener('click', () => {
       if (UI.typing) UI.fast = true;
     });
+    $('#cine').addEventListener('click', () => {
+      if (UI.typing) UI.fast = true;
+    });
     title();
   };
 
@@ -123,6 +126,57 @@
     A().play('breath');
     await wait(S().fadeOut(4200) + 600);
     end(how);
+  }
+
+  // ------------------------------------------------------------------ WILLPOWER
+  // The first time he falls: the screen goes red, the family flashes past, he says it, and he
+  // gets back up.
+  const LINE = "N-No... You won't take this house... Not this man, and not this man's family.";
+  async function willpower() {
+    const cine = $('#cine');
+    const pic = $('#cine-pic');
+    const box = $('#cine-box');
+    A().play('fall');
+    S().hitHero();
+    S().hero.down = 1;
+    await wait(S().redOut(900));
+    cine.className = '';
+    cine.hidden = false;
+    box.hidden = true;
+    A().play('heartbeat');
+    for (const src of window.CRISPY_IMAGES.memories || []) {
+      pic.src = src;
+      pic.className = '';
+      void pic.offsetWidth;
+      pic.className = 'on';
+      A().play('memory');
+      await wait(1150);
+    }
+    pic.className = '';
+    box.hidden = false;
+    await type($('#cine-text'), LINE);
+    await wait(1800);
+    A().play('rise');
+    cine.className = 'up';
+    await wait(S().rise());
+    cine.hidden = true;
+    cine.className = '';
+    $('#cine-text').textContent = '';
+  }
+  // Typing, with a beat at every pause.
+  async function type(el, text) {
+    el.textContent = '';
+    UI.typing = true;
+    UI.fast = false;
+    for (let i = 1; i <= text.length; i++) {
+      if (UI.fast || SPEED < 1) break;
+      el.textContent = text.slice(0, i);
+      const ch = text[i - 1];
+      if (i % 2 === 0 && ch !== ' ') A().play('text');
+      await wait(ch === '.' ? 170 : ch === ',' ? 160 : 42);
+    }
+    el.textContent = text;
+    UI.typing = false;
   }
 
   // ------------------------------------------------------------------ the HUD
@@ -411,37 +465,33 @@
             void $('#foe').offsetWidth;
             $('#foe').classList.add('hit');
             const [x, y] = C().point('chest');
-            S().popup(e.crit ? `${e.amount}!` : `${e.amount}`, x + (Math.random() - 0.5) * 60, y - 40, { color: e.crit ? '#ffd23f' : '#ffffff', size: e.crit ? 70 : 52 });
+            S().popup(`${e.amount}`, x + (Math.random() - 0.5) * 60, y - 40, { color: e.crit ? '#b89a52' : '#b8b2a6', size: e.crit ? 40 : 32 });
           } else {
             UI.stats.taken += e.amount;
             S().hitHero();
             A().play('hurt');
             const [x, y] = S().heroPoint('head');
-            S().popup(`${e.amount}`, x + 60, y, { color: e.crit ? '#ff6b3d' : '#ff9a8a', size: e.crit ? 66 : 52 });
+            S().popup(`${e.amount}`, x + 60, y, { color: e.crit ? '#a8443a' : '#8a5a52', size: e.crit ? 40 : 32 });
           }
           refresh();
           await wait(420);
           break;
         }
-        case 'miss': {
+        // (words from attacks go in the log, not on screen)
+        case 'miss':
           A().play('miss');
-          const [x, y] = e.who === 'foe' ? C().point('chest') : S().heroPoint('head');
-          S().popup('MISS', x, y - 30, { color: '#b9c2c9', size: 42 });
-          await wait(380);
+          await wait(300);
           break;
-        }
-        case 'block': {
+        case 'block':
           A().play('block');
-          const [x, y] = S().heroPoint('head');
-          S().popup('BLOCKED', x + 40, y, { color: '#9fdcff', size: 46 });
-          await wait(420);
+          S().hero.shake = 4;
+          await wait(320);
           break;
-        }
         case 'heal': {
           if (e.amount > 0) {
             A().play('heal');
             const [x, y] = e.who === 'foe' ? C().point('chest') : S().heroPoint('head');
-            S().popup(`+${e.amount}`, x + 40, y, { color: '#6dff9e', size: 50 });
+            S().popup(`+${e.amount}`, x + 40, y, { color: '#7e9a84', size: 32 });
           }
           refresh();
           await wait(380);
@@ -450,14 +500,9 @@
         case 'sp':
           refresh();
           break;
-        case 'tag': {
-          refresh();
-          if (e.quiet) break;
-          const [x, y] = e.who === 'foe' ? C().point('head') : S().heroPoint('head');
-          S().popup(e.text, x + (e.who === 'foe' ? -40 : 80), y - 90, { color: e.good ? '#8dffc4' : '#ff9a7a', size: 30, dur: 1.4 });
-          await wait(260);
+        case 'tag':
+          refresh(); // (it shows in the boxes' tags)
           break;
-        }
         case 'adjust': {
           const ms = Math.max(C().adjust(e.to), S().adjust());
           setTimeout(refresh, ms * 0.5);
@@ -465,13 +510,10 @@
           refresh();
           break;
         }
-        case 'revive': {
-          const ms = S().revive();
-          await wait(ms * 0.55);
+        case 'revive':
+          await willpower();
           refresh();
-          await wait(ms * 0.45);
           break;
-        }
         case 'lights':
           S().setLights(e.on);
           break;
@@ -489,14 +531,14 @@
           const up = e.delta > 0;
           A().play(up ? 'mercyUp' : 'mercyDown');
           const [x, y] = C().point('head');
-          S().popup(`MERCY ${up ? '+' : ''}${e.delta}%`, x - 30, y - 130, { color: up ? '#ffe27a' : '#b9a98a', size: up ? 34 : 26, dur: 1.3 });
+          S().popup(`MERCY ${up ? '+' : ''}${e.delta}%`, x - 30, y - 130, { color: up ? '#a8975a' : '#6e6658', size: 24, dur: 1.3 });
           await wait(up ? 420 : 200);
           break;
         }
         case 'family': {
           refresh();
           const [x, y] = S().heroPoint('head');
-          S().popup(`${e.name.toUpperCase()} IS OUT`, x + 90, y - 160, { color: '#8dffc4', size: 30, dur: 1.6 });
+          S().popup(`${e.name.toUpperCase()} IS OUT`, x + 90, y - 160, { color: '#7e9a84', size: 24, dur: 1.6 });
           await wait(500);
           break;
         }
@@ -511,11 +553,11 @@
           await wait(C().die());
           break;
         case 'spare':
+          // he blinks, and it's gone
           refresh();
           A().stopMusic(4);
           S().setDoor(true);
-          A().play('leave');
-          await wait(C().leave() + 300);
+          await wait(S().blink() + 400);
           break;
         case 'flee':
           refresh();

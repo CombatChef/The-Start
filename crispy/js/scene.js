@@ -2,9 +2,12 @@
  * The scene: Chris's living room at night (grainy, darker, the lights able to come up), the
  * creature standing in it, and a screen effect for every move, item and act. Everything but the
  * room is drawn at a third of the resolution and blown up, so the effects, the numbers and the
- * creature are all the same chunky pixels; even their see-through parts are dithered. The props
- * are pixel art: the trash bag, the grilled cheese and the sword from their sheet, and little
- * ones drawn here (a gavel, the RG 405M, a wine glass...).
+ * creature are all the same chunky pixels; even their see-through parts are dithered, and the
+ * effects are muted and grainy, like the item sheet: nothing bright, nothing cheerful. The props
+ * are pixel art: the trash bag, the grilled cheese and the sword from one sheet; the wine glass,
+ * the pills, the cracked phone, the car keys and the text bubble from another; and little ones
+ * drawn here (a gavel, the RG 405M, an alarm clock...). Words from attacks go in the battle log,
+ * not on screen.
  */
 (function () {
   const W = 1280;
@@ -42,39 +45,27 @@
   // Little pixel-art sprites: rows of characters, one colour each.
   const PROPS = {
     gavel: {
-      pal: { b: '#8a5a2e', d: '#5e3b1d', l: '#b07a45', y: '#d9b04a' },
+      pal: { b: '#5e4a36', d: '#3a2c20', l: '#7a6448', y: '#8a7440' },
       rows: ['..llllllll....', '.lbbbbbbbbd...', 'ylbbbbbbbbdy..', 'ylbbbbbbbbdy..', '.lbbbbbbbbd...', '..dddddddd....', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....dd.......'],
     },
     rg: {
-      pal: { k: '#26282d', e: '#4b4e55', s: '#9fe6ff', S: '#e6fbff', d: '#0d0e10', r: '#e34b4b', g: '#4bd17a', b: '#4b8ae3', w: '#e8c53a', t: '#7d828a' },
+      pal: { k: '#1e2023', e: '#3a3c40', s: '#5e7a84', S: '#9fb2b8', d: '#0d0e10', r: '#6e2626', g: '#2e5a3e', b: '#2e3e5a', w: '#7a6a34', t: '#55585e' },
       rows: ['.eeeeeeeeeeeeeeeeeeee.', 'ekkkkkkkkkkkkkkkkkkkke', 'ekkkkdddddddddddkkkkke', 'ekdkksSssssssssskkkwke', 'edddksssssssssskkbkrke', 'ekdkksssssssssskkkgkke', 'ekkkksssssssssskkkkkke', 'ekkkkdddddddddddkkkkke', 'ekkkkkkkkttkkkkkkkkkke', '.eeeeeeeeeeeeeeeeeeee.'],
     },
-    glass: {
-      pal: { c: '#d8e1e8', C: '#9fb0bd', w: '#7a0f24', W: '#b81d45' },
-      rows: ['c........c', 'c........c', 'c........c', 'cWWWWWWWWc', 'cwwwwwwwwc', 'cwwwwwwwwc', '.cwwwwwwc.', '..cwwwwc..', '...cCCc...', '....cc....', '....cc....', '....cc....', '....cc....', '..cccccc..'],
-    },
     choc: {
-      pal: { f: '#d0d3d6', F: '#9da2a7', b: '#4a2a18', B: '#6b3d22', h: '#86502c' },
+      pal: { f: '#8e9094', F: '#6a6d72', b: '#2a170e', B: '#3e2416', h: '#55341e' },
       rows: ['ffffbbbbbbbbbb', 'FffFbBhbBhbBhb', 'ffffbBBbBBbBBb', 'FffFbbbbbbbbbb', 'ffffbBhbBhbBhb', 'FffFbBBbBBbBBb', 'ffffbbbbbbbbbb'],
     },
-    pill: {
-      pal: { w: '#f4f4f4', o: '#f08a2e', O: '#c96a1a', g: '#c9c9c9' },
-      rows: ['.wwwoo.', 'wwwwooo', 'gwwwOOO', '.ggOO..'],
-    },
-    keys: {
-      pal: { r: '#c0c4c8', y: '#d4af37', Y: '#a8862a', k: '#1b1c1f', e: '#e34b4b' },
-      rows: ['..rrr.........', '.r...r........', '.r...ryyyyyy.y.', '.r...rYYYYYYyY.', '..rrr.........', '...r..........', '..kkkk........', '.kkekkk.......', '.kkkkkk.......', '..kkkk........'],
-    },
     clock: {
-      pal: { r: '#c62d2d', R: '#8f1e1e', w: '#f2f2f2', k: '#1b1c1f', s: '#e0e0e0' },
+      pal: { r: '#5e2422', R: '#3e1716', w: '#a8a298', k: '#121214', s: '#7a7670' },
       rows: ['.ss......ss.', 'sss.rrrr.sss', '.s.rrrrrr.s.', '..rrwwwwrr..', '.rrwwwkwwwr.', '.rwwwwkwwwwr', '.rwwwwkkkwwr', '.rwwwwwwwwwr', '.rrwwwwwwwr.', '..rrwwwwrr..', '...RRRRRR...', '..R......R..'],
     },
     bird: {
-      pal: { b: '#7a5136', o: '#f08a2e', k: '#15171a', y: '#f2c230' },
+      pal: { b: '#1c1c20', o: '#26262c', k: '#0a0a0c', y: '#4a4a50' },
       rows: ['...bb.....', '..bkbbb...', 'ybbbbbbbb.', '..oooobbbb', '..ooobb...', '...b.b....'],
     },
     bird2: {
-      pal: { b: '#7a5136', o: '#f08a2e', k: '#15171a', y: '#f2c230' },
+      pal: { b: '#1c1c20', o: '#26262c', k: '#0a0a0c', y: '#4a4a50' },
       rows: ['......bb..', '...bbbb...', '..bkbbb...', 'ybbbbbbbb.', '..oooobbbb', '...b.b....'],
     },
     // the family, sneaking out in the dark (lit at the edges by the windows)
@@ -86,20 +77,54 @@
       pal: { k: '#1d222b', r: '#7d8ea6' },
       rows: ['..rrr..', '.rkkkr.', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', '.kkkkk.', '.kkkkk.', '.kkkkk.', '.kkkkk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.rr.rr.'],
     },
-    phone: {
-      pal: { k: '#1b1c1f', s: '#3f8fd8', S: '#d6f0ff', g: '#6b6f76' },
-      rows: ['kkkkkkk', 'kSSSSSk', 'kSsssSk', 'kssssSk', 'kSSSssk', 'ksssssk', 'kSSSSsk', 'ksssssk', 'kkkgkkk', 'kkkkkkk'],
-    },
     heart: {
-      pal: { r: '#ffb0a0', R: '#ff6b5a' },
+      pal: { r: '#8a5a52', R: '#6a2a26' },
       rows: ['.rr.rr.', 'rRRrRRr', 'rRRRRRr', '.rRRRr.', '..rRr..', '...r...'],
     },
     flag: {
-      pal: { p: '#8a6a4a', w: '#f2f2f2', W: '#c9ccd0' },
+      pal: { p: '#5e4a36', w: '#a8a298', W: '#7e7a72' },
       rows: ['pwwwwwwwww', 'pwwwwwwwwW', 'pwwwwwwwWW', 'pwwwwwwwww', 'pWwwwwwwww', 'pWWwwwwwwW', 'p.........', 'p.........', 'p.........', 'p.........', 'p.........', 'p.........'],
     },
   };
   const sprites = {};
+  // 3x5 letters, like the ones in the item sheet's text bubble
+  const GLYPHS = {
+    a: ['...', '.XX', 'X.X', 'X.X', '.XX'], b: ['X..', 'XX.', 'X.X', 'X.X', 'XX.'], c: ['...', '.XX', 'X..', 'X..', '.XX'],
+    d: ['..X', '.XX', 'X.X', 'X.X', '.XX'], e: ['...', '.X.', 'XXX', 'X..', '.XX'], f: ['.XX', 'X..', 'XX.', 'X..', 'X..'],
+    g: ['...', '.XX', 'X.X', '.XX', 'XX.'], h: ['X..', 'XX.', 'X.X', 'X.X', 'X.X'], i: ['.X.', '...', '.X.', '.X.', '.X.'],
+    j: ['..X', '...', '..X', 'X.X', '.X.'], k: ['X..', 'X.X', 'XX.', 'X.X', 'X.X'], l: ['.X.', '.X.', '.X.', '.X.', '.X.'],
+    m: ['...', 'X.X', 'XXX', 'X.X', 'X.X'], n: ['...', 'XX.', 'X.X', 'X.X', 'X.X'], o: ['...', '.X.', 'X.X', 'X.X', '.X.'],
+    p: ['...', 'XX.', 'X.X', 'XX.', 'X..'], q: ['...', '.XX', 'X.X', '.XX', '..X'], r: ['...', 'X.X', 'XX.', 'X..', 'X..'],
+    s: ['.XX', 'X..', '.X.', '..X', 'XX.'], t: ['.X.', 'XXX', '.X.', '.X.', '..X'], u: ['...', 'X.X', 'X.X', 'X.X', '.XX'],
+    v: ['...', 'X.X', 'X.X', 'X.X', '.X.'], w: ['...', 'X.X', 'X.X', 'XXX', 'X.X'], x: ['...', 'X.X', '.X.', '.X.', 'X.X'],
+    y: ['...', 'X.X', 'X.X', '.XX', 'XX.'], z: ['...', 'XXX', '..X', '.X.', 'XXX'],
+    0: ['XXX', 'X.X', 'X.X', 'X.X', 'XXX'], 1: ['.X.', 'XX.', '.X.', '.X.', 'XXX'], 2: ['XX.', '..X', '.X.', 'X..', 'XXX'],
+    3: ['XX.', '..X', '.X.', '..X', 'XX.'], 4: ['X.X', 'X.X', 'XXX', '..X', '..X'], 5: ['XXX', 'X..', 'XX.', '..X', 'XX.'],
+    6: ['.XX', 'X..', 'XX.', 'X.X', '.X.'], 7: ['XXX', '..X', '.X.', '.X.', '.X.'], 8: ['.X.', 'X.X', '.X.', 'X.X', '.X.'],
+    9: ['.X.', 'X.X', '.XX', '..X', 'XX.'], '.': ['...', '...', '...', '...', '.X.'], ',': ['...', '...', '...', '.X.', 'X..'],
+    '?': ['XX.', '..X', '.X.', '...', '.X.'], '!': ['.X.', '.X.', '.X.', '...', '.X.'], ':': ['...', '.X.', '...', '.X.', '...'],
+    "'": ['.X.', '.X.', '...', '...', '...'], '-': ['...', '...', 'XXX', '...', '...'],
+  };
+  // The item sheet's blank text bubble, with lines of text in it and a "read" time under it.
+  function textBubble(lines, read) {
+    const key = 'msg:' + lines.join('|') + '|' + read;
+    if (sprites[key]) return key;
+    const base = sprites.bubbleBlank;
+    if (!base || !base.width) return null;
+    const c = document.createElement('canvas');
+    c.width = base.width;
+    c.height = base.height + 8;
+    const x = c.getContext('2d');
+    x.drawImage(base, 0, 0);
+    const put = (str, x0, y0, col) => {
+      x.fillStyle = col;
+      [...str].forEach((ch, i) => (GLYPHS[ch] || []).forEach((row, yy) => [...row].forEach((v, xx) => v === 'X' && x.fillRect(x0 + i * 4 + xx, y0 + yy, 1, 1))));
+    };
+    lines.forEach((l, i) => put(l, 6, 5 + i * 7, '#161618'));
+    if (read) put(read, base.width - read.length * 4, base.height + 2, '#58585a');
+    sprites[key] = c;
+    return key;
+  }
   function pixelSprite({ pal, rows }) {
     const c = document.createElement('canvas');
     c.width = rows[0].length;
@@ -241,7 +266,7 @@
     }
     ctx.fill();
   }
-  function clawMarks(ctx, x, y, p, n = 3, color = '#e0262c') {
+  function clawMarks(ctx, x, y, p, n = 3, color = '#5e1014') {
     const q = clamp(p * 3, 0, 1);
     const fade = 1 - clamp((p - 0.5) * 2, 0, 1);
     ctx.save();
@@ -249,52 +274,53 @@
     ctx.lineCap = 'round';
     for (let i = 0; i < n; i++) {
       const ox = x - 60 + i * 34;
-      ctx.strokeStyle = '#1a0003';
-      ctx.lineWidth = 14;
+      ctx.strokeStyle = '#0a0102';
+      ctx.lineWidth = 12;
       ctx.beginPath();
       ctx.moveTo(ox, y - 90);
       ctx.lineTo(ox + 70 * q, y - 90 + 170 * q);
       ctx.stroke();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 8;
+      ctx.lineWidth = 5;
       ctx.stroke();
     }
     ctx.restore();
   }
 
   // The swing of the sword: its grip off to the left of the creature, the blade sweeping from
-  // up over the shoulder, across its chest, down to the floor.
+  // up over the shoulder, across its chest, down to the floor. A faint trail, a puff of dust.
   function swingFx(real) {
     const [cx, cy] = S.foePoint('chest');
     const px = cx - 270;
     const py = cy - 10;
     sfx(real ? 'realSlash' : 'swing');
+    const dust = particles(10, cx, cy, (i, a, b) => ({ vx: (a - 0.5) * 300, vy: -b * 200 }));
     return add(700, (ctx, p) => {
       const a = -0.9 + ease(clamp(p / 0.6, 0, 1)) * 3.0; // 0 = blade straight up, clockwise
       const fade = 1 - clamp((p - 0.7) / 0.3, 0, 1);
       ctx.save();
-      ctx.globalAlpha = 0.4 * fade;
-      ctx.strokeStyle = real ? '#cfe8ff' : '#ffffff';
-      ctx.lineWidth = 60;
-      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.16 * fade;
+      ctx.strokeStyle = real ? '#8a9aa4' : '#8a8478';
+      ctx.lineWidth = 40;
       ctx.beginPath();
-      ctx.arc(px, py, 300, Math.max(-0.9, a - 1.3) - Math.PI / 2, a - Math.PI / 2);
+      ctx.arc(px, py, 300, Math.max(-0.9, a - 1.1) - Math.PI / 2, a - Math.PI / 2);
       ctx.stroke();
       ctx.restore();
       drawSprite(ctx, real ? 'swordReal' : 'sword', px, py, PX, { rot: a, ax: 0.5, ay: 0.9, alpha: fade });
       if (real && p > 0.3 && p < 0.6) {
-        ctx.save();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 6;
-        ctx.shadowColor = '#7fd0ff';
-        ctx.shadowBlur = 20;
+        // a thin, dark cut where the real blade went through
+        ctx.strokeStyle = '#2a0608';
+        ctx.lineWidth = PX * 2;
         ctx.beginPath();
-        ctx.moveTo(cx - 170, cy - 170);
-        ctx.lineTo(cx + 170, cy + 150);
+        ctx.moveTo(cx - 150, cy - 150);
+        ctx.lineTo(cx - 150 + 300 * clamp((p - 0.3) / 0.15, 0, 1), cy - 150 + 280 * clamp((p - 0.3) / 0.15, 0, 1));
         ctx.stroke();
-        ctx.restore();
       }
-      if (p > 0.32 && p < 0.62) star(ctx, cx, cy, 80 * (1 - (p - 0.32) * 3), real ? '#e6f6ff' : '#fffbe8');
+      if (p > 0.32) {
+        const tt = (p - 0.32) * 0.7;
+        ctx.fillStyle = `rgba(90,84,76,${0.8 * (1 - p)})`;
+        for (const d of dust) ctx.fillRect(d.x + d.vx * tt, d.y + d.vy * tt + 300 * tt * tt, PX * 3, PX * 3);
+      }
     });
   }
 
@@ -319,80 +345,56 @@
       const [cx, cy] = S.foePoint('chest');
       sfx('tear');
       sfx('poison', 350);
-      const junk = particles(26, cx, cy, (i, a, b, c) => ({ vx: (a - 0.5) * 900, vy: -300 - b * 600, kind: i % 5, spin: (c - 0.5) * 12 }));
+      const junk = particles(22, cx, cy, (i, a, b, c) => ({ vx: (a - 0.5) * 800, vy: -250 - b * 500, kind: i % 5, spin: (c - 0.5) * 10 }));
       return add(1100, (ctx, p) => {
         const tt = p * 1.1;
         for (const j of junk) {
-          const x = j.x + j.vx * tt;
-          const y = j.y + j.vy * tt + 900 * tt * tt;
           ctx.save();
-          ctx.translate(x, y);
+          ctx.translate(j.x + j.vx * tt, j.y + j.vy * tt + 900 * tt * tt);
           ctx.rotate(j.spin * tt);
           ctx.globalAlpha = 1 - p;
-          ctx.fillStyle = ['#f2d34b', '#b9bec4', '#f2f2f2', '#4fb34a', '#7a5a3a'][j.kind];
-          if (j.kind === 0) ctx.fillRect(-12, -4, 24, 8); // banana peel
-          else if (j.kind === 1) ctx.fillRect(-6, -10, 12, 20); // can
-          else if (j.kind === 2) ctx.fillRect(-10, -8, 20, 14); // paper
+          ctx.fillStyle = ['#6e6232', '#5e6268', '#8a867c', '#3a4422', '#3e3024'][j.kind];
+          if (j.kind === 0) ctx.fillRect(-12, -4, 24, 8);
+          else if (j.kind === 1) ctx.fillRect(-6, -10, 12, 20);
+          else if (j.kind === 2) ctx.fillRect(-10, -8, 20, 14);
           else ctx.fillRect(-6, -6, 12, 12);
           ctx.restore();
         }
-        // garbage juice bubbling on it
-        ctx.fillStyle = 'rgba(110, 220, 80, 0.75)';
-        for (let i = 0; i < 9; i++) {
-          const by = cy + 60 - ((p * 260 + i * 40) % 220);
-          ctx.beginPath();
-          ctx.arc(cx - 70 + i * 18, by, 6 + (i % 3) * 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // garbage juice, seeping down it
+        ctx.fillStyle = 'rgba(58,74,34,0.8)';
+        for (let i = 0; i < 7; i++) ctx.fillRect(cx - 70 + i * 22, cy - 20 + ((i * 37) % 50), PX * 2, 30 + p * 140 * (0.5 + (i % 3) / 3));
       });
     },
     early() {
       sfx('early');
-      const [hx, hy] = S.heroPoint('head');
-      const [fx, fy] = S.foePoint('head');
       return add(1800, (ctx, p) => {
         const a = Math.sin(Math.PI * p);
-        // sunrise
-        const g = ctx.createLinearGradient(0, H, 0, H * (0.9 - 0.7 * ease(Math.min(1, p * 1.5))));
-        g.addColorStop(0, `rgba(255,170,60,${0.5 * a})`);
-        g.addColorStop(1, 'rgba(255,200,90,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-        // the alarm clock, ringing
-        const shake = Math.sin(S.t * 80) * 6 * (p < 0.6 ? 1 : 0);
-        drawSprite(ctx, 'clock', 640 + shake, 170, PX * 3, { alpha: a });
-        // a bird, flying across
-        const bx = -60 + p * (W + 120);
-        drawSprite(ctx, Math.floor(S.t * 10) % 2 ? 'bird' : 'bird2', bx, 260 + Math.sin(p * 9) * 30, PX * 2, { alpha: Math.min(1, a * 2) });
-        // up for Crispy, down for it
-        for (let i = 0; i < 3; i++) {
-          const yy = ((p * 220 + i * 70) % 220);
-          bigText(ctx, '▲', hx - 80 + i * 80, hy + 60 - yy, 40, '#ff5a3c', { alpha: a });
-          bigText(ctx, '▼', fx - 70 + i * 70, fy + 40 + yy, 40, '#4aa8ff', { alpha: a });
-        }
+        // the alarm clock, rattling
+        const shake = p < 0.6 ? Math.round(Math.sin(S.t * 70) * 2) * PX : 0;
+        drawSprite(ctx, 'clock', 470 + shake, 470, PX * 3, { alpha: a });
+        // a crow, past the window
+        drawSprite(ctx, Math.floor(S.t * 8) % 2 ? 'bird' : 'bird2', -60 + p * (W + 120), 330 + Math.sin(p * 7) * 20, PX * 2, { alpha: Math.min(1, a * 2) });
       });
     },
     authority(o = {}) {
       const onFoe = o.target === 'foe';
       const [x, y] = onFoe ? S.foePoint('head') : S.heroPoint('head');
       sfx('gavel', 380);
-      return add(1400, (ctx, p) => {
+      return add(1300, (ctx, p) => {
         const drop = ease(clamp(p / 0.3, 0, 1));
         const lift = p > 0.4 && p < 0.55 ? Math.sin(((p - 0.4) / 0.15) * Math.PI) * 0.5 : 0;
-        const ang = -1.2 + drop * 1.2 - lift;
-        drawSprite(ctx, 'gavel', x + 40, y - 40, PX * 3, { rot: ang, ax: 0.45, ay: 0.95, alpha: 1 - clamp((p - 0.85) / 0.15, 0, 1) });
+        drawSprite(ctx, 'gavel', x + 40, y - 40, PX * 3, { rot: -1.2 + drop * 1.2 - lift, ax: 0.45, ay: 0.95, alpha: 1 - clamp((p - 0.85) / 0.15, 0, 1) });
         if (p > 0.28) {
           const q = (p - 0.28) / 0.72;
           ctx.save();
-          ctx.globalAlpha = 1 - q;
-          ctx.strokeStyle = '#ffe28a';
-          ctx.lineWidth = 8;
+          ctx.globalAlpha = 0.6 * (1 - q);
+          ctx.strokeStyle = '#2a2420';
+          ctx.lineWidth = PX * 2;
           ctx.beginPath();
-          ctx.ellipse(x, y + 40, 60 + q * 260, 20 + q * 80, 0, 0, Math.PI * 2);
+          ctx.ellipse(x, y + 40, 60 + q * 200, 20 + q * 60, 0, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
-          if (p < 0.34) S.shake = Math.max(S.shake, 14);
-          bigText(ctx, 'AUTHORITY', 640, 300, 110, '#ffffff', { stroke: '#b3121b', rot: -0.08, alpha: Math.min(1, (p - 0.28) * 6) * (1 - clamp((p - 0.8) / 0.2, 0, 1)) });
+          if (p < 0.34) S.shake = Math.max(S.shake, 6);
         }
       });
     },
@@ -404,92 +406,67 @@
       return add(1700, (ctx, p) => {
         const rise = ease(clamp(p / 0.25, 0, 1));
         drawSprite(ctx, 'rg', ox, oy + 80 - 80 * rise, PX * 3, { alpha: 1 - clamp((p - 0.88) / 0.12, 0, 1) });
-        if (p > 0.18 && p < 0.3) {
-          ctx.fillStyle = `rgba(160,235,255,${0.5 - (p - 0.18) * 4})`;
-          ctx.fillRect(ox - 60, oy - 30, 120, 50);
-        }
         if (p > 0.28 && p < 0.85) {
-          ctx.save();
-          ctx.shadowColor = '#5fd8ff';
-          ctx.shadowBlur = 24;
-          for (let k = 0; k < 3; k++) bolt(ctx, ox, oy - 10, cx + (Math.random() - 0.5) * 80, cy + (Math.random() - 0.5) * 160, 90, k ? 3 : 7, k ? '#9feaff' : '#ffffff');
-          // crackling round it
-          for (let k = 0; k < 4; k++) {
+          // thin, cold arcs, and static over it, like a bad signal
+          for (let k = 0; k < 2; k++) bolt(ctx, ox, oy - 10, cx + (Math.random() - 0.5) * 80, cy + (Math.random() - 0.5) * 160, 70, PX, k ? '#4e5e66' : '#8a9ca4');
+          for (let k = 0; k < 3; k++) {
             const a = Math.random() * Math.PI * 2;
-            bolt(ctx, cx, cy, cx + Math.cos(a) * 120, cy + Math.sin(a) * 200, 40, 2, '#c8f4ff');
+            bolt(ctx, cx, cy, cx + Math.cos(a) * 100, cy + Math.sin(a) * 160, 30, PX, '#5e7480');
           }
-          ctx.restore();
-          if (Math.random() < 0.3) {
-            ctx.fillStyle = 'rgba(180,240,255,0.25)';
-            ctx.fillRect(0, 0, W, H);
-          }
-          // scanlines, like it's coming through a screen
-          ctx.fillStyle = 'rgba(0,30,40,0.18)';
-          for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
-          S.shake = Math.max(S.shake, 4);
+          ctx.fillStyle = 'rgba(150,158,162,0.35)';
+          for (let i = 0; i < 46; i++) ctx.fillRect(cx - 160 + Math.random() * 320, cy - 260 + Math.random() * 520, PX * (1 + Math.floor(Math.random() * 5)), PX);
+          S.shake = Math.max(S.shake, 2);
         }
       });
     },
     wine() {
       sfx('wine');
-      const x = 390;
-      const y = 600;
+      const x = 410;
+      const y = 560;
+      const drops = particles(5, 0, 0, (i, a) => ({ at: 0.45 + i * 0.07, dx: (a - 0.5) * 24 }));
       return add(1600, (ctx, p) => {
-        const fill = clamp((p - 0.15) / 0.45, 0, 1);
-        const tilt = p > 0.65 ? -Math.sin(((p - 0.65) / 0.35) * Math.PI) * 0.9 : 0;
-        // the glass, filled from the bottom up with wine
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(tilt);
-        ctx.imageSmoothingEnabled = false;
-        const sp = sprites.glass;
-        const sc = PX * 3;
-        ctx.globalAlpha = 1 - clamp((p - 0.9) / 0.1, 0, 1);
-        // empty glass (wine rows hidden above the fill line)
-        const rows = Math.round(4 * fill);
-        ctx.drawImage(sp, -sp.width * sc * 0.5, -sp.height * sc * 0.5, sp.width * sc, sp.height * sc);
-        ctx.fillStyle = 'rgba(20,24,30,1)';
-        ctx.fillRect(-sp.width * sc * 0.5 + sc, -sp.height * sc * 0.5 + 3 * sc, (sp.width - 2) * sc, (5 - rows) * sc);
-        ctx.restore();
-        if (p > 0.12 && p < 0.55) {
-          ctx.fillStyle = '#a8153a';
-          ctx.fillRect(x - 4, y - 220, 8, 160);
+        const up = ease(clamp(p / 0.25, 0, 1));
+        const tilt = p > 0.35 && p < 0.85 ? -Math.sin(((p - 0.35) / 0.5) * Math.PI) * 0.8 : 0;
+        drawSprite(ctx, 'glass', x, y + 60 * (1 - up), PX * 1.2, { rot: tilt, alpha: 1 - clamp((p - 0.88) / 0.12, 0, 1) });
+        // a few drops, dark as blood
+        ctx.fillStyle = '#3a0a0e';
+        for (const d of drops) {
+          const q = p - d.at;
+          if (q > 0 && q < 0.35) ctx.fillRect(x - 40 + d.dx, y - 70 + q * 900, PX * 2, PX * 3);
         }
-        S.wobble = p > 0.6 ? Math.sin(((p - 0.6) / 0.4) * Math.PI) * 10 : 0;
+        S.wobble = p > 0.6 ? Math.sin(((p - 0.6) / 0.4) * Math.PI) * 6 : 0;
       });
     },
     slice() {
       sfx('slice');
       const [cx, cy] = S.foePoint('chest');
-      const crumbs = particles(30, cx, cy, (i, a, b) => ({ vx: (a - 0.5) * 800, vy: (b - 0.7) * 700, s: 4 + (i % 3) * 3 }));
+      const bits = particles(16, cx, cy, (i, a, b) => ({ vx: (a - 0.5) * 600, vy: (b - 0.7) * 500, s: PX * (1 + (i % 2)) }));
       return add(1000, (ctx, p) => {
         ctx.save();
-        ctx.lineCap = 'round';
-        ctx.shadowColor = '#ffb347';
-        ctx.shadowBlur = 18;
+        ctx.lineCap = 'butt';
         for (const [k, t0] of [[0, 0], [1, 0.18]]) {
           const q = clamp((p - t0) / 0.15, 0, 1);
           const fade = 1 - clamp((p - t0 - 0.25) / 0.3, 0, 1);
           if (q <= 0 || fade <= 0) continue;
           ctx.globalAlpha = fade;
-          ctx.strokeStyle = '#fff6dc';
-          ctx.lineWidth = 9;
-          ctx.beginPath();
           const s = k ? 1 : -1;
+          ctx.beginPath();
           ctx.moveTo(cx - 180 * s, cy - 200);
           ctx.lineTo(cx - 180 * s + 360 * s * q, cy - 200 + 380 * q);
+          ctx.strokeStyle = '#140405';
+          ctx.lineWidth = PX * 3;
+          ctx.stroke();
+          ctx.strokeStyle = '#a49a86';
+          ctx.lineWidth = PX;
           ctx.stroke();
         }
         ctx.restore();
         if (p > 0.25) {
           const tt = (p - 0.25) * 1.2;
-          for (const c of crumbs) {
-            ctx.fillStyle = c.s > 6 ? '#e09a2c' : '#f7c75a';
-            ctx.globalAlpha = 1 - p;
-            ctx.fillRect(c.x + c.vx * tt, c.y + c.vy * tt + 700 * tt * tt, c.s, c.s);
-          }
+          ctx.globalAlpha = 1 - p;
+          ctx.fillStyle = '#4a1012';
+          for (const b of bits) ctx.fillRect(b.x + b.vx * tt, b.y + b.vy * tt + 700 * tt * tt, b.s, b.s);
           ctx.globalAlpha = 1;
-          bigText(ctx, 'CRISPY!', cx, cy - 250, 70, '#ffcf4a', { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1), rot: -0.12 });
         }
       });
     },
@@ -497,124 +474,92 @@
       sfx('taste');
       return add(2400, (ctx, p) => {
         const a = Math.sin(Math.PI * p);
-        ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
+        ctx.fillStyle = `rgba(0,0,0,${0.6 * a})`;
         ctx.fillRect(0, 0, W, H);
-        const real = p > 0.45;
+        const real = p > 0.5;
         drawSprite(ctx, real ? 'swordReal' : 'sword', 640, 440, PX + 1, { alpha: Math.min(1, a * 2.5) });
-        // a shine runs up the blade
-        if (p > 0.12 && p < 0.45) {
-          const q = (p - 0.12) / 0.33;
-          const y = 440 + 290 - q * 580;
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
-          ctx.fillRect(640 - 50, y - 12, 100, 24);
-          ctx.restore();
+        // a cold glint runs up the blade... and it's real
+        if (p > 0.15 && p < 0.5) {
+          const q = (p - 0.15) / 0.35;
+          ctx.fillStyle = 'rgba(176,184,188,0.55)';
+          ctx.fillRect(640 - 30, 440 + 290 - q * 580 - 4, 60, PX * 2);
         }
-        if (p > 0.43 && p < 0.52) {
-          ctx.fillStyle = `rgba(255,255,255,${1 - (p - 0.43) / 0.09})`;
-          ctx.fillRect(0, 0, W, H);
-        }
-        if (real) {
-          star(ctx, 640, 440 - 270, 30 + Math.sin(S.t * 20) * 8, '#ffffff');
-          bigText(ctx, 'TASTE OF REALITY', 640, 820 - 30 * ease(clamp((p - 0.45) * 4, 0, 1)), 80, '#dff1ff', { stroke: '#10304a', alpha: Math.min(1, (p - 0.45) * 5) * (1 - clamp((p - 0.85) / 0.15, 0, 1)) });
-        }
+        if (real && p < 0.6) S.shake = Math.max(S.shake, 3);
       });
     },
     nut() {
-      // a shout, a little shine... that grows into an explosion, and a CRACK
+      // a dull glint that swells... and goes off: a heavy, dark blast, and it cracks
       const [cx, cy0] = S.foePoint('chest');
       const cy = cy0 + 70; // right where it hurts
-      sfx('nutShine', 600);
-      sfx('boom', 1750);
-      sfx('crack', 2250);
-      const fire = particles(40, cx, cy, (i, a, b) => ({ a: a * Math.PI * 2, v: 200 + b * 600, r: 20 + (i % 5) * 14 }));
+      sfx('nutShine', 300);
+      sfx('boom', 1450);
+      sfx('crack', 1900);
+      const smoke = particles(34, cx, cy, (i, a, b) => ({ a: a * Math.PI * 2, v: 140 + b * 420, r: 18 + (i % 5) * 12 }));
+      const embers = particles(24, cx, cy, (i, a, b) => ({ vx: (a - 0.5) * 900, vy: -200 - b * 500 }));
       const cracks = [];
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < 7; i++) {
         let x = cx;
         let y = cy;
         const pts = [[x, y]];
-        let a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
-        for (let k = 0; k < 7; k++) {
+        let a = (i / 7) * Math.PI * 2 + Math.random() * 0.5;
+        for (let k = 0; k < 6; k++) {
           a += (Math.random() - 0.5) * 0.9;
-          x += Math.cos(a) * (60 + Math.random() * 70);
-          y += Math.sin(a) * (60 + Math.random() * 70);
+          x += Math.cos(a) * (50 + Math.random() * 60);
+          y += Math.sin(a) * (50 + Math.random() * 60);
           pts.push([x, y]);
         }
         cracks.push(pts);
       }
-      return add(3800, (ctx, p) => {
-        const T = p * 3.8;
-        if (T < 0.9) {
-          const q = ease(Math.min(1, T / 0.25));
-          bigText(ctx, 'NUTCRACKAAAA!!!', 640, 200, 96 + (1 - q) * 80, '#ffd23f', { stroke: '#7a1010', rot: -0.06, alpha: q });
-          if (T < 0.3) S.shake = Math.max(S.shake, 8);
+      return add(3200, (ctx, p) => {
+        const T = p * 3.2;
+        if (T > 0.2 && T < 1.45) {
+          // the glint: small, dull, swelling, flickering
+          const q = (T - 0.2) / 1.25;
+          if (Math.random() < 0.85) star(ctx, cx, cy, 6 + q * q * 40, '#b8b0a0', 0.14);
+          if (q > 0.6) S.shake = Math.max(S.shake, 2 * q);
         }
-        if (T > 0.6 && T < 1.8) {
-          // the shine: small, then bigger, pulsing
-          const q = (T - 0.6) / 1.2;
-          const r = 10 + q * q * 90 + Math.sin(S.t * 30) * 6 * q;
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.4);
-          g.addColorStop(0, `rgba(255,255,230,${0.9})`);
-          g.addColorStop(1, 'rgba(255,220,120,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-          star(ctx, cx, cy, r, '#ffffff', 0.12);
-          if (q > 0.6) S.shake = Math.max(S.shake, 4 * q);
-        }
-        if (T > 1.75 && T < 3.4) {
-          const q = (T - 1.75) / 1.65;
-          if (q < 0.08) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, W, H);
-          }
-          if (q < 0.15) S.shake = 26;
-          // the fireball: smoke behind, then fire, then a white-hot core, cooling as it spreads
-          ctx.globalAlpha = 1 - clamp((q - 0.7) / 0.3, 0, 1);
-          const layers = [
-            [1.25, q < 0.3 ? '#7a1c10' : '#2e2220'],
-            [1.0, q < 0.5 ? '#e2541f' : '#5a2a1c'],
-            [0.72, q < 0.6 ? '#ffb03a' : '#a8461e'],
-            [0.42, q < 0.35 ? '#fff4c2' : q < 0.6 ? '#ffd76a' : '#e2741f'],
-          ];
-          for (const [k, col] of layers) {
+        if (T > 1.45 && T < 3.1) {
+          const q = (T - 1.45) / 1.65;
+          if (q < 0.12) S.shake = Math.max(S.shake, 12);
+          // dark smoke round a dull red heart, going out
+          ctx.globalAlpha = 1 - clamp((q - 0.6) / 0.4, 0, 1);
+          for (const [k, col] of [[1.2, '#120e0e'], [0.9, '#241412'], [0.55, q < 0.3 ? '#5a2014' : '#321612']]) {
             ctx.fillStyle = col;
-            for (const f of fire) {
-              const d = f.v * Math.min(q, 0.45);
-              const r = f.r * (1 + q * 2) * (1 - q * 0.6) * k;
+            for (const f of smoke) {
+              const d = f.v * Math.min(q, 0.5);
+              const r = f.r * (1 + q * 1.6) * (1 - q * 0.5) * k;
               ctx.beginPath();
-              ctx.arc(cx + Math.cos(f.a) * d, cy + Math.sin(f.a) * d * 0.7 - q * 80 * k, Math.max(0, r), 0, Math.PI * 2);
+              ctx.arc(cx + Math.cos(f.a) * d, cy + Math.sin(f.a) * d * 0.7 - q * 60 * k, Math.max(0, r), 0, Math.PI * 2);
               ctx.fill();
             }
           }
-          ctx.globalAlpha = 1;
-          ctx.strokeStyle = `rgba(255,240,200,${1 - q})`;
-          ctx.lineWidth = 10;
+          ctx.globalAlpha = 1 - q;
+          ctx.fillStyle = '#7a3a22';
+          for (const e of embers) ctx.fillRect(e.x + e.vx * q * 0.8, e.y + e.vy * q * 0.8 + 600 * q * q, PX * 2, PX * 2);
+          ctx.globalAlpha = 0.6 * (1 - q);
+          ctx.strokeStyle = '#3a3632';
+          ctx.lineWidth = PX * 2;
           ctx.beginPath();
-          ctx.ellipse(cx, cy, 80 + q * 700, 30 + q * 260, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, cy, 80 + q * 500, 30 + q * 180, 0, 0, Math.PI * 2);
           ctx.stroke();
+          ctx.globalAlpha = 1;
         }
-        if (T > 2.25) {
-          // CRACK, and the screen cracks with it
-          const q = (T - 2.25) / 1.55;
+        if (T > 1.9) {
+          // and it cracks
+          const q = (T - 1.9) / 1.3;
           ctx.save();
-          ctx.globalAlpha = 1 - clamp((q - 0.65) / 0.35, 0, 1);
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 4;
-          for (const pts of cracks) {
-            ctx.beginPath();
-            const n = Math.ceil(pts.length * Math.min(1, q * 4));
-            pts.slice(0, n).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-            ctx.stroke();
+          ctx.globalAlpha = 1 - clamp((q - 0.7) / 0.3, 0, 1);
+          for (const [w, col] of [[PX * 3, '#0a0506'], [PX, '#5a1414']]) {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = w;
+            for (const pts of cracks) {
+              ctx.beginPath();
+              const n = Math.ceil(pts.length * Math.min(1, q * 4));
+              pts.slice(0, n).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+              ctx.stroke();
+            }
           }
           ctx.restore();
-          const s = 1 + (1 - ease(Math.min(1, q * 5))) * 0.8;
-          bigText(ctx, 'CRACK', cx, cy - 40, 170 * s, '#ffffff', { stroke: '#2a0a0a', rot: 0.1, alpha: 1 - clamp((q - 0.7) / 0.3, 0, 1) });
         }
       });
     },
@@ -637,20 +582,8 @@
       sfx('stance');
       S.hero.gold = 1;
       const [x, y] = S.heroPoint('head');
-      return add(1300, (ctx, p) => {
-        const a = Math.sin(Math.PI * p);
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        for (let i = 0; i < 12; i++) {
-          const xx = x - 180 + i * 32 + Math.sin(S.t * 3 + i) * 6;
-          const g = ctx.createLinearGradient(0, 800, 0, 300);
-          g.addColorStop(0, `rgba(255,200,80,${0.35 * a})`);
-          g.addColorStop(1, 'rgba(255,200,80,0)');
-          ctx.fillStyle = g;
-          ctx.fillRect(xx, 300 + ((i * 53) % 120), 10, 500);
-        }
-        ctx.restore();
-        bigText(ctx, 'FEARLESS', x + 150, y - 150, 76, '#ffd86b', { stroke: '#4a2a00', alpha: a });
+      return add(1200, (ctx, p) => {
+        bigText(ctx, 'FEARLESS', x + 170, y - 150, 34, '#b8975a', { alpha: Math.sin(Math.PI * p) * 0.9 });
       });
     },
     talk() {
@@ -662,19 +595,12 @@
         const bubble = (x, y, w, txt, creepy, a) => {
           ctx.save();
           ctx.globalAlpha = a;
-          ctx.fillStyle = creepy ? '#1b0b0d' : '#f4f1ea';
-          ctx.strokeStyle = creepy ? '#b8232b' : '#15171a';
-          ctx.lineWidth = 5;
-          ctx.beginPath();
-          ctx.roundRect(x - w / 2, y - 40, w, 80, 16);
-          ctx.fill();
-          ctx.stroke();
-          ctx.font = `700 ${creepy ? 38 : 44}px "Share Tech Mono", monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = creepy ? '#ff5a5f' : '#15171a';
-          ctx.fillText(txt, x + (creepy ? (Math.random() - 0.5) * 4 : 0), y + (creepy ? (Math.random() - 0.5) * 4 : 0));
+          ctx.fillStyle = creepy ? '#120708' : '#a8a296';
+          ctx.fillRect(x - w / 2, y - 36, w, 72);
+          ctx.fillStyle = creepy ? '#5a1414' : '#161618';
+          for (const [rx, ry, rw, rh] of [[x - w / 2, y - 36, w, PX * 2], [x - w / 2, y + 36 - PX * 2, w, PX * 2], [x - w / 2, y - 36, PX * 2, 72], [x + w / 2 - PX * 2, y - 36, PX * 2, 72]]) ctx.fillRect(rx, ry, rw, rh);
           ctx.restore();
+          bigText(ctx, txt, x + (creepy ? (Math.random() - 0.5) * 4 : 0), y, 36, creepy ? '#8a3a3a' : '#161618', { alpha: a, stroke: creepy ? '#000' : '#a8a296' });
         };
         const dots = '.'.repeat(1 + (Math.floor(S.t * 6) % 3));
         if (p < 0.6) bubble(hx + 150, hy - 110, 150, dots, false, Math.min(1, p * 8));
@@ -688,15 +614,12 @@
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
         drawSprite(ctx, 'choc', 400, 600 - ease(Math.min(1, p * 4)) * 30, PX * 3, { alpha: a });
         if (p > 0.38) {
-          // the bite out of it
-          ctx.fillStyle = '#14161a';
-          ctx.beginPath();
-          ctx.arc(400 + 63, 570, 26, 0, Math.PI * 2);
+          ctx.fillStyle = '#0e0f12';
           ctx.globalAlpha = a;
-          ctx.fill();
+          ctx.fillRect(400 + 40, 548, 44, 44); // the bite out of it
           const tt = p - 0.38;
-          ctx.fillStyle = '#4a2a18';
-          for (const c of crumbs) ctx.fillRect(c.x + 60 + c.vx * tt, c.y - 30 + c.vy * tt + 900 * tt * tt, 6, 6);
+          ctx.fillStyle = '#2a170e';
+          for (const c of crumbs) ctx.fillRect(c.x + 60 + c.vx * tt, c.y - 30 + c.vy * tt + 900 * tt * tt, PX * 2, PX * 2);
           ctx.globalAlpha = 1;
         }
       });
@@ -708,32 +631,28 @@
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
         const y = 600 - ease(Math.min(1, p * 4)) * 30;
         drawSprite(ctx, 'cheese', 430, y, PX, { alpha: a });
-        // steam
-        ctx.strokeStyle = `rgba(255,255,255,${0.5 * a})`;
-        ctx.lineWidth = 6;
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          for (let k = 0; k < 10; k++) ctx.lineTo(400 + i * 30 + Math.sin(S.t * 5 + k * 0.8 + i) * 8, y - 80 - k * 12);
-          ctx.stroke();
-        }
-        // the cheese pull
+        // a little steam
+        ctx.fillStyle = `rgba(150,146,138,${0.45 * a})`;
+        for (let i = 0; i < 3; i++) for (let k = 0; k < 8; k++) ctx.fillRect(400 + i * 30 + Math.round(Math.sin(S.t * 5 + k * 0.8 + i) * 2) * PX, y - 80 - k * 14, PX * 2, PX * 2);
         if (p > 0.45) {
-          const q = Math.min(1, (p - 0.45) * 3);
-          ctx.fillStyle = `rgba(255,211,77,${a})`;
-          ctx.fillRect(345, y + 20, 9, 10 + q * 90);
+          ctx.fillStyle = `rgba(150,124,52,${a})`;
+          ctx.fillRect(345, y + 20, PX * 2, 10 + Math.min(1, (p - 0.45) * 3) * 90);
         }
       });
     },
     pills() {
       sfx('pills');
       const [x, y] = S.heroPoint('head');
-      return add(1200, (ctx, p) => {
-        const a = 1 - clamp((p - 0.8) / 0.2, 0, 1);
-        drawSprite(ctx, 'pill', x - 30, y - 60 - Math.sin(p * Math.PI) * 120, PX * 3, { rot: p * 8, alpha: a });
-        drawSprite(ctx, 'pill', x + 50, y - 50 - Math.sin(p * Math.PI) * 140, PX * 3, { rot: -p * 9, alpha: a });
-        for (let i = 0; i < 6; i++) {
-          const an = (i / 6) * Math.PI * 2 + S.t * 2;
-          star(ctx, x + Math.cos(an) * 150 * p, y + Math.sin(an) * 110 * p, 16 * a, '#fff6c2');
+      return add(1300, (ctx, p) => {
+        const a = 1 - clamp((p - 0.82) / 0.18, 0, 1);
+        const bx = x + 260;
+        drawSprite(ctx, 'pills', bx, y + 20 - ease(Math.min(1, p * 4)) * 20, PX * 1.3, { alpha: a, rot: -0.12 });
+        // two press out of the foil, and he takes them
+        ctx.fillStyle = '#7a3448';
+        for (let i = 0; i < 2; i++) {
+          const q = clamp((p - 0.3 - i * 0.1) / 0.4, 0, 1);
+          if (q <= 0 || q >= 1) continue;
+          ctx.fillRect(bx + (i ? 20 : -20) + (x + 40 - bx) * q, y - Math.sin(Math.PI * q) * 110, PX * 3, PX * 2);
         }
       });
     },
@@ -743,9 +662,8 @@
       C().act('distracted');
       return add(2100, (ctx, p) => {
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
-        drawSprite(ctx, 'keys', 400 + Math.sin(S.t * 40) * (p < 0.3 ? 6 : 0), 600, PX * 3, { alpha: a, rot: Math.sin(S.t * 30) * 0.15 });
+        drawSprite(ctx, 'keys', 430 + (p < 0.3 ? Math.round(Math.sin(S.t * 40)) * PX : 0), 600, PX * 1.4, { alpha: a, rot: Math.sin(S.t * 18) * 0.08 });
         if (p > 0.3) windowsFlash(ctx, p);
-        if (p > 0.35) bigText(ctx, 'WEE-OOO WEE-OOO', 760, 300, 64, Math.floor(S.t * 6) % 2 ? '#ff6a3c' : '#ffd23f', { alpha: a, rot: -0.04 });
       });
     },
     distracted() {
@@ -774,7 +692,7 @@
         const y1 = Math.min(fy, 740) + k * 30;
         ctx.save();
         ctx.globalAlpha = a;
-        ctx.fillStyle = '#9fe6ff';
+        ctx.fillStyle = '#7e9aa4';
         const L = 42;
         const T = PX * 2;
         for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
@@ -789,7 +707,7 @@
           ctx.fillRect(x0, y0, x1 - x0, yy - y0);
         }
         ctx.restore();
-        bigText(ctx, 'CHECK', x0 + 72, y0 + 34, 34, '#9fe6ff', { alpha: a });
+        bigText(ctx, 'CHECK', x0 + 64, y0 + 30, 28, '#7e9aa4', { alpha: a });
       });
     },
     // ACT: Show it the photos. The frames on the wall glow, and it looks.
@@ -803,7 +721,7 @@
         ctx.save();
         for (const [x0, y0, x1, y1] of frames) {
           ctx.globalAlpha = a;
-          ctx.strokeStyle = '#ffd36b';
+          ctx.strokeStyle = '#8a7a52';
           ctx.lineWidth = PX * 2;
           const g = PX * 3 + Math.round(Math.sin(S.t * 6)) * PX;
           ctx.strokeRect(x0 - g, y0 - g, x1 - x0 + g * 2, y1 - y0 + g * 2);
@@ -840,24 +758,29 @@
     family(o = {}) {
       const step = o.step || 0;
       const ok = o.ok !== false;
-      const [hx, hy] = S.heroPoint('head');
       const sprite = ['veranda', 'adult', 'adult'][step];
       const label = ['VERANDA', 'JUSTIN', 'ERIK'][step];
+      const msg = [
+        ['somethings in', 'the house. out', 'the back. now'],
+        ['basement stairs', 'slow. out the', 'back. to the car'],
+        ['erik. shoes on', 'dont look at it', 'go when i say'],
+      ][step];
       const path = step === 1 ? [[392, 476], [300, 478], [-60, 478]] : [[318, 395], [175, 478], [-60, 478]];
       sfx('phone');
-      sfx('sneak', 1000);
-      if (!ok) sfx(step === 1 ? 'groan' : 'creak', 1500);
-      return add(2600, (ctx, p) => {
+      sfx('sneak', 1300);
+      if (!ok) sfx(step === 1 ? 'groan' : 'creak', 1900);
+      return add(3200, (ctx, p) => {
         const a = 1 - clamp((p - 0.9) / 0.1, 0, 1);
-        // the text going out
-        if (p < 0.34) {
-          const buzz = p < 0.16 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
-          drawSprite(ctx, 'phone', hx + 200 + buzz, hy - 40, PX * 4);
-          bigText(ctx, label, hx + 200, hy - 112, 28, '#d6f0ff');
-          if (p > 0.2) bigText(ctx, 'ok', hx + 248, hy - 70, 34, '#8dffc4');
+        // the text: his cracked phone, and the message
+        if (p < 0.42) {
+          const fa = 1 - clamp((p - 0.36) / 0.06, 0, 1);
+          const buzz = p < 0.1 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
+          drawSprite(ctx, 'phone', 390 + buzz, 610, PX, { alpha: fa });
+          const k = textBubble(msg, p > 0.22 ? `read 2:${49 + step * 3}` : '');
+          if (k && p > 0.05) drawSprite(ctx, k, 600, 520, PX, { alpha: fa });
         }
-        if (p < 0.3) return;
-        const q0 = (p - 0.3) / 0.6;
+        if (p < 0.38) return;
+        const q0 = (p - 0.38) / 0.52;
         const q = ok ? clamp(q0, 0, 1) : Math.min(clamp(q0, 0, 1), 0.4); // heard: frozen part way
         const seg = q < 0.5 ? 0 : 1;
         const t = seg ? (q - 0.5) * 2 : q * 2;
@@ -867,11 +790,8 @@
         const y = y0 + (y1 - y0) * t + (q0 < 0.4 || ok ? (Math.sin(S.t * 9) > 0 ? -PX : 0) : 0);
         const fade = step === 1 ? clamp(q0 * 5, 0, 1) : 1; // Justin, out of the dark of the basement
         drawSprite(ctx, sprite, x, y, PX * 2, { ay: 1, alpha: a * fade, sy: step === 2 ? 0.94 : 1 });
-        bigText(ctx, label, x, y - 118, 22, '#d6f0ff', { alpha: a * fade });
-        if (!ok && q0 > 0.4) {
-          const k = 1 + (1 - ease(Math.min(1, (q0 - 0.4) * 6))) * 0.6;
-          bigText(ctx, step === 1 ? 'GROAN' : 'CREAK', x + 70, y - 170, 56 * k, '#ffd36b', { stroke: '#2a1a00', rot: -0.08, alpha: a });
-        }
+        bigText(ctx, label, x, y - 116, 20, '#7d8ea6', { alpha: a * fade });
+        if (!ok && q0 > 0.4) bigText(ctx, step === 1 ? 'groan' : 'creak', x + 60, y - 160, 30, '#8a7a52', { rot: -0.08, alpha: a });
       });
     },
     // ACT: Show it who he is, a step at a time (the first is the photos, above).
@@ -883,7 +803,7 @@
         ['VERANDA', 'JUSTIN', 'ERIK'].forEach((n, i) => {
           const q = clamp((p - i * 0.18) / 0.4, 0, 1);
           if (!q) return;
-          bigText(ctx, n, x + 290 + i * 50, y - 30 - i * 80 - ease(q) * 30, 46, '#fff3d6', { stroke: '#2a2016', alpha: Math.min(1, q * 4) * a });
+          bigText(ctx, n, x + 290 + i * 50, y - 30 - i * 80 - ease(q) * 20, 34, '#a8a296', { alpha: Math.min(1, q * 4) * a });
         });
       });
     },
@@ -893,7 +813,7 @@
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
         const shake = Math.round(Math.sin(S.t * 50) * 2) * PX;
         drawSprite(ctx, 'clock', 470 + shake, 450, PX * 4, { alpha: a, rot: Math.sin(S.t * 40) * 0.08 });
-        if (Math.floor(S.t * 4) % 2) bigText(ctx, '4:00 AM', 470, 340, 58, '#ff5a4a', { stroke: '#2a0000', alpha: a });
+        if (Math.floor(S.t * 3) % 2) bigText(ctx, '4:00 AM', 470, 350, 40, '#8a3a32', { alpha: a });
       });
     },
     hands() {
@@ -906,7 +826,7 @@
           if (!q) continue;
           drawSprite(ctx, 'bag', 430 + i * 120, 680 - (1 - q * q) * 300, PX * 0.6, { ay: 1, alpha: a });
         }
-        if (p > 0.45) bigText(ctx, 'EVERY CAN. EVERY ROUTE.', 600, 380, 40, '#ffd36b', { stroke: '#2a1a00', alpha: a });
+        if (p > 0.45) bigText(ctx, 'every can. every route.', 600, 390, 30, '#a8a296', { alpha: a });
       });
     },
     noBlink() {
@@ -924,7 +844,7 @@
           blinked = true;
           C().act('twitch');
         }
-        bigText(ctx, p < 0.62 ? 'DON’T BLINK' : 'IT BLINKED', 640, 470, 52, p < 0.62 ? '#ffffff' : '#ffd36b', { alpha: k });
+        bigText(ctx, p < 0.62 ? 'don’t blink' : 'it blinked', 640, 470, 34, '#a8a296', { alpha: k });
       });
     },
     hold() {
@@ -932,7 +852,7 @@
       S.hero.gold = 1;
       const [x, y] = S.heroPoint('head');
       return add(1300, (ctx, p) => {
-        bigText(ctx, 'STILL HERE', x + 180, y - 150, 64, '#ffd86b', { stroke: '#4a2a00', alpha: Math.sin(Math.PI * p) });
+        bigText(ctx, 'still here', x + 180, y - 150, 34, '#b8975a', { alpha: Math.sin(Math.PI * p) });
       });
     },
     spare() {
@@ -944,18 +864,10 @@
     },
   };
   function windowsFlash(ctx, p) {
-    // the car alarm's lights through the blinds
-    const on = Math.floor(S.t * 6) % 2;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = on ? 'rgba(255,120,30,0.35)' : 'rgba(255,40,30,0.25)';
-    for (const [x0, y0, x1, y1] of [[330, 268, 476, 520], [684, 262, 870, 505]]) ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-    const g = ctx.createRadialGradient(560, 380, 20, 560, 380, 700);
-    g.addColorStop(0, on ? 'rgba(255,120,30,0.18)' : 'rgba(255,40,30,0.12)');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.restore();
+    // the car alarm's lights, dull, through the blinds
+    const on = Math.floor(S.t * 3) % 2;
+    ctx.fillStyle = on ? 'rgba(130,64,30,0.3)' : 'rgba(80,22,22,0.16)';
+    for (const [x0, y0, x1, y1] of [[330, 268, 476, 520], [684, 262, 870, 505]]) for (let yy = y0; yy < y1; yy += 12) ctx.fillRect(x0, yy, x1 - x0, 6);
     void p;
   }
 
@@ -964,8 +876,8 @@
     claw: () => (sfx('claw', 200), heroClaw(700, 3)),
     rake: () => (sfx('claw', 120), sfx('claw', 330), heroClaw(800, 2)),
     reach: () => (sfx('reach'), sfx('claw', 650), heroClaw(1200, 3, 0.5)),
-    screech: () => (sfx('screech'), waves(1300, '#ffffff')),
-    scream: () => (sfx('scream'), waves(1300, '#ff4d4d')),
+    screech: () => (sfx('screech'), waves(1300, '#6a6660')),
+    scream: () => (sfx('scream'), waves(1300, '#4a1414')),
     twitch: () => (sfx('twitch'), glitch(1100)),
     lash: () => (sfx('lash'), whips(1000, 2)),
     lash3: () => (sfx('lash'), whips(1100, 3)),
@@ -991,16 +903,16 @@
   function jaws(dur) {
     const [x, y] = S.heroPoint('head');
     return add(dur, (ctx, p) => {
-      const close = p < 0.3 ? ease(p / 0.3) : 1;
+      const close = p < 0.3 ? ease(p / 0.3) : 1; // (bone-coloured, not white)
       const a = 1 - clamp((p - 0.7) / 0.3, 0, 1);
       const gap = 160 * (1 - close);
       ctx.save();
       ctx.globalAlpha = a;
       for (const dir of [-1, 1]) {
         const yy = y + 20 + dir * (gap / 2 + 30);
-        ctx.fillStyle = '#2a0808';
+        ctx.fillStyle = '#160404';
         ctx.fillRect(x - 175, dir < 0 ? yy - 42 : yy, 350, 42);
-        ctx.fillStyle = '#efe6cf';
+        ctx.fillStyle = '#9a917e';
         for (let i = 0; i < 9; i++) {
           const tx = x - 165 + i * 37;
           ctx.beginPath();
@@ -1011,10 +923,6 @@
         }
       }
       ctx.restore();
-      if (p > 0.28 && p < 0.4) {
-        ctx.fillStyle = 'rgba(200,0,0,0.35)';
-        ctx.fillRect(0, 0, W, H);
-      }
     });
   }
   // Flicker: the room goes black (the HUD doesn't), and when it comes back, so does it, closer.
@@ -1055,22 +963,23 @@
       ctx.restore();
     });
   }
-  // Lure: a voice from somewhere else in the house, in one of theirs.
+  // Lure: one of them, in the dark, somewhere else in the house: Veranda by the kitchen, Erik
+  // on the stairs, Justin at the basement door. It isn't them; the shape glitches and is gone.
+  // Or a text from Veranda that was sent from inside the house.
   function voiceFx(dur, voice) {
-    const [x, y, txt] = [[1130, 430, 'chris?'], [330, 360, 'dad?'], [420, 470, 'dad...?']][voice];
+    if (voice === 3) {
+      sfx('phone');
+      return add(dur + 600, (ctx, p) => {
+        const a = Math.min(1, p * 8) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
+        drawSprite(ctx, 'phone', 390, 610, PX, { alpha: a });
+        drawSprite(ctx, 'bubble', 600, 520, PX, { alpha: a });
+      });
+    }
+    const [x, y, k] = [[1200, 700, 'veranda'], [300, 430, 'adult'], [392, 478, 'adult']][voice];
     return add(dur, (ctx, p) => {
-      const a = Math.min(1, p * 6) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
-      ctx.save();
-      ctx.globalAlpha = a;
-      ctx.fillStyle = '#120708';
-      ctx.fillRect(x - 95, y - 34, 190, 68);
-      ctx.fillStyle = '#b8232b';
-      ctx.fillRect(x - 95, y - 34, 190, PX * 2);
-      ctx.fillRect(x - 95, y + 34 - PX * 2, 190, PX * 2);
-      ctx.fillRect(x - 95, y - 34, PX * 2, 68);
-      ctx.fillRect(x + 95 - PX * 2, y - 34, PX * 2, 68);
-      ctx.restore();
-      bigText(ctx, txt, x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6, 40, '#ff8a8a', { alpha: a });
+      const a = Math.min(1, p * 3) * (1 - clamp((p - 0.7) / 0.3, 0, 1)) * (Math.random() < 0.85 ? 1 : 0.2);
+      const jit = p > 0.6 && Math.random() < 0.4 ? (Math.random() - 0.5) * 40 : 0;
+      drawSprite(ctx, k, x + jit, y, PX * 2, { ay: 1, alpha: a * 0.8, sy: voice === 1 ? 0.94 : 1 });
     });
   }
   // Ceiling Drop: it goes up out of sight, then lands on him.
@@ -1090,29 +999,23 @@
       for (const d of dust) ctx.fillRect(x + 160 + d.vx * q, y + 60 + d.vy * q + 700 * q * q, 12, 12);
     });
   }
-  // Steal the Joke: the rimshot.
+  // Steal the Joke: his grin, and the elbow on the punchline.
   function jokeFx(dur) {
-    const [x, y] = C().point('head');
-    return add(dur, (ctx, p) => {
-      const a = 1 - clamp((p - 0.8) / 0.2, 0, 1);
-      if (p > 0.2) bigText(ctx, 'BA-DUM', x - 180, y - 20, 50, '#ffffff', { rot: -0.08, alpha: a });
-      if (p > 0.4) bigText(ctx, 'TSS', x + 110, y + 80, 58 * (1 + (1 - ease(Math.min(1, (p - 0.4) * 6))) * 0.5), '#ffd36b', { rot: 0.1, alpha: a });
-    });
+    stareFx(dur, true);
+    return heroClaw(dur, 1, 0.55);
   }
   // Lock the Door: it slams, and the night light's gone.
   function lockFx(dur) {
     S.door = S.doorTarget = 0;
-    S.shake = 10;
-    return add(dur, (ctx, p) => {
-      bigText(ctx, 'CLICK', 1170, 520, 46, '#ffffff', { alpha: 1 - clamp((p - 0.6) / 0.4, 0, 1) });
-    });
+    S.shake = 6;
+    return add(dur, () => {});
   }
   // it stops short: a '...' over its head
   function dots(dur) {
     const [x, y] = C().point('head');
     return add(dur, (ctx, p) => {
       const n = Math.min(3, 1 + Math.floor(p * 5));
-      bigText(ctx, '.'.repeat(n).padEnd(3, ' '), x + 70, y - 80, 60, '#ffffff', { alpha: 1 - clamp((p - 0.8) / 0.2, 0, 1) });
+      bigText(ctx, '.'.repeat(n).padEnd(3, ' '), x + 70, y - 80, 44, '#8a8478', { alpha: 1 - clamp((p - 0.8) / 0.2, 0, 1) });
     });
   }
   function heroClaw(dur, n, at = 0.2) {
@@ -1128,15 +1031,15 @@
       ctx.strokeStyle = color;
       for (let i = 0; i < 5; i++) {
         const q = (p * 2 + i * 0.2) % 1;
-        ctx.globalAlpha = (1 - q) * 0.6;
-        ctx.lineWidth = 6;
+        ctx.globalAlpha = (1 - q) * 0.45;
+        ctx.lineWidth = PX * 2;
         ctx.beginPath();
         ctx.arc(x, y, 30 + q * 600, 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.restore();
-      S.shake = Math.max(S.shake, 6 * Math.sin(Math.PI * p));
-      S.wobble = Math.sin(Math.PI * p) * 6;
+      S.shake = Math.max(S.shake, 3 * Math.sin(Math.PI * p));
+      S.wobble = Math.sin(Math.PI * p) * 5;
     });
   }
   function glitch(dur, k = 1) {
@@ -1240,7 +1143,7 @@
     const [x, y] = S.heroPoint('chest');
     return add(dur, (ctx, p) => {
       const q = ease(clamp(p / 0.4, 0, 1));
-      ctx.fillStyle = '#a58f7c';
+      ctx.fillStyle = '#6e6258';
       for (const s of [-1, 1]) {
         const hx = x + s * (420 - 260 * q);
         ctx.fillRect(hx - 60, y - 140, 120, 34);
@@ -1253,10 +1156,8 @@
     const [x, y] = S.heroPoint('head');
     return add(dur, (ctx, p) => {
       const bob = Math.abs(Math.sin(p * Math.PI * 2)) * 30;
-      ctx.fillStyle = '#b39a85';
+      ctx.fillStyle = '#6e6258';
       ctx.fillRect(x + 70, y + 70 - bob, 110, 36);
-      ctx.fillStyle = `rgba(120,170,255,${0.15 * Math.sin(Math.PI * p)})`;
-      ctx.fillRect(0, 0, W, H);
     });
   }
 
@@ -1273,8 +1174,8 @@
     }
     return add(3800, (ctx, p) => {
       const T = p * 3.8;
-      if (T > 0.3 && T < 2.6 && Math.random() < 0.12) {
-        ctx.fillStyle = 'rgba(160,0,10,0.28)';
+      if (T > 0.3 && T < 2.6 && Math.random() < 0.06) {
+        ctx.fillStyle = 'rgba(90,0,6,0.2)';
         ctx.fillRect(0, 0, W, H);
       }
       S.shake = Math.max(S.shake, T < 2.6 ? 3 + Math.random() * 5 : 0);
@@ -1297,36 +1198,70 @@
     }, { top: true });
   };
 
-  // WILLPOWER: down, a heartbeat, and back up in a golden light.
-  S.revive = function () {
-    sfx('revive');
-    return add(3400, (ctx, p) => {
-      const T = p * 3.4;
-      const dark = T < 2 ? Math.min(1, T * 2) : Math.max(0, 1 - (T - 2) * 1.5);
-      ctx.fillStyle = `rgba(40,0,0,${0.85 * dark})`;
+  // WILLPOWER: while he's down the screen goes red and dark (the family photos flash over it,
+  // in the page: see ui.js), then it lifts as he gets back up, in a dull gold light.
+  S.redOut = function (ms) {
+    const red = { t0: S.t, ms: ms / 1000, up: null };
+    S.red = red;
+    add(600000, (ctx) => {
+      if (S.red !== red) return;
+      let a = Math.min(1, (S.t - red.t0) / red.ms);
+      if (red.up !== null) a *= Math.max(0, 1 - (S.t - red.up) / 1.2);
+      if (a <= 0) return;
+      ctx.fillStyle = `rgba(30,0,2,${a})`;
       ctx.fillRect(0, 0, W, H);
-      if (T < 2) {
-        const beat = Math.max(0, Math.sin(T * Math.PI * 1.43)) ** 6;
-        const g = ctx.createRadialGradient(640, 480, 100, 640, 480, 800);
-        g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(200,0,20,${0.5 * beat})`);
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-        S.hero.down = 1;
-      } else {
-        S.hero.down = Math.max(0, 1 - (T - 2) * 2);
-        S.hero.gold = 1;
-        const q = T - 2;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createLinearGradient(0, H, 0, 0);
-        g.addColorStop(0, `rgba(255,190,70,${0.55 * (1 - q / 1.4)})`);
-        g.addColorStop(1, 'rgba(255,190,70,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
-        bigText(ctx, 'WILLPOWER', 640, 300, 120, '#ffd86b', { stroke: '#4a2400', alpha: Math.min(1, q * 3) * (1 - clamp((q - 1.1) / 0.3, 0, 1)) });
+      // its pulse, at the edges
+      const beat = Math.max(0, Math.sin(S.t * Math.PI * 1.4)) ** 6;
+      const g = ctx.createRadialGradient(640, 480, 200, 640, 480, 820);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, `rgba(90,0,8,${0.6 * beat * a})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }, { top: true });
+    return ms;
+  };
+  S.rise = function () {
+    if (S.red) S.red.up = S.t;
+    S.hero.gold = 1.6;
+    S.hero.rising = true;
+    return 1200;
+  };
+
+  // SPARED: Crispy blinks. When his eyes open again, it's gone.
+  S.blink = function () {
+    sfx('blink');
+    let gone = false;
+    return add(2800, (ctx, p) => {
+      let c; // 0 open .. 1 shut
+      if (p < 0.16) c = ease(p / 0.16);
+      else if (p < 0.5) c = 1;
+      else if (p < 0.62) c = 1 - 0.3 * Math.sin(((p - 0.5) / 0.12) * Math.PI); // a flutter
+      else c = 1 - ease((p - 0.62) / 0.38);
+      if (p > 0.3 && !gone) {
+        gone = true;
+        C().gone = true;
       }
+      if (c <= 0.001) return;
+      const half = (H / 2) * c;
+      const lid = (edge, bulge, alpha) => {
+        ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(W, 0);
+        ctx.lineTo(W, edge);
+        ctx.quadraticCurveTo(W / 2, edge + bulge, 0, edge);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        ctx.lineTo(W, H);
+        ctx.lineTo(W, H - edge);
+        ctx.quadraticCurveTo(W / 2, H - edge - bulge, 0, H - edge);
+        ctx.closePath();
+        ctx.fill();
+      };
+      lid(half + 50 * c, 140 * c, 0.45 * c); // the shadow of the lids
+      lid(half, 140 * c, 1);
     }, { top: true });
   };
 
@@ -1376,6 +1311,10 @@
     h.shake *= Math.pow(0.01, dt);
     h.flash = Math.max(0, h.flash - dt * 3);
     h.gold = Math.max(0, h.gold - dt * 0.6);
+    if (h.rising) {
+      h.down = Math.max(0, h.down - dt * 1.4);
+      if (!h.down) h.rising = false;
+    }
     S.effects = S.effects.filter((e) => S.t - e.t0 < e.dur);
     S.popups = S.popups.filter((q) => S.t - q.t0 < q.dur);
     if (!S.effects.length) S.flicker = S.black = 0;
@@ -1383,16 +1322,26 @@
 
   // The see-through parts of the effects layer, dithered to solid or nothing, like old pixel art.
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) * 16);
-  function dither(lctx) {
+  // The effects also lose most of their colour and get a grain, like the item sheet.
+  function dither(lctx, grit) {
     const d = lctx.getImageData(0, 0, LW, LH);
     const px = d.data;
     for (let y = 0; y < LH; y++) {
       const row = (y & 3) * 4;
       for (let x = 0; x < LW; x++) {
-        const k = (y * LW + x) * 4 + 3;
-        const a = px[k];
-        if (a === 0 || a === 255) continue;
-        px[k] = a > BAYER[row + (x & 3)] ? 255 : 0;
+        const k = (y * LW + x) * 4;
+        const a = px[k + 3];
+        if (a === 0) continue;
+        if (a !== 255) {
+          px[k + 3] = a > BAYER[row + (x & 3)] ? 255 : 0;
+          if (!px[k + 3]) continue;
+        }
+        if (!grit) continue;
+        const l = px[k] * 0.3 + px[k + 1] * 0.59 + px[k + 2] * 0.11;
+        const n = (Math.random() - 0.5) * 22;
+        px[k] = (l + (px[k] - l) * 0.7) * 0.92 + n;
+        px[k + 1] = (l + (px[k + 1] - l) * 0.7) * 0.92 + n;
+        px[k + 2] = (l + (px[k + 2] - l) * 0.7) * 0.92 + n;
       }
     }
     lctx.putImageData(d, 0, 0);
@@ -1405,8 +1354,8 @@
     l.imageSmoothingEnabled = false;
     return l;
   }
-  function blowUp(ctx, layer) {
-    dither(layer.x);
+  function blowUp(ctx, layer, grit) {
+    dither(layer.x, grit);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(layer.c, 0, 0, LW * PX, LH * PX);
@@ -1505,10 +1454,10 @@
     for (const e of S.effects) if (!e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
     for (const q of S.popups) {
       const p = (S.t - q.t0) / q.dur;
-      bigText(l, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 60, q.size * (p < 0.1 ? 1 + (0.1 - p) * 4 : 1), q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
+      bigText(l, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 30, q.size, q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
     }
     for (const e of S.effects) if (e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
-    blowUp(ctx, S.lowFx);
+    blowUp(ctx, S.lowFx, true);
   };
 
   // Crispy's portrait in his box: it shakes and flashes red when he's hit, trembles when he's
@@ -1544,6 +1493,8 @@
     S.popups = [];
     S.lights = S.lightsTarget = 0;
     S.hero.gold = S.hero.flash = S.hero.down = S.hero.dx = S.hero.away = 0;
+    S.hero.rising = false;
+    S.red = null;
     S.door = S.doorTarget = S.beam = S.black = 0;
     S.turned = false;
   };

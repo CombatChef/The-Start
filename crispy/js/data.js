@@ -16,7 +16,7 @@
       spPerRound: 4,
       accuracy: 0.95,
       // When his health runs out the first time, the will to protect his family brings him back.
-      willpower: { heal: 0.4 },
+      willpower: { heal: 0.3, def: 1.7, turns: 5 }, // ...and his defense rises sharply
       // Hard Foam Buster Sword: "Has a small chance to block an incoming attack and take no damage!"
       blockChance: 0.1,
     },

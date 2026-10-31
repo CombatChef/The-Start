@@ -22,8 +22,10 @@ picks, Esc or X goes back; or click.
   or get the family out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys (the alarm makes it
   lose a turn, once).
 - **Health** reads as on SlashCo VR's HUD: a coloured word under a heart. The first time it runs
-  out, the **pilot light** (his willpower to protect his family) brings him back; the second time
-  he falls.
+  out, the screen goes red, photos of his family flash past, and he says: *"N-No... You won't
+  take this house... Not this man, and not this man's family."* The **pilot light** (his
+  willpower) brings him back with his defense sharply up for a few turns; the second time he
+  falls.
 - **The creature** ADJUSTS into its next form every third turn (the oven timer counts down), or
   the moment a form's health runs out; each form has its own stats from the doc and six attacks
   (bites, ceiling drops, the lights cutting out, black bile, calling to Crispy in his family's
@@ -37,14 +39,20 @@ picks, Esc or X goes back; or click.
   up a little with each **Show it who he is** (a new ACT each time: the photos, their names, 4 AM,
   his hands, a staring contest, then holding the line), with **Talk**, and once with **Open the
   front door**; after three Shows it creeps up on its own every round. Hurting it lowers it. At
-  100%, MERCY > SPARE and it walks out of the front door. It's the long way: about 23 rounds.
+  100%, MERCY > SPARE: Crispy blinks, and when he opens his eyes it's gone. It's the long way:
+  about 23 rounds.
 - **Flee**: get the family out, one at a time: **Veranda** (his wife, upstairs), then **Justin**
   (in the basement), then **Erik** (his younger son, in his room upstairs). Each is a risk: if it
   hears them, it lunges and Crispy takes the hit. The car alarm or the lights make it a sure thing;
   an open front door helps. Their names in his box turn green as they get to the car. Once all
   three are out, MERCY > FLEE; with the front door shut it gets one swipe at him on the way out.
+  His texts to them show up on his cracked phone.
 
 Each one ends the same way: a long, calm breath and a fade to black.
+
+The effects are kept dark and quiet, in the grainy, washed-out style of the item sheet (the wine
+glass, the pills, the cracked phone, the car keys and the text bubble are its sprites). Words
+from attacks (NUTCRACKAAAA!!!, CRACK...) are in the battle log, not on screen.
 
 `node crispy/tests/simulate.js` plays thousands of fights with a few kinds of player to check the
 balance: someone who plays normally wins about 9 times in 10, mashing ATTACK about half the time;
@@ -52,8 +60,9 @@ someone who only goes for SPARE or FLEE gets there about 9 times in 10.
 
 ## Building
 
-The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp` and
-`living_room.webp` in `crispy/assets/source/`, then:
+The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
+`living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
+in `crispy/assets/source/`, then:
 
 ```
 pip install numpy opencv-python-headless pillow onnxruntime
@@ -76,6 +85,7 @@ js/ui.js, js/main.js        the HUD, the menus and the flow of a fight
 tests/simulate.js           headless balance test
 tools/                      builds the art, cuts Crispy out, builds the single file
 assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
-                            sheet, and references
+                            sheet, the wine / pills / phone / keys / text bubble sheet, and
+                            references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb
 ```

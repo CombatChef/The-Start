@@ -659,6 +659,61 @@ img {
   color: var(--foe);
   font-size: 80px;
 }
+/* WILLPOWER: the photos he sees when he falls, and what he says (no portrait: just his name) */
+#cine {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 150px;
+}
+#cine-pic {
+  width: 616px;
+  height: 462px;
+  image-rendering: pixelated;
+  opacity: 0;
+  filter: sepia(0.4) hue-rotate(-28deg) saturate(1.3) brightness(0.85);
+  box-shadow: 0 0 0 6px #0a0000;
+}
+#cine-pic.on {
+  animation: memory 1.1s steps(1) forwards;
+}
+@keyframes memory {
+  0% { opacity: 0.35; transform: scale(1.02); }
+  8% { opacity: 0.9; }
+  14% { opacity: 0.5; }
+  20% { opacity: 1; }
+  70% { opacity: 1; transform: scale(1.06); }
+  80% { opacity: 0.4; }
+  86% { opacity: 0.8; }
+  100% { opacity: 0; transform: scale(1.07); }
+}
+#cine-box {
+  left: 120px;
+  right: 120px;
+  bottom: 36px;
+  min-height: 140px;
+  padding: 16px 26px;
+}
+#cine-box .who {
+  font-size: 22px;
+  letter-spacing: 4px;
+  color: var(--gold);
+}
+#cine-box p {
+  margin: 10px 0 0;
+  font-size: 29px;
+  line-height: 1.35;
+  color: #e6e0d2;
+}
+#cine.up {
+  animation: lift 1.2s steps(6) forwards;
+}
+@keyframes lift {
+  to { opacity: 0; }
+}
+
 /* the quiet endings: black, a breath, and one line */
 #screen.calm {
   background: #000;

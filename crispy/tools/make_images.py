@@ -10,8 +10,10 @@ From crispy/assets/source/ (the photos aren't in the repo: put them there first)
   crispy_mask.png      little to the right (the mask cuts him out of the photo: make it with
                        crispy/tools/cutout.py; the pixels are kept as crispy_pixels.png once made)
 the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), the trash bag,
-grilled cheese and sword from theirs (props_sheet.png), and the creature's doc profiles (the
-repo's assets/profiles/) for the HUD.
+grilled cheese and sword from theirs (props_sheet.png), the wine glass, pills, phone, car keys
+and text bubble from theirs (items_sheet.png), the creature's doc profiles (the repo's
+assets/profiles/) for the HUD, and the family photos he sees when he falls (memory_1..4.webp,
+not in the repo either).
 """
 import base64
 import io
@@ -221,6 +223,70 @@ def props():
     return out
 
 
+def items():
+    """The wine glass, the allergy pills, the cracked phone, the car keys and the text bubble,
+    from their pixel-art sheet (items_sheet.png, 4 screen pixels to each of theirs), cut out
+    without the shadows under them. The bubble comes twice: as drawn ("im outside / open the
+    d", read 3:33), and blank, for the game's own texts."""
+    src = np.asarray(Image.open(os.path.join(SRC, 'items_sheet.png')).convert('RGB')).astype(int)
+    px = src[2::4, 2::4]
+    fig = (np.abs(px - 40).sum(2) > 6) & ~np.all(px == 30, axis=2)
+    cols = fig.any(0)
+    spans, start = [], None
+    for x, v in enumerate(list(cols) + [False]):
+        if v and start is None:
+            start = x
+        if not v and start is not None:
+            spans.append((start, x))
+            start = None
+    out = {}
+    for name, (a, b) in zip(('glass', 'pills', 'phone', 'keys', 'bubble'), spans):
+        m = fig[:, a:b]
+        rows = np.flatnonzero(m.any(1))
+        rgb, al = px[rows[0]:rows[-1] + 1, a:b].copy(), m[rows[0]:rows[-1] + 1].copy()
+        out[name] = Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))
+        if name == 'bubble':
+            # blank: no "read 3:33", and the words painted over with the bubble's own speckle
+            read = np.all(rgb == (88, 88, 90), axis=2)
+            al = al & ~read
+            rgb = rgb.copy()
+            rng = np.random.default_rng(7)
+            ys, xs = np.nonzero(np.all(rgb == (22, 22, 24), axis=2))
+            for y, x in zip(ys, xs):
+                if 4 <= y <= 22 and 5 <= x <= 52:  # the words, not the outline
+                    rgb[y, x] = (206, 204, 200) if rng.random() < 0.4 else (156, 156, 160)
+            keep = np.flatnonzero(al.any(1))
+            out['bubbleBlank'] = Image.fromarray(np.dstack([rgb[:keep[-1] + 1], al[:keep[-1] + 1] * 255]).astype(np.uint8))
+    return out
+
+
+def memories():
+    """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
+    item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
+    the repo.)"""
+    crops = {1: (50, 100, 1950, 1525), 2: (0, 20, 647, 505), 3: (25, 470, 725, 995), 4: (0, 420, 1500, 1545)}
+    out = []
+    rng = np.random.default_rng(3)
+    for i in range(1, 5):
+        path = os.path.join(SRC, f'memory_{i}.webp')
+        if not os.path.exists(path):
+            continue
+        im = Image.open(path).convert('RGB').crop(crops[i]).resize((176, 132), Image.LANCZOS)
+        a = np.asarray(im).astype(float)
+        grey = a @ [0.3, 0.59, 0.11]
+        a = grey[..., None] * 0.78 + a * 0.22  # mostly grey: a little of the colour left
+        a = (a - a.mean()) * 1.15 + a.mean()  # faces readable
+        a = 48 + (np.clip(a, 0, 255) / 255) ** 0.9 * 178  # washed out: no real black, no real white
+        a += rng.normal(0, 6, a.shape[:2])[..., None]  # a little speckle
+        a = np.round(a / 16) * 16  # a few tones, like the sheet
+        # a little darker towards the edges
+        yy, xx = np.mgrid[0:132, 0:176]
+        v = 1 - 0.35 * (((xx - 88) / 88) ** 2 + ((yy - 66) / 66) ** 2) ** 2
+        a *= np.clip(v, 0.45, 1)[..., None]
+        out.append(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)))
+    return out
+
+
 def profiles():
     """The doc's profile of each stage, small, for the HUD."""
     return [Image.open(os.path.join(ROOT, 'assets', 'profiles', f'basswood_{i}.png')).convert('L').resize((216, 216), Image.LANCZOS) for i in range(1, 6)]
@@ -237,7 +303,8 @@ if __name__ == '__main__':
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],
         'creatureMeta': [m for _, m in forms],
-        'props': {k: data_url(v) for k, v in things.items()},
+        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}},
+        'memories': [data_url(m) for m in memories()],
         'profiles': [data_url(p) for p in profiles()],
     }
     with open(os.path.join(CRISPY, 'js', 'images.js'), 'w') as f:

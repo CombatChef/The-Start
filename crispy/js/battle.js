@@ -334,7 +334,7 @@
       ev.push({ t: 'log', text: `${this.stage.name} is a step behind.`, tone: 'good' });
     }
     skill_authority(s, cmd, ev) {
-      ev.push({ t: 'log', text: 'Crispy puts his foot down. What he says, goes.', tone: 'hero' });
+      ev.push({ t: 'log', text: 'AUTHORITY. Crispy puts his foot down. What he says, goes.', tone: 'hero' });
       ev.push({ t: 'fx', name: 'authority', target: cmd.target });
       if (cmd.target === 'foe') {
         const n = this.foe.mods.filter((m) => m.good).length;
@@ -396,6 +396,7 @@
       h.nutThisTurn++;
       ev.push({ t: 'log', text: 'NUTCRACKAAAA!!!', tone: 'special' });
       ev.push({ t: 'fx', name: 'nut' });
+      ev.push({ t: 'log', text: 'CRACK.', tone: 'special' });
       if (this.rand() < s.ko) {
         ev.push({ t: 'log', text: 'A PERFECT CRACK. INSTANT K.O.!', tone: 'special' });
         const amount = this.foe.hp;
@@ -622,13 +623,12 @@
         }
         if (this.stage.final) {
           ev.push({ t: 'log', text: 'Andy looks him up and down. "Keep it. The 4 AM alarm. The route. All of it."', tone: 'foe' });
-          ev.push({ t: 'log', text: '"I’ll let you live, Chris. This time." He walks out the front door, into the dark.', tone: 'special' });
-        } else {
-          ev.push({ t: 'log', text: 'It looks down at him for a long time. Then it decides to let him live.', tone: 'foe' });
-          ev.push({ t: 'log', text: 'It turns its back on him, like he was never a threat, and walks out into the night.', tone: 'special' });
-        }
+          ev.push({ t: 'log', text: '"I’ll let you live, Chris. This time."', tone: 'foe' });
+        } else ev.push({ t: 'log', text: 'It looks down at him for a long time. Then it decides to let him live.', tone: 'foe' });
+        // he blinks, and it's gone
         this.over = 'spare';
         ev.push({ t: 'spare' });
+        ev.push({ t: 'log', text: `When Crispy opens his eyes, ${this.stage.final ? 'Andy is' : 'it’s'} gone. The front door swings in the wind.`, tone: 'special' });
         return;
       }
       ev.push({ t: 'log', text: this.stage.final ? 'Andy laughs. "A truce? I’m just getting started."' : 'It doesn’t want a truce. It isn’t done with him.', tone: 'foe' });
@@ -653,6 +653,8 @@
         ev.push({ t: 'log', text: 'Crispy goes down...', tone: 'bad' });
         ev.push({ t: 'revive', hp: h.hp });
         ev.push({ t: 'log', text: `But ${this.family >= 3 ? 'his family is waiting in the car' : 'his family is still in the house'}. He gets back up. WILLPOWER!`, tone: 'special' });
+        const wp = DATA.hero.willpower;
+        ev.push(this.addMod(h, { def: wp.def }, wp.turns, 'WILLPOWER'));
         return;
       }
       this.over = 'lose';
@@ -744,16 +746,16 @@
       const andy = this.stage.final;
       const say = (text, tone = 'foe') => ev.push({ t: 'log', text, tone });
       // Lure: in one of their voices
-      const voice = id === 'lure' ? Math.floor(this.rand() * 3) : 0;
+      const voice = id === 'lure' ? Math.floor(this.rand() * 4) : 0;
       ev.push({ t: 'foe', move: id, voice });
       const lines = {
         bite: `${name} unhinges its jaw and BITES!`,
         flicker: 'The lamp flickers. When it comes back on, it’s right in Crispy’s face!',
         bile: `${name} retches up something black. It burns!`,
-        lure: ['From the kitchen, in Veranda’s voice: "Chris? Come here a sec." It isn’t her.', 'From the stairs, in Erik’s voice: "Dad? Dad, I heard something." It isn’t him.', 'From the basement, in Justin’s voice: "Dad, can you come down here?" It isn’t him.'][voice],
+        lure: ['From the kitchen, in Veranda’s voice: "Chris? Come here a sec." It isn’t her.', 'From the stairs, in Erik’s voice: "Dad? Dad, I heard something." It isn’t him.', 'From the basement, in Justin’s voice: "Dad, can you come down here?" It isn’t him.', 'Crispy’s phone buzzes. Veranda: "im outside open the d" It was sent from inside the house.'][voice],
         drop: `${name} folds itself up onto the ceiling... and DROPS on him!`,
-        joke: 'Andy tells one of Crispy’s jokes, better, and elbows him on the punchline.',
-        lock: 'Andy shuts the front door and turns the lock. "We’re not done, Chris."',
+        joke: 'Andy tells one of Crispy’s jokes, better, and elbows him on the punchline. Ba-dum, tss.',
+        lock: 'Andy shuts the front door and turns the lock. Click. "We’re not done, Chris."',
         claw: `${name} rakes its long claws at Crispy!`,
         reach: `${name} reaches across the room with an arm far too long for its body.`,
         screech: `${name} SCREECHES. The windows hum.`,

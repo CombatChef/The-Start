@@ -125,8 +125,8 @@
         id: 'talk',
         name: 'Talk',
         foe: { atk: 0.85, turns: 2 },
-        mercy: [6, 9, 13, 18, 26], // by stage: the more human it gets, the more it listens
-        doc: 'Say something to it. The more human it gets, the more it listens. (MERCY up)',
+        mercy: [1, 2, 3, 5, 7], // by stage: the more human it gets, the more it listens
+        doc: 'Say something to it. The more human it gets, the more it listens. (MERCY up a little)',
       },
       {
         id: 'lights',
@@ -144,31 +144,47 @@
         doc: "Plant your feet. Nothing gets past you. (Defense up, attack up a little, and you can't be scared.)",
       },
       {
-        id: 'photos',
-        name: 'Show it the photos',
-        mercy: [3, 6, 10, 15, 24],
-        doc: 'Point at the family photos on the wall. Show it whose house this is. (MERCY up, more the more human it is)',
+        // It wants his life. Each time, he shows it a bit more of what that life costs, and it
+        // slowly loses interest. The ACT changes every time he uses it; once he's shown it
+        // enough, MERCY keeps creeping up by itself each round (`trickle`, by steps done).
+        id: 'show',
+        name: 'Show it who he is',
+        steps: [
+          { name: 'Show it the photos', fx: 'photos', mercy: 3, doc: 'Point at the family photos on the wall. Show it whose house this is.' },
+          { name: 'Say their names', fx: 'names', mercy: 4, doc: 'Veranda. Justin. Erik. Make sure it knows exactly who it would have to get through.' },
+          { name: 'Tell it about 4 AM', fx: 'fourAm', mercy: 5, doc: 'Tell it what time he gets up. Every day.' },
+          { name: 'Show it his hands', fx: 'hands', mercy: 6, doc: 'Every can, on every route. It wants this life? Show it what it costs.' },
+          { name: 'Don’t blink', fx: 'noBlink', mercy: 7, doc: 'Stare it down.' },
+          { name: 'Hold the line', fx: 'hold', mercy: 3, doc: 'Stay right where he is, in its way. Again.' },
+        ],
+        trickle: [0, 0, 0, 1, 1, 1], // MERCY each round, by how many steps he's shown it
+        doc: '(MERCY up a little, and a different ACT each time. After a few, MERCY keeps creeping up on its own.)',
       },
-      { id: 'door', name: 'Open the front door', mercy: 15, doc: 'Prop the front door open and show it the way out. (MERCY up, once. And a clear run for the door.)' },
+      { id: 'door', name: 'Open the front door', mercy: 8, doc: 'Prop the front door open and show it the way out. (MERCY up a little, once. It also makes getting the family out, and running, safer.)' },
       {
         id: 'family',
         name: 'Get the family out',
-        chance: [1, 0.45, 0.55], // waking them; down the stairs behind its back; out the back door
+        door: 0.1, // an open front door: a better chance to get each of them past it
         hunting: { atk: 1.3, turns: 2 }, // if it hears them
-        caught: 1.0, // ...it goes for them, and Crispy takes the hit in their place
-        doc: 'Quietly get everyone out of the house, one step at a time: it must not hear them. (The car alarm or the lights help.) Once they are out, he can FLEE.',
+        caught: 1.3, // ...it goes for them, and Crispy takes the hit in their place
+        doc: 'Text the next one, and get them out to the car without it hearing. (A sure thing while the car alarm or the lights cover it; an open front door helps.) Once all three are out, he can FLEE.',
       },
     ],
-    // MERCY: at 100 it can be SPARED. Hurting it costs some back; the higher it is, the more
-    // often it hesitates instead of attacking.
-    mercyRules: { full: 100, hurt: 10, sting: 5, hesitate: 0.003 },
-    family: ['ASLEEP UPSTAIRS', 'AWAKE UPSTAIRS', 'IN THE KITCHEN', 'SAFE IN THE CAR'],
+    // MERCY: at 100 it's lost interest, and will take a truce (SPARE). Hurting it costs some
+    // back; the higher it is, the more often it can't be bothered to attack.
+    mercyRules: { full: 100, hurt: 12, sting: 6, hesitate: 0.001 },
+    // Who Crispy gets out, in order, and how likely each is to get past it unheard.
+    family: [
+      { name: 'Veranda', pron: 'her', who: 'his wife', where: 'upstairs', chance: 0.55 },
+      { name: 'Justin', pron: 'him', who: 'his son', where: 'the basement', chance: 0.45 },
+      { name: 'Erik', pron: 'him', who: 'his younger son', where: 'his room upstairs', chance: 0.4 },
+    ],
 
     items: [
       { id: 'choc', name: '70% Dark Chocolate', count: 3, heal: 0.22, doc: 'Bittersweet. Heals lightly.' },
       { id: 'cheese', name: 'Grilled Cheese', count: 2, heal: 0.45, self: { def: 1.25, turns: 3 }, doc: 'Golden and gooey. Heals significantly and increases defense.' },
       { id: 'pills', name: 'Allergy Pills', count: 2, self: { atk: 1.2, spd: 1.3, acc: 1.15, turns: 4 }, doc: 'Non-drowsy. Increases attack, speed, and accuracy.' },
-      { id: 'keys', name: 'Car Keys', count: 1, doc: 'Starts the car alarm, momentarily distracting the creature. One time use.' },
+      { id: 'keys', name: 'Car Keys', count: 1, alarm: 2, doc: 'Starts the car alarm, momentarily distracting the creature (and covering any noise for a moment). One time use.' },
     ],
 
     mercy: [
@@ -197,7 +213,9 @@
           moves: [
             { id: 'claw', w: 4 },
             { id: 'reach', w: 3 },
+            { id: 'bite', w: 2 },
             { id: 'screech', w: 2 },
+            { id: 'flicker', w: 2 },
             { id: 'twitch', w: 1 },
           ],
         },
@@ -209,8 +227,10 @@
           moves: [
             { id: 'claw', w: 3 },
             { id: 'lash', w: 3 },
+            { id: 'bile', w: 2 },
             { id: 'scream', w: 2 },
             { id: 'reach', w: 2 },
+            { id: 'lure', w: 2 },
           ],
         },
         {
@@ -220,9 +240,11 @@
           health: 'High',
           moves: [
             { id: 'lash3', w: 3 },
-            { id: 'claw', w: 3 },
+            { id: 'claw', w: 2 },
+            { id: 'drop', w: 2 },
             { id: 'weep', w: 2 },
             { id: 'lengthen', w: 2 },
+            { id: 'flicker', w: 2 },
           ],
         },
         {
@@ -233,6 +255,8 @@
           moves: [
             { id: 'rake', w: 3 },
             { id: 'lunge', w: 3 },
+            { id: 'drop', w: 2 },
+            { id: 'lure', w: 2 },
             { id: 'stare', w: 2 },
             { id: 'harden', w: 2 },
           ],
@@ -249,6 +273,8 @@
             { id: 'grab', w: 3 },
             { id: 'smile', w: 2 },
             { id: 'pat', w: 2 },
+            { id: 'joke', w: 2 },
+            { id: 'lock', w: 2 }, // only while the front door is open
           ],
         },
       ],
@@ -260,7 +286,7 @@
         lash: { name: 'Tendril Lash', power: 0.55, hits: 2, acc: 0.85 },
         lash3: { name: 'Tendril Lash', power: 0.42, hits: 3, acc: 0.85 },
         scream: { name: 'Scream', power: 0.5, acc: 1, afraid: 2 },
-        weep: { name: 'Weep', heal: 0.12 },
+        weep: { name: 'Mend', heal: 0.12 },
         lengthen: { name: 'Lengthen', buff: { atk: 1.3, turns: 3 } },
         rake: { name: 'Rake', power: 0.62, hits: 2, acc: 0.9 },
         lunge: { name: 'Lunge', power: 1.25, acc: 0.8 },
@@ -270,6 +296,13 @@
         grab: { name: 'Grab', power: 1.4, acc: 0.8 },
         smile: { name: 'Smile', debuff: { atk: 0.8, turns: 2 }, afraid: 2, acc: 1 },
         pat: { name: 'Pat on the Back', power: 0.8, acc: 0.95 },
+        bite: { name: 'Bite', power: 1.25, acc: 0.82 },
+        flicker: { name: 'Flicker', power: 0.95, acc: 1, afraid: 1 },
+        bile: { name: 'Bile', power: 0.75, acc: 0.88, debuff: { def: 0.85, turns: 2 }, label: 'BURNED' },
+        lure: { name: 'Lure', debuff: { acc: 0.85, turns: 2 }, label: 'SHAKEN', afraid: 2, acc: 1 },
+        drop: { name: 'Ceiling Drop', power: 1.5, acc: 0.8 },
+        joke: { name: 'Steal the Joke', power: 0.8, acc: 0.95, debuff: { atk: 0.85, turns: 2 }, label: 'HECKLED' },
+        lock: { name: 'Lock the Door', door: true, mercy: -6 },
         hesitate: { name: 'Hesitate' },
         adjust: { name: 'ADJUST' },
       },

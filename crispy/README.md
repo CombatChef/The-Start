@@ -1,6 +1,6 @@
 # Crispy vs The Creature
 
-A turn-based birthday battle, all in pixels. It's late, everyone's asleep upstairs, and something
+A turn-based birthday battle, all in pixels. It's late, everyone's asleep, and something
 is standing in Chris's living room. Crispy Soto (Level 99, from his stats doc) has to fight it with a Hard Foam Buster
 Sword, a trash bag and a handheld console while it ADJUSTS through five forms, each more like a
 man, until it calls itself Andy.
@@ -18,34 +18,37 @@ picks, Esc or X goes back; or click.
 - **NUTCRACKAAAA!!!**, his special, only works at half health or less, and he can use it twice in
   one turn. Medium chance of a fatal critical hit, small chance of an instant K.O.
 - **ACT**: Check it (free: doesn't use his turn), turn the lights up (it hates being seen), take a
-  fearless stance, talk to it, show it the family photos, open the front door, or get the family
-  out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys (the alarm makes it
+  fearless stance, talk to it, show it who he is (a different ACT each time), open the front door,
+  or get the family out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys (the alarm makes it
   lose a turn, once).
 - **Health** reads as on SlashCo VR's HUD: a coloured word under a heart. The first time it runs
   out, the **pilot light** (his willpower to protect his family) brings him back; the second time
   he falls.
 - **The creature** ADJUSTS into its next form every third turn (the oven timer counts down), or
-  the moment a form's health runs out; each form has its own stats from the doc. Only Andy can be
-  killed.
+  the moment a form's health runs out; each form has its own stats from the doc and six attacks
+  (bites, ceiling drops, the lights cutting out, black bile, calling to Crispy in his family's
+  voices, Andy stealing his jokes and locking the front door...). Only Andy can be killed.
 
 ## Three ways out
 
 - **Fight**: beat Andy.
-- **Spare**: fill its **MERCY** bar (in its box) to 100%. Talk and Show it the photos raise it,
-  more the more human it gets; Open the front door adds some once. Hurting it lowers it. The fuller
-  the bar, the more often it can't bring itself to attack. At 100%, MERCY > SPARE and it walks out
-  of the front door.
-- **Flee**: Get the family out, three times: wake them (always works), down the stairs behind its
-  back (a sure thing while the car alarm has it distracted, or the lights have it EXPOSED), and out
-  the back door (much likelier with the front door open). If it hears them, it lunges and Crispy
-  takes the hit. The FAMILY line in his box shows where they are. Once they're in the car, MERCY >
-  FLEE; with the front door shut it gets one swipe at him on the way out.
+- **Spare**: it wants Crispy's life. Show it what that life costs until it loses interest, then
+  call a truce, and it's the one that decides to let him live. Its **MERCY** bar (in its box) goes
+  up a little with each **Show it who he is** (a new ACT each time: the photos, their names, 4 AM,
+  his hands, a staring contest, then holding the line), with **Talk**, and once with **Open the
+  front door**; after three Shows it creeps up on its own every round. Hurting it lowers it. At
+  100%, MERCY > SPARE and it walks out of the front door. It's the long way: about 23 rounds.
+- **Flee**: get the family out, one at a time: **Veranda** (his wife, upstairs), then **Justin**
+  (in the basement), then **Erik** (his younger son, in his room upstairs). Each is a risk: if it
+  hears them, it lunges and Crispy takes the hit. The car alarm or the lights make it a sure thing;
+  an open front door helps. Their names in his box turn green as they get to the car. Once all
+  three are out, MERCY > FLEE; with the front door shut it gets one swipe at him on the way out.
 
 Each one ends the same way: a long, calm breath and a fade to black.
 
 `node crispy/tests/simulate.js` plays thousands of fights with a few kinds of player to check the
 balance: someone who plays normally wins about 9 times in 10, mashing ATTACK about half the time;
-someone who only goes for SPARE always gets there, and FLEE works about 9 times in 10.
+someone who only goes for SPARE or FLEE gets there about 9 times in 10.
 
 ## Building
 

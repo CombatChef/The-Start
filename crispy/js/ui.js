@@ -62,7 +62,7 @@
       'title',
       `<div class="kicker">A BIRTHDAY BATTLE</div>
        <h1>CRISPY SOTO<span class="vs">VS</span><span class="red">THE CREATURE</span></h1>
-       <p>It's late. Everyone's asleep upstairs. Something is standing in Chris's living room.</p>
+       <p>It's late. Everyone's asleep. Something is standing in Chris's living room.</p>
        <button class="go" id="start">PRESS START</button>
        <div class="keys">ARROWS to choose · ENTER / Z to pick · ESC / X to go back · or click</div>`
     );
@@ -105,7 +105,7 @@
         'lose',
         `<div class="kicker">THE LIGHTS GO OUT</div>
          <h1>CRISPY SOTO HAS FALLEN</h1>
-         <p>His family is still upstairs. Get back up.</p>
+         <p>Veranda, Justin and Erik are still in the house. Get back up.</p>
          <div class="tally">${line}</div>
          <button class="go" id="again">TRY AGAIN</button>`
       );
@@ -167,10 +167,8 @@
     $('#mercy-fill').style.width = `${b.mercy}%`;
     $('#mercy-num').textContent = `${b.mercy}%`;
     $('#foe').classList.toggle('spareable', b.mercy >= DATA.mercyRules.full);
-    const fam = $('#family');
-    fam.classList.toggle('moving', b.family > 0 && b.family < 3);
-    fam.classList.toggle('safe', b.family >= 3);
-    $('#family-word').textContent = `FAMILY · ${DATA.family[Math.min(b.family, DATA.family.length - 1)]}`;
+    DATA.family.forEach((p, i) => $(`#fam-${i}`).classList.toggle('out', b.family > i));
+    $('#family').classList.toggle('safe', b.family >= 3);
     $('#round').textContent = `ROUND ${String(b.round).padStart(2, '0')}`;
   }
   // The stage's doc profile, made small so it shows in pixels like everything else.
@@ -398,7 +396,7 @@
           break;
         }
         case 'foe': {
-          const ms = Math.max(C().act(e.move), S().foeMove(e.move));
+          const ms = Math.max(C().act(e.move), S().foeMove(e.move, e));
           await wait(ms * 0.7);
           break;
         }
@@ -487,6 +485,7 @@
           break;
         case 'mercy': {
           refresh();
+          if (e.quiet) break; // creeping up by itself at the end of a round
           const up = e.delta > 0;
           A().play(up ? 'mercyUp' : 'mercyDown');
           const [x, y] = C().point('head');
@@ -497,12 +496,12 @@
         case 'family': {
           refresh();
           const [x, y] = S().heroPoint('head');
-          S().popup(DATA.family[e.value], x + 60, y - 160, { color: e.value >= 3 ? '#8dffc4' : '#ffd26b', size: 30, dur: 1.6 });
+          S().popup(`${e.name.toUpperCase()} IS OUT`, x + 90, y - 160, { color: '#8dffc4', size: 30, dur: 1.6 });
           await wait(500);
           break;
         }
         case 'door':
-          S().setDoor(true);
+          S().setDoor(e.open !== false);
           break;
         // the endings: Andy falls, it walks out of the front door, or they drive away
         case 'win':

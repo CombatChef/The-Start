@@ -29,6 +29,7 @@
     popups: [],
     splats: [], // blood on the screen while it ADJUSTS
     real: false, // the sword is real
+    black: 0, // the room's lights cut out (the creature's Flicker)
     door: 0, // the front door, 0 shut .. 1 open: the night comes in
     beam: 0, // the car's headlights through the blinds, when they get away
     beamX: 0,
@@ -81,9 +82,9 @@
       pal: { k: '#1d222b', r: '#7d8ea6' },
       rows: ['..rrr..', '.rkkkr.', '.rkkkr.', '..rkr..', '.rkkkr.', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', '.kkkkk.', '.kkkkk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.rr.rr.'],
     },
-    kid: {
+    veranda: {
       pal: { k: '#1d222b', r: '#7d8ea6' },
-      rows: ['.rrr.', 'rkkkr', '.rkr.', 'rkkkr', 'rkkkr', 'rkkkr', '.kkk.', '.k.k.', '.k.k.', '.k.k.', '.r.r.'],
+      rows: ['..rrr..', '.rkkkr.', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', '.kkkkk.', '.kkkkk.', '.kkkkk.', '.kkkkk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.rr.rr.'],
     },
     phone: {
       pal: { k: '#1b1c1f', s: '#3f8fd8', S: '#d6f0ff', g: '#6b6f76' },
@@ -833,42 +834,105 @@
         }
       });
     },
-    // ACT: Get the family out. 0: texting them upstairs; 1: down the stairs behind its back
-    // (at the left of the room); 2: out the back door. If it hears them, they freeze.
+    // ACT: Get the family out. Crispy texts one of them, then they sneak out behind its back:
+    // Veranda down the stairs (at the left of the room), Justin up from the basement, Erik down
+    // the stairs. If it hears them, they freeze.
     family(o = {}) {
       const step = o.step || 0;
       const ok = o.ok !== false;
-      if (step === 0) {
-        sfx('phone');
-        const [x, y] = S.heroPoint('head');
-        return add(1700, (ctx, p) => {
-          const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
-          const buzz = p < 0.45 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
-          drawSprite(ctx, 'phone', x + 200 + buzz, y - 40, PX * 4, { alpha: a });
-          if (p < 0.45) {
-            ctx.fillStyle = '#d6f0ff';
-            for (const s of [-1, 1]) ctx.fillRect(x + 200 + s * 30 - PX, y - 60 + Math.round(Math.sin(S.t * 30)) * PX, PX, PX * 6);
-          } else bigText(ctx, 'ok', x + 245, y - 120, 40, '#8dffc4', { alpha: a });
-        });
-      }
-      sfx('sneak');
-      if (!ok) sfx('creak', 700);
-      // three of them: from the top of the stairs down to the kitchen, or from the kitchen out
-      const path = step === 1 ? [[318, 395], [165, 492]] : [[200, 476], [-80, 476]];
-      return add(1900, (ctx, p) => {
-        const stop = ok ? 1 : 0.4; // heard: they freeze where they are
-        const q = Math.min(p, stop);
-        const a = 1 - clamp((p - 0.88) / 0.12, 0, 1);
-        ['adult', 'kid', 'adult'].forEach((k, i) => {
-          const qq = clamp(q * 1.3 - i * 0.15, 0, 1);
-          const x = path[0][0] + (path[1][0] - path[0][0]) * qq + i * 26;
-          const y = path[0][1] + (path[1][1] - path[0][1]) * qq + (p < stop && Math.sin(S.t * 9 + i) > 0 ? -PX : 0);
-          drawSprite(ctx, k, x, y, PX * 2, { ay: 1, alpha: a, sx: i === 2 ? 0.9 : 1 });
-        });
-        if (!ok && p > 0.42) {
-          const s = 1 + (1 - ease(Math.min(1, (p - 0.42) * 6))) * 0.6;
-          bigText(ctx, step === 1 ? 'CREAK' : 'RATTLE', path[0][0] + 40, path[0][1] - 150, 56 * s, '#ffd36b', { stroke: '#2a1a00', rot: -0.08, alpha: a });
+      const [hx, hy] = S.heroPoint('head');
+      const sprite = ['veranda', 'adult', 'adult'][step];
+      const label = ['VERANDA', 'JUSTIN', 'ERIK'][step];
+      const path = step === 1 ? [[392, 476], [300, 478], [-60, 478]] : [[318, 395], [175, 478], [-60, 478]];
+      sfx('phone');
+      sfx('sneak', 1000);
+      if (!ok) sfx(step === 1 ? 'groan' : 'creak', 1500);
+      return add(2600, (ctx, p) => {
+        const a = 1 - clamp((p - 0.9) / 0.1, 0, 1);
+        // the text going out
+        if (p < 0.34) {
+          const buzz = p < 0.16 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
+          drawSprite(ctx, 'phone', hx + 200 + buzz, hy - 40, PX * 4);
+          bigText(ctx, label, hx + 200, hy - 112, 28, '#d6f0ff');
+          if (p > 0.2) bigText(ctx, 'ok', hx + 248, hy - 70, 34, '#8dffc4');
         }
+        if (p < 0.3) return;
+        const q0 = (p - 0.3) / 0.6;
+        const q = ok ? clamp(q0, 0, 1) : Math.min(clamp(q0, 0, 1), 0.4); // heard: frozen part way
+        const seg = q < 0.5 ? 0 : 1;
+        const t = seg ? (q - 0.5) * 2 : q * 2;
+        const [x0, y0] = path[seg];
+        const [x1, y1] = path[seg + 1];
+        const x = x0 + (x1 - x0) * t;
+        const y = y0 + (y1 - y0) * t + (q0 < 0.4 || ok ? (Math.sin(S.t * 9) > 0 ? -PX : 0) : 0);
+        const fade = step === 1 ? clamp(q0 * 5, 0, 1) : 1; // Justin, out of the dark of the basement
+        drawSprite(ctx, sprite, x, y, PX * 2, { ay: 1, alpha: a * fade, sy: step === 2 ? 0.94 : 1 });
+        bigText(ctx, label, x, y - 118, 22, '#d6f0ff', { alpha: a * fade });
+        if (!ok && q0 > 0.4) {
+          const k = 1 + (1 - ease(Math.min(1, (q0 - 0.4) * 6))) * 0.6;
+          bigText(ctx, step === 1 ? 'GROAN' : 'CREAK', x + 70, y - 170, 56 * k, '#ffd36b', { stroke: '#2a1a00', rot: -0.08, alpha: a });
+        }
+      });
+    },
+    // ACT: Show it who he is, a step at a time (the first is the photos, above).
+    names() {
+      sfx('names');
+      const [x, y] = S.heroPoint('head');
+      return add(2000, (ctx, p) => {
+        const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
+        ['VERANDA', 'JUSTIN', 'ERIK'].forEach((n, i) => {
+          const q = clamp((p - i * 0.18) / 0.4, 0, 1);
+          if (!q) return;
+          bigText(ctx, n, x + 290 + i * 50, y - 30 - i * 80 - ease(q) * 30, 46, '#fff3d6', { stroke: '#2a2016', alpha: Math.min(1, q * 4) * a });
+        });
+      });
+    },
+    fourAm() {
+      sfx('fourAm');
+      return add(1800, (ctx, p) => {
+        const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
+        const shake = Math.round(Math.sin(S.t * 50) * 2) * PX;
+        drawSprite(ctx, 'clock', 470 + shake, 450, PX * 4, { alpha: a, rot: Math.sin(S.t * 40) * 0.08 });
+        if (Math.floor(S.t * 4) % 2) bigText(ctx, '4:00 AM', 470, 340, 58, '#ff5a4a', { stroke: '#2a0000', alpha: a });
+      });
+    },
+    hands() {
+      sfx('hands');
+      S.hero.gold = 1.2;
+      return add(2000, (ctx, p) => {
+        const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
+        for (let i = 0; i < 3; i++) {
+          const q = clamp((p - i * 0.14) / 0.22, 0, 1);
+          if (!q) continue;
+          drawSprite(ctx, 'bag', 430 + i * 120, 680 - (1 - q * q) * 300, PX * 0.6, { ay: 1, alpha: a });
+        }
+        if (p > 0.45) bigText(ctx, 'EVERY CAN. EVERY ROUTE.', 600, 380, 40, '#ffd36b', { stroke: '#2a1a00', alpha: a });
+      });
+    },
+    noBlink() {
+      sfx('noBlink');
+      const [fx, fy] = C().point('head');
+      let blinked = false;
+      return add(2100, (ctx, p) => {
+        const k = ease(Math.min(1, p / 0.3)) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
+        // everything goes dark but its eyes and his
+        ctx.fillStyle = `rgba(0,0,0,${0.85 * k})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.clearRect(fx - 110, fy - 50, 220, 100);
+        ctx.clearRect(30, 575, 260, 95);
+        if (p > 0.62 && !blinked) {
+          blinked = true;
+          C().act('twitch');
+        }
+        bigText(ctx, p < 0.62 ? 'DON’T BLINK' : 'IT BLINKED', 640, 470, 52, p < 0.62 ? '#ffffff' : '#ffd36b', { alpha: k });
+      });
+    },
+    hold() {
+      sfx('stance');
+      S.hero.gold = 1;
+      const [x, y] = S.heroPoint('head');
+      return add(1300, (ctx, p) => {
+        bigText(ctx, 'STILL HERE', x + 180, y - 150, 64, '#ffd86b', { stroke: '#4a2a00', alpha: Math.sin(Math.PI * p) });
       });
     },
     spare() {
@@ -915,7 +979,134 @@
     smile: () => (sfx('smile'), stareFx(1700, true)),
     pat: () => (sfx('pat'), patFx(1000)),
     hesitate: () => (sfx('hesitate'), dots(1500)),
+    bite: () => (sfx('chomp', 220), jaws(800)),
+    flicker: () => (sfx('flicker'), blackout(1000)),
+    bile: () => (sfx('bile'), spit(1000)),
+    lure: (o = {}) => (sfx('lure'), voiceFx(1600, o.voice || 0)),
+    drop: () => (sfx('drop'), dropFx(1300)),
+    joke: () => (sfx('rimshot', 300), jokeFx(1300)),
+    lock: () => (sfx('slam'), lockFx(900)),
   };
+  // Bite: jaws close over Crispy.
+  function jaws(dur) {
+    const [x, y] = S.heroPoint('head');
+    return add(dur, (ctx, p) => {
+      const close = p < 0.3 ? ease(p / 0.3) : 1;
+      const a = 1 - clamp((p - 0.7) / 0.3, 0, 1);
+      const gap = 160 * (1 - close);
+      ctx.save();
+      ctx.globalAlpha = a;
+      for (const dir of [-1, 1]) {
+        const yy = y + 20 + dir * (gap / 2 + 30);
+        ctx.fillStyle = '#2a0808';
+        ctx.fillRect(x - 175, dir < 0 ? yy - 42 : yy, 350, 42);
+        ctx.fillStyle = '#efe6cf';
+        for (let i = 0; i < 9; i++) {
+          const tx = x - 165 + i * 37;
+          ctx.beginPath();
+          ctx.moveTo(tx, yy);
+          ctx.lineTo(tx + 33, yy);
+          ctx.lineTo(tx + 16, yy - dir * 34);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      if (p > 0.28 && p < 0.4) {
+        ctx.fillStyle = 'rgba(200,0,0,0.35)';
+        ctx.fillRect(0, 0, W, H);
+      }
+    });
+  }
+  // Flicker: the room goes black (the HUD doesn't), and when it comes back, so does it, closer.
+  function blackout(dur) {
+    let hit = false;
+    return add(dur, (ctx, p) => {
+      S.black = (p > 0.1 && p < 0.2) || (p > 0.3 && p < 0.55) ? 1 : 0;
+      if (p > 0.55 && !hit) {
+        hit = true;
+        S.shake = 12;
+      }
+    });
+  }
+  // Bile: a black glob, arcing over, and the splash.
+  function spit(dur) {
+    const [fx, fy] = C().point('head');
+    const [hx, hy] = S.heroPoint('head');
+    return add(dur, (ctx, p) => {
+      if (p < 0.45) {
+        const q = p / 0.45;
+        const x = fx + (hx - fx) * q;
+        const y = fy + 40 + (hy - fy - 40) * q - Math.sin(Math.PI * q) * 180;
+        ctx.fillStyle = '#1d2a12';
+        ctx.fillRect(x - 21, y - 15, 42, 30);
+        ctx.fillStyle = '#6b8f2e';
+        ctx.fillRect(x - 12, y - 9, 12, 9);
+        return;
+      }
+      const q = (p - 0.45) / 0.55;
+      ctx.save();
+      ctx.globalAlpha = 1 - q;
+      for (let i = 0; i < 12; i++) {
+        const an = i * 0.52;
+        const r = (35 + (i % 3) * 30) * ease(Math.min(1, q * 4));
+        ctx.fillStyle = i % 3 ? '#1d2a12' : '#4a6a22';
+        ctx.fillRect(hx + Math.cos(an) * r - 12, hy + Math.sin(an) * r * 0.7 + q * 30, 24, 24 + q * 50);
+      }
+      ctx.restore();
+    });
+  }
+  // Lure: a voice from somewhere else in the house, in one of theirs.
+  function voiceFx(dur, voice) {
+    const [x, y, txt] = [[1130, 430, 'chris?'], [330, 360, 'dad?'], [420, 470, 'dad...?']][voice];
+    return add(dur, (ctx, p) => {
+      const a = Math.min(1, p * 6) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#120708';
+      ctx.fillRect(x - 95, y - 34, 190, 68);
+      ctx.fillStyle = '#b8232b';
+      ctx.fillRect(x - 95, y - 34, 190, PX * 2);
+      ctx.fillRect(x - 95, y + 34 - PX * 2, 190, PX * 2);
+      ctx.fillRect(x - 95, y - 34, PX * 2, 68);
+      ctx.fillRect(x + 95 - PX * 2, y - 34, PX * 2, 68);
+      ctx.restore();
+      bigText(ctx, txt, x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6, 40, '#ff8a8a', { alpha: a });
+    });
+  }
+  // Ceiling Drop: it goes up out of sight, then lands on him.
+  function dropFx(dur) {
+    const [x, y] = S.heroPoint('chest');
+    let hit = false;
+    const dust = particles(16, 0, 0, (i, a, b) => ({ vx: (a - 0.5) * 900, vy: -b * 400 }));
+    return add(dur, (ctx, p) => {
+      if (p < 0.5) return;
+      if (!hit) {
+        hit = true;
+        S.shake = 16;
+      }
+      const q = (p - 0.5) / 0.5;
+      clawMarks(ctx, x, y - 80, q, 4);
+      ctx.fillStyle = `rgba(150,140,125,${0.8 * (1 - q)})`;
+      for (const d of dust) ctx.fillRect(x + 160 + d.vx * q, y + 60 + d.vy * q + 700 * q * q, 12, 12);
+    });
+  }
+  // Steal the Joke: the rimshot.
+  function jokeFx(dur) {
+    const [x, y] = C().point('head');
+    return add(dur, (ctx, p) => {
+      const a = 1 - clamp((p - 0.8) / 0.2, 0, 1);
+      if (p > 0.2) bigText(ctx, 'BA-DUM', x - 180, y - 20, 50, '#ffffff', { rot: -0.08, alpha: a });
+      if (p > 0.4) bigText(ctx, 'TSS', x + 110, y + 80, 58 * (1 + (1 - ease(Math.min(1, (p - 0.4) * 6))) * 0.5), '#ffd36b', { rot: 0.1, alpha: a });
+    });
+  }
+  // Lock the Door: it slams, and the night light's gone.
+  function lockFx(dur) {
+    S.door = S.doorTarget = 0;
+    S.shake = 10;
+    return add(dur, (ctx, p) => {
+      bigText(ctx, 'CLICK', 1170, 520, 46, '#ffffff', { alpha: 1 - clamp((p - 0.6) / 0.4, 0, 1) });
+    });
+  }
   // it stops short: a '...' over its head
   function dots(dur) {
     const [x, y] = C().point('head');
@@ -1070,7 +1261,7 @@
   }
 
   S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
-  S.foeMove = (name) => (FOE[name] ? FOE[name]() : 0);
+  S.foeMove = (name, o) => (FOE[name] ? FOE[name](o) : 0);
 
   // ADJUST: the screen shakes and bleeds while it changes.
   S.adjust = function () {
@@ -1187,7 +1378,7 @@
     h.gold = Math.max(0, h.gold - dt * 0.6);
     S.effects = S.effects.filter((e) => S.t - e.t0 < e.dur);
     S.popups = S.popups.filter((q) => S.t - q.t0 < q.dur);
-    if (!S.effects.length) S.flicker = 0;
+    if (!S.effects.length) S.flicker = S.black = 0;
   };
 
   // The see-through parts of the effects layer, dithered to solid or nothing, like old pixel art.
@@ -1287,6 +1478,10 @@
     // the creature, at a third of the resolution
     C().draw(begin(S.low, sx + wx, sy + wy));
     blowUp(ctx, S.low);
+    if (S.black) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // film grain over everything
     const g = S.grain[Math.floor(Math.random() * S.grain.length)];
@@ -1349,7 +1544,7 @@
     S.popups = [];
     S.lights = S.lightsTarget = 0;
     S.hero.gold = S.hero.flash = S.hero.down = S.hero.dx = S.hero.away = 0;
-    S.door = S.doorTarget = S.beam = 0;
+    S.door = S.doorTarget = S.beam = S.black = 0;
     S.turned = false;
   };
 })();

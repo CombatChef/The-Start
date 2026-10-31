@@ -83,6 +83,7 @@
       stretchL: 1,
       lean: 0, // its top half towards Crispy (pixels, at its head)
       dx: 0,
+      dy: 0, // up off the floor (the ceiling drop)
       scale: 1,
       shake: 0,
       flash: 0, // 1 white, 2 red
@@ -166,6 +167,46 @@
         o.lean = 14 * out;
         o.sway = 0;
         break;
+      case 'bite':
+        o.lean = -20 * snap;
+        o.dx = -50 * snap;
+        o.scale = 1 + 0.06 * snap;
+        break;
+      case 'flicker': {
+        // while the lights are out, it moves in
+        const near = p > 0.3 && p < 0.8 ? 1 : 0;
+        o.scale = 1 + 0.18 * near;
+        o.dx = -70 * near;
+        o.lean = -10 * near;
+        break;
+      }
+      case 'bile':
+        o.lean = -10 * out;
+        o.shake = 1.5 * out;
+        o.breathe = Math.sin(C.t * 14) * 1.5 * out;
+        break;
+      case 'lure':
+        o.lean = 6 * out;
+        o.sway = 0;
+        o.shake = 0.6 * out;
+        break;
+      case 'drop': {
+        // up onto the ceiling, out of sight... and down on him
+        const up = p < 0.42 ? 1 - Math.pow(1 - p / 0.42, 3) : Math.max(0, 1 - (p - 0.42) / 0.08);
+        o.dy = -260 * up;
+        o.dx = p > 0.42 && p < 0.85 ? -70 : 0;
+        o.armL = 0.9 * up;
+        o.armR = 0.9 * up;
+        break;
+      }
+      case 'joke':
+        o.breathe = Math.sin(C.t * 22) * 1.2 * out;
+        o.lean = 5 * out;
+        break;
+      case 'lock':
+        o.lean = 16 * out;
+        o.sway = 0;
+        break;
       case 'hesitate': {
         // it raises its claws... and lets them down again, slowly
         const rise = p < 0.25 ? p / 0.25 : Math.max(0, 1 - (p - 0.25) / 0.75);
@@ -199,7 +240,7 @@
   }
 
   C.act = function (type) {
-    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, adjust: 3.6 }[type] || 0.8;
+    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, bite: 0.6, flicker: 1.0, bile: 1.0, lure: 1.6, drop: 1.3, joke: 1.3, lock: 0.9, adjust: 3.6 }[type] || 0.8;
     C.action = { type, t0: C.t, dur };
     return dur * 1000;
   };
@@ -406,17 +447,18 @@
     // on whole pixels of its own, so it stays crisp
     const snap = (v) => Math.round(v / SCALE) * SCALE;
     const sx = snap(C.x + wx + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
-    const sy = snap(C.y + wy + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
+    const floorY = snap(C.y + wy);
+    const sy = snap(C.y + wy + o.dy + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
     const sc = SCALE * o.scale * wk;
     ctx.save();
     // its shadow on the floor, and the blood it's left there
     const sh = o.scale * wk;
-    const g = ctx.createRadialGradient(sx, sy + 2, 4, sx, sy + 2, 160 * sh);
+    const g = ctx.createRadialGradient(sx, floorY + 2, 4, sx, floorY + 2, 160 * sh);
     g.addColorStop(0, `rgba(0,0,0,${0.6 * alpha})`);
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(sx, sy + 2, 160 * sh, 32 * sh, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, floorY + 2, 160 * sh, 32 * sh, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(70, 4, 8, 0.85)';
     for (const st of C.stains) ctx.fillRect(Math.round(C.x + st.x * SCALE), Math.round(C.y + st.d), Math.round(st.w * SCALE), 3);

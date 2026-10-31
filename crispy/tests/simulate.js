@@ -58,7 +58,7 @@ const POLICIES = {
     if (r < 0.38 && ok('early')) return { type: 'skill', id: 'early' };
     return { type: 'attack' };
   },
-  // Never hurts it: talks it down, shows it the photos and the door, heals, then SPAREs it.
+  // Never hurts it: opens the door, shows it who he is, talks, heals, then calls a truce.
   pacifist(b) {
     const h = b.hero;
     if (b.awaiting === 'again') return { type: 'pass' };
@@ -71,12 +71,12 @@ const POLICIES = {
     if (!b.door) return { type: 'act', id: 'door' };
     if (h.items.keys && b.foe.stage >= 3) return { type: 'item', id: 'keys' };
     if (!h.mods.some((m) => m.label === 'FEARLESS') && b.rand() < 0.2) return { type: 'act', id: 'stance' };
-    const st = b.foe.stage;
-    const talk = DATA.acts.find((a) => a.id === 'talk').mercy[st];
-    const photos = DATA.acts.find((a) => a.id === 'photos').mercy[st];
-    return { type: 'act', id: talk >= photos ? 'talk' : 'photos' };
+    const show = DATA.acts.find((a) => a.id === 'show');
+    const talk = DATA.acts.find((a) => a.id === 'talk').mercy[b.foe.stage];
+    const next = show.steps[Math.min(b.shown, show.steps.length - 1)].mercy;
+    return { type: 'act', id: b.shown < 5 || next >= talk ? 'show' : 'talk' };
   },
-  // Gets the family out, then runs.
+  // Gets the family out (the car alarm covering Erik), then runs.
   runner(b) {
     const h = b.hero;
     if (b.awaiting === 'again') return { type: 'pass' };
@@ -85,7 +85,8 @@ const POLICIES = {
       if (h.items.cheese) return { type: 'item', id: 'cheese' };
       if (h.items.choc) return { type: 'item', id: 'choc' };
     }
-    if (b.family === 1 && h.items.keys) return { type: 'item', id: 'keys' }; // the alarm covers the stairs
+    if (!b.door) return { type: 'act', id: 'door' };
+    if (b.family === 2 && h.items.keys) return { type: 'item', id: 'keys' }; // the alarm covers the stairs
     return { type: 'act', id: 'family' };
   },
   // Only ever presses ATTACK.

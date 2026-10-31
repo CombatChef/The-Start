@@ -458,6 +458,58 @@
       tone('sawtooth', [55, 90], 1.6, 2.2, 0.1, { filter: ['lowpass', 260], attack: 0.2 });
       noise(1.6, 2.4, 0.08, { f: [500, 150], attack: 0.3 });
     },
+    // the basement door's hinges
+    groan: () => tone('sawtooth', [120, 80], 0, 0.9, 0.08, { filter: ['bandpass', 450, 6], vibrato: [7, 20] }),
+    // Show it who he is: their names; a 4 AM alarm clock; bags landing; a stare-down; holding the line
+    names: () => chime(0, [523, 659, 784], 0.36, 0.06, 'sine', 0.9),
+    fourAm: () => {
+      for (let k = 0; k < 3; k++) for (let i = 0; i < 4; i++) tone('square', 1976, k * 0.5 + i * 0.07, 0.05, 0.05);
+    },
+    hands: () => {
+      for (let i = 0; i < 3; i++) thump(0.2 + i * 0.28, 95, 0.35, 0.18);
+      chime(1.0, [784, 1175], 0.1, 0.05, 'triangle', 0.6);
+    },
+    noBlink: () => {
+      tone('sine', [65, 60], 0, 2.0, 0.12, { attack: 0.5 });
+      for (let i = 0; i < 3; i++) thump(0.3 + i * 0.45, 55, 0.4, 0.15);
+      click(1.3, 0.2, 900); // it blinks
+    },
+    // its new moves
+    chomp: () => {
+      thump(0, 150, 0.55, 0.15);
+      noise(0, 0.12, 0.4, { type: 'bandpass', f: 1300, q: 2 });
+      for (let i = 0; i < 4; i++) click(0.04 + i * 0.03, 0.18, 2500 + Math.random() * 1500);
+    },
+    flicker: () => {
+      for (const at of [0.1, 0.2, 0.3, 0.55]) click(at, 0.3, 1200);
+      tone('sawtooth', 60, 0, 0.6, 0.06, { filter: ['lowpass', 400] });
+    },
+    bile: () => {
+      noise(0, 0.35, 0.3, { f: [300, 1400], q: 3, attack: 0.15 }); // the retch
+      noise(0.45, 0.2, 0.35, { f: [900, 200] }); // the splash
+      noise(0.5, 0.8, 0.08, { type: 'highpass', f: 5000, attack: 0.1 }); // it burns
+    },
+    lure: () => {
+      // a voice, almost
+      tone('sawtooth', [210, 240], 0, 0.35, 0.05, { filter: ['bandpass', 1100, 5], vibrato: [6, 9], attack: 0.05 });
+      tone('sawtooth', [250, 170], 0.42, 0.55, 0.05, { filter: ['bandpass', 800, 5], vibrato: [5, 12], attack: 0.05 });
+    },
+    drop: () => {
+      whoosh(0, 0.45, 0.25, true);
+      whoosh(0.5, 0.15, 0.4);
+      thump(0.62, 70, 0.9, 0.45);
+      noise(0.62, 0.4, 0.35, { f: [1500, 150] });
+    },
+    rimshot: () => {
+      thump(0, 200, 0.35, 0.1);
+      thump(0.16, 160, 0.35, 0.1);
+      noise(0.42, 0.5, 0.2, { type: 'highpass', f: 6000 });
+    },
+    slam: () => {
+      thump(0, 80, 0.9, 0.35);
+      noise(0, 0.15, 0.4, { f: [2000, 300] });
+      click(0.35, 0.3, 2500);
+    },
     // the end: one long, calm breath in, and out
     breath: () => {
       noise(0, 1.9, 0.09, { type: 'bandpass', f: [280, 900], q: 0.9, attack: 1.5 });

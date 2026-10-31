@@ -9,8 +9,9 @@ From crispy/assets/source/ (the photos aren't in the repo: put them there first)
   crispy_photo.webp -> Crispy as a pixel sprite in colour, from the collar up, his face turned a
   crispy_mask.png      little to the right (the mask cuts him out of the photo: make it with
                        crispy/tools/cutout.py; the pixels are kept as crispy_pixels.png once made)
-the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), and its doc
-profiles (the repo's assets/profiles/) for the HUD.
+the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), the trash bag,
+grilled cheese and sword from theirs (props_sheet.png), and the creature's doc profiles (the
+repo's assets/profiles/) for the HUD.
 """
 import base64
 import io
@@ -183,6 +184,43 @@ def creature():
     return out
 
 
+def props():
+    """The trash bag, the grilled cheese and the sword, from their pixel-art sheet (5 screen
+    pixels to each of theirs), back down to their own pixels and cut out. The bag's blood
+    pool comes off it, to go on the floor."""
+    src = np.asarray(Image.open(os.path.join(SRC, 'props_sheet.png')).convert('RGB')).astype(int)
+    px = src[2::5, 2::5]
+    fig = (np.abs(px - 40).sum(2) > 12) & ~np.all(px == 30, axis=2)  # not the background, nor the floor line
+    cols = fig.any(0)
+    spans, start = [], None
+    for x, v in enumerate(list(cols) + [False]):
+        if v and start is None:
+            start = x
+        if not v and start is not None:
+            if x - start > 5:
+                spans.append((start, x))
+            start = None
+    out = {}
+    for name, (a, b) in zip(('bag', 'cheese', 'sword'), spans):
+        m = fig[:, a:b]
+        rows = np.flatnonzero(m.any(1))
+        rgb, al = px[rows[0]:rows[-1] + 1, a:b], m[rows[0]:rows[-1] + 1].copy()
+        if name == 'bag':
+            # the pool is the red along the bottom
+            red = (rgb[..., 0] > rgb[..., 1] * 2) & (np.arange(len(rgb))[:, None] >= len(rgb) - 6)
+            pool = al & red
+            pr = np.flatnonzero(pool.any(1))
+            out['pool'] = Image.fromarray(np.dstack([rgb[pr[0]:], (pool[pr[0]:] * 255)]).astype(np.uint8))
+            al &= ~pool
+            keep = np.flatnonzero(al.any(1))
+            rgb, al = rgb[:keep[-1] + 1], al[:keep[-1] + 1]
+        img = Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))
+        if name == 'sword':
+            img = img.rotate(180)  # blade up, hilt down, like the game holds it
+        out[name] = img
+    return out
+
+
 def profiles():
     """The doc's profile of each stage, small, for the HUD."""
     return [Image.open(os.path.join(ROOT, 'assets', 'profiles', f'basswood_{i}.png')).convert('L').resize((216, 216), Image.LANCZOS) for i in range(1, 6)]
@@ -191,6 +229,7 @@ def profiles():
 if __name__ == '__main__':
     sprite, anchors = crispy()
     forms = creature()
+    things = props()
     images = {
         'night': data_url(night(1.0), 'JPEG', quality=86),
         'nightLit': data_url(night(2.6), 'JPEG', quality=86),
@@ -198,6 +237,7 @@ if __name__ == '__main__':
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],
         'creatureMeta': [m for _, m in forms],
+        'props': {k: data_url(v) for k, v in things.items()},
         'profiles': [data_url(p) for p in profiles()],
     }
     with open(os.path.join(CRISPY, 'js', 'images.js'), 'w') as f:

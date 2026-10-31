@@ -15,13 +15,17 @@
   window.UI.init();
 
   const ctx = document.getElementById('scene').getContext('2d');
+  const fx = document.getElementById('fx').getContext('2d');
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     window.CREATURE.update(dt);
     window.SCENE.update(dt);
-    if (window.SCENE.bg.complete) window.SCENE.draw(ctx);
+    if (window.SCENE.bg.complete) {
+      window.SCENE.draw(ctx);
+      window.SCENE.drawFx(fx);
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

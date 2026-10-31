@@ -1,11 +1,18 @@
 /*
- * The scene: the living room at night (grainy, the lights able to come up), Crispy on the left,
- * the creature on the rug, and a screen effect for every move, item and act, drawn with little
- * pixel-art props (a trash bag, the Buster Sword, a gavel, the RG 405M, a wine glass...).
+ * The scene: Chris's living room at night (grainy, darker, the lights able to come up), the
+ * creature standing in it, and a screen effect for every move, item and act. Everything but the
+ * room is drawn at a third of the resolution and blown up, so the effects, the numbers and the
+ * creature are all the same chunky pixels; even their see-through parts are dithered. The props
+ * are pixel art: the trash bag, the grilled cheese and the sword from their sheet, and little
+ * ones drawn here (a gavel, the RG 405M, a wine glass...).
  */
 (function () {
   const W = 1280;
   const H = 960;
+  const PX = 3; // screen pixels to each of the effects' pixels
+  const LW = Math.ceil(W / PX);
+  const LH = H / PX;
+  const FONT = '"Pixelify Sans", "Courier New", monospace';
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const ease = (p) => 1 - Math.pow(1 - p, 3);
   const A = () => window.AUDIO;
@@ -22,17 +29,13 @@
     popups: [],
     splats: [], // blood on the screen while it ADJUSTS
     real: false, // the sword is real
-    hero: { x: 40, y: 422, scale: 7, shake: 0, flash: 0, dx: 0, gold: 0, afraid: false, critical: false, down: 0 },
+    hero: { shake: 0, flash: 0, dx: 0, gold: 0, afraid: false, critical: false, down: 0 }, // his portrait's state
   };
   window.SCENE = S;
 
   // ------------------------------------------------------------------ pixel props
   // Little pixel-art sprites: rows of characters, one colour each.
   const PROPS = {
-    bag: {
-      pal: { k: '#15171a', g: '#4a5058', h: '#6b737d', y: '#f2c230', Y: '#b88c18' },
-      rows: ['......yy........', '.....yYYy.......', '......kk........', '.....kkkk.......', '....kkkkkk......', '...kkkgkkkk.....', '..kkkgkkkkkk....', '.kkkhkkkkkkkk...', '.kkgkkkkkkkkk...', 'kkkgkkkkkkkkkk..', 'kkkkkkkkkkkkkk..', 'kkkkkkkkkkkgkk..', 'kkkkkkkkkkgkkk..', '.kkkkkkkkgkkkk..', '.kkkkkkkkkkkkk..', '..kkkkkkkkkkk...', '...kkkkkkkkk....', '.....kkkkk......'],
-    },
     gavel: {
       pal: { b: '#8a5a2e', d: '#5e3b1d', l: '#b07a45', y: '#d9b04a' },
       rows: ['..llllllll....', '.lbbbbbbbbd...', 'ylbbbbbbbbdy..', 'ylbbbbbbbbdy..', '.lbbbbbbbbd...', '..dddddddd....', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....dd.......'],
@@ -48,10 +51,6 @@
     choc: {
       pal: { f: '#d0d3d6', F: '#9da2a7', b: '#4a2a18', B: '#6b3d22', h: '#86502c' },
       rows: ['ffffbbbbbbbbbb', 'FffFbBhbBhbBhb', 'ffffbBBbBBbBBb', 'FffFbbbbbbbbbb', 'ffffbBhbBhbBhb', 'FffFbBBbBBbBBb', 'ffffbbbbbbbbbb'],
-    },
-    cheese: {
-      pal: { c: '#a8661f', b: '#d9a441', B: '#e8bd5c', y: '#ffd34d', Y: '#ffe68a' },
-      rows: ['cccccccccccccc', 'cbbbBbbbbbBbbc', 'cbBbbbbBbbbbbc', 'yyyyyyyyyyyyyy', 'yYyyyyYyyyyYyy', 'cbbbbBbbbbbbbc', 'cbBbbbbbbBbbbc', 'cccccccccccccc', '..y....y...y..', '..y.........y.'],
     },
     pill: {
       pal: { w: '#f4f4f4', o: '#f08a2e', O: '#c96a1a', g: '#c9c9c9' },
@@ -92,54 +91,42 @@
     }));
     return c;
   }
-  // The Hard Foam Buster Sword (or the real one): pointing up, its hilt at the bottom.
-  function swordSprite(real) {
-    const c = document.createElement('canvas');
-    c.width = 16;
-    c.height = 64;
-    const x = c.getContext('2d');
-    const P = real ? { o: '#0f1114', m: '#9fb0c2', l: '#dfe8f1', h: '#ffffff', e: '#6f8195' } : { o: '#15171a', m: '#8f959c', l: '#bcc1c6', h: '#dfe2e5', e: '#6d7278' };
-    const px = (cx, cy, col) => {
-      x.fillStyle = col;
-      x.fillRect(cx, cy, 1, 1);
-    };
-    for (let y = 0; y < 46; y++) {
-      // the broad blade, cut off at a slant for its tip
-      const left = 3;
-      const right = y < 8 ? 3 + Math.round((12 - 3) * (y / 8)) : 12;
-      for (let i = left; i <= right; i++) {
-        let col = P.m;
-        if (i === left || i === right || y === 0) col = P.o;
-        else if (i === left + 1) col = P.h;
-        else if (i <= left + 4) col = P.l;
-        else if (i === right - 1) col = P.e;
-        px(i, y, col);
-      }
-    }
-    // the two holes near the guard
-    for (const hy of [34, 39]) for (let i = 5; i <= 7; i++) for (let j = hy; j <= hy + 2; j++) px(i, j, '#0b0c0e');
-    for (let i = 0; i < 16; i++) for (let j = 46; j <= 48; j++) px(i, j, j === 46 || i === 0 || i === 15 ? '#15171a' : real ? '#b7c2cc' : '#7c8288');
-    for (let j = 49; j <= 59; j++) for (let i = 6; i <= 9; i++) px(i, j, i === 6 || i === 9 ? '#121214' : j % 3 ? '#2b2b2e' : '#4a4a50');
-    for (let i = 5; i <= 10; i++) for (let j = 60; j <= 62; j++) px(i, j, '#5b6066');
-    return c;
-  }
-
   // ------------------------------------------------------------------ setup
   S.init = function (images) {
     S.bg = new Image();
     S.bg.src = images.night;
     S.bgLit = new Image();
     S.bgLit.src = images.nightLit;
-    S.me = new Image();
-    S.me.src = images.crispy;
-    S.me.onload = () => {
-      // his silhouette in red (hurt) and gold (fearless, willpower)
-      S.meRed = tinted(S.me, '#ff2b2b');
-      S.meGold = tinted(S.me, '#ffcf4a');
-    };
     for (const k in PROPS) sprites[k] = pixelSprite(PROPS[k]);
-    sprites.sword = swordSprite(false);
-    sprites.swordReal = swordSprite(true);
+    // the trash bag, the grilled cheese and the sword, from their sheet. The game's sword is
+    // foam, so it's the sheet's sword greyed and lightened, until Taste of Reality makes it real.
+    for (const [k, src] of Object.entries(images.props)) {
+      const im = new Image();
+      im.onload = () => {
+        sprites[k] = im;
+        if (k === 'sword') {
+          const c = document.createElement('canvas');
+          c.width = im.width;
+          c.height = im.height;
+          const x = c.getContext('2d');
+          x.filter = 'grayscale(0.85) brightness(1.3) contrast(0.85)';
+          x.drawImage(im, 0, 0);
+          sprites.swordReal = im;
+          sprites.sword = c;
+        }
+      };
+      im.src = src;
+    }
+    // the layers everything but the room is drawn on, small: the creature (under the HUD), and
+    // the effects (over it)
+    const layer = () => {
+      const c = document.createElement('canvas');
+      c.width = LW;
+      c.height = LH;
+      return { c, x: c.getContext('2d', { willReadFrequently: true }) };
+    };
+    S.low = layer();
+    S.lowFx = layer();
     // film grain, a few frames of it to cycle through
     S.grain = [];
     for (let k = 0; k < 6; k++) {
@@ -156,21 +143,11 @@
       S.grain.push(c);
     }
   };
-  function tinted(im, color) {
-    const c = document.createElement('canvas');
-    c.width = im.width;
-    c.height = im.height;
-    const x = c.getContext('2d');
-    x.drawImage(im, 0, 0);
-    x.globalCompositeOperation = 'source-atop';
-    x.fillStyle = color;
-    x.fillRect(0, 0, c.width, c.height);
-    return c;
-  }
 
   // ------------------------------------------------------------------ positions
   const C = () => window.CREATURE;
-  S.heroPoint = (k) => ({ head: [210, 560], chest: [210, 700], eyes: [215, 610], side: [330, 640] }[k] || [210, 620]);
+  // Crispy's portrait, in his box at the bottom left
+  S.heroPoint = (k) => ({ head: [160, 600], chest: [160, 690], eyes: [165, 620], side: [330, 640] }[k] || [160, 640]);
   S.foePoint = (k) => C().point(k);
 
   // ------------------------------------------------------------------ effects
@@ -197,7 +174,7 @@
   }
   function bigText(ctx, text, x, y, size, fill, o = {}) {
     ctx.save();
-    ctx.font = `${o.weight || 800} ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    ctx.font = `${o.weight || 700} ${size}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (o.rot) {
@@ -207,7 +184,7 @@
     }
     ctx.globalAlpha = o.alpha != null ? o.alpha : 1;
     ctx.lineJoin = 'round';
-    ctx.lineWidth = size * 0.16;
+    ctx.lineWidth = Math.max(PX * 2, size * 0.18);
     ctx.strokeStyle = o.stroke || '#0b0b0d';
     ctx.strokeText(text, x, y);
     ctx.fillStyle = fill;
@@ -282,7 +259,7 @@
       ctx.arc(px, py, 300, Math.max(-0.9, a - 1.3) - Math.PI / 2, a - Math.PI / 2);
       ctx.stroke();
       ctx.restore();
-      drawSprite(ctx, real ? 'swordReal' : 'sword', px, py, 7, { rot: a, ax: 0.5, ay: 0.85, alpha: fade });
+      drawSprite(ctx, real ? 'swordReal' : 'sword', px, py, PX, { rot: a, ax: 0.5, ay: 0.9, alpha: fade });
       if (real && p > 0.3 && p < 0.6) {
         ctx.save();
         ctx.strokeStyle = '#ffffff';
@@ -313,7 +290,7 @@
         const y = 600 - Math.sin(q * Math.PI) * 330 + (cy - 600) * q;
         const squash = p > 0.55 && p < 0.75 ? 1 - Math.sin(((p - 0.55) / 0.2) * Math.PI) * 0.3 : 1;
         const fade = 1 - clamp((p - 0.82) / 0.18, 0, 1);
-        drawSprite(ctx, 'bag', x, y, 8, { rot: q * 4.2, sx: 1 / squash, sy: squash, alpha: fade });
+        drawSprite(ctx, 'bag', x, y, PX, { rot: q * 2.6, sx: 1 / squash, sy: squash, alpha: fade });
       });
     },
     tear() {
@@ -361,10 +338,10 @@
         ctx.fillRect(0, 0, W, H);
         // the alarm clock, ringing
         const shake = Math.sin(S.t * 80) * 6 * (p < 0.6 ? 1 : 0);
-        drawSprite(ctx, 'clock', 640 + shake, 170, 8, { alpha: a });
+        drawSprite(ctx, 'clock', 640 + shake, 170, PX * 3, { alpha: a });
         // a bird, flying across
         const bx = -60 + p * (W + 120);
-        drawSprite(ctx, Math.floor(S.t * 10) % 2 ? 'bird' : 'bird2', bx, 260 + Math.sin(p * 9) * 30, 6, { alpha: Math.min(1, a * 2) });
+        drawSprite(ctx, Math.floor(S.t * 10) % 2 ? 'bird' : 'bird2', bx, 260 + Math.sin(p * 9) * 30, PX * 2, { alpha: Math.min(1, a * 2) });
         // up for Crispy, down for it
         for (let i = 0; i < 3; i++) {
           const yy = ((p * 220 + i * 70) % 220);
@@ -381,7 +358,7 @@
         const drop = ease(clamp(p / 0.3, 0, 1));
         const lift = p > 0.4 && p < 0.55 ? Math.sin(((p - 0.4) / 0.15) * Math.PI) * 0.5 : 0;
         const ang = -1.2 + drop * 1.2 - lift;
-        drawSprite(ctx, 'gavel', x + 40, y - 40, 9, { rot: ang, ax: 0.45, ay: 0.95, alpha: 1 - clamp((p - 0.85) / 0.15, 0, 1) });
+        drawSprite(ctx, 'gavel', x + 40, y - 40, PX * 3, { rot: ang, ax: 0.45, ay: 0.95, alpha: 1 - clamp((p - 0.85) / 0.15, 0, 1) });
         if (p > 0.28) {
           const q = (p - 0.28) / 0.72;
           ctx.save();
@@ -404,7 +381,7 @@
       const oy = 640;
       return add(1700, (ctx, p) => {
         const rise = ease(clamp(p / 0.25, 0, 1));
-        drawSprite(ctx, 'rg', ox, oy + 80 - 80 * rise, 7, { alpha: 1 - clamp((p - 0.88) / 0.12, 0, 1) });
+        drawSprite(ctx, 'rg', ox, oy + 80 - 80 * rise, PX * 3, { alpha: 1 - clamp((p - 0.88) / 0.12, 0, 1) });
         if (p > 0.18 && p < 0.3) {
           ctx.fillStyle = `rgba(160,235,255,${0.5 - (p - 0.18) * 4})`;
           ctx.fillRect(ox - 60, oy - 30, 120, 50);
@@ -444,7 +421,7 @@
         ctx.rotate(tilt);
         ctx.imageSmoothingEnabled = false;
         const sp = sprites.glass;
-        const sc = 9;
+        const sc = PX * 3;
         ctx.globalAlpha = 1 - clamp((p - 0.9) / 0.1, 0, 1);
         // empty glass (wine rows hidden above the fill line)
         const rows = Math.round(4 * fill);
@@ -501,11 +478,11 @@
         ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
         ctx.fillRect(0, 0, W, H);
         const real = p > 0.45;
-        drawSprite(ctx, real ? 'swordReal' : 'sword', 640, 470, 9, { alpha: Math.min(1, a * 2.5) });
+        drawSprite(ctx, real ? 'swordReal' : 'sword', 640, 440, PX + 1, { alpha: Math.min(1, a * 2.5) });
         // a shine runs up the blade
         if (p > 0.12 && p < 0.45) {
           const q = (p - 0.12) / 0.33;
-          const y = 470 + 288 - q * 576;
+          const y = 440 + 290 - q * 580;
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -517,7 +494,7 @@
           ctx.fillRect(0, 0, W, H);
         }
         if (real) {
-          star(ctx, 640 + 8, 470 - 280, 30 + Math.sin(S.t * 20) * 8, '#ffffff');
+          star(ctx, 640, 440 - 270, 30 + Math.sin(S.t * 20) * 8, '#ffffff');
           bigText(ctx, 'TASTE OF REALITY', 640, 820 - 30 * ease(clamp((p - 0.45) * 4, 0, 1)), 80, '#dff1ff', { stroke: '#10304a', alpha: Math.min(1, (p - 0.45) * 5) * (1 - clamp((p - 0.85) / 0.15, 0, 1)) });
         }
       });
@@ -651,7 +628,7 @@
           ctx.fillRect(xx, 300 + ((i * 53) % 120), 10, 500);
         }
         ctx.restore();
-        bigText(ctx, 'FEARLESS', x, y - 160, 76, '#ffd86b', { stroke: '#4a2a00', alpha: a });
+        bigText(ctx, 'FEARLESS', x + 150, y - 150, 76, '#ffd86b', { stroke: '#4a2a00', alpha: a });
       });
     },
     talk() {
@@ -687,7 +664,7 @@
       const crumbs = particles(14, 400, 600, (i, a, b) => ({ vx: (a - 0.5) * 300, vy: -b * 300 }));
       return add(1200, (ctx, p) => {
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
-        drawSprite(ctx, 'choc', 400, 600 - ease(Math.min(1, p * 4)) * 30, 9, { alpha: a });
+        drawSprite(ctx, 'choc', 400, 600 - ease(Math.min(1, p * 4)) * 30, PX * 3, { alpha: a });
         if (p > 0.38) {
           // the bite out of it
           ctx.fillStyle = '#14161a';
@@ -708,20 +685,20 @@
       return add(1400, (ctx, p) => {
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
         const y = 600 - ease(Math.min(1, p * 4)) * 30;
-        drawSprite(ctx, 'cheese', 400, y, 9, { alpha: a });
+        drawSprite(ctx, 'cheese', 430, y, PX, { alpha: a });
         // steam
         ctx.strokeStyle = `rgba(255,255,255,${0.5 * a})`;
         ctx.lineWidth = 6;
         for (let i = 0; i < 3; i++) {
           ctx.beginPath();
-          for (let k = 0; k < 10; k++) ctx.lineTo(370 + i * 30 + Math.sin(S.t * 5 + k * 0.8 + i) * 8, y - 60 - k * 12);
+          for (let k = 0; k < 10; k++) ctx.lineTo(400 + i * 30 + Math.sin(S.t * 5 + k * 0.8 + i) * 8, y - 80 - k * 12);
           ctx.stroke();
         }
         // the cheese pull
         if (p > 0.45) {
           const q = Math.min(1, (p - 0.45) * 3);
           ctx.fillStyle = `rgba(255,211,77,${a})`;
-          ctx.fillRect(330, y - 10, 10, 10 + q * 90);
+          ctx.fillRect(345, y + 20, 9, 10 + q * 90);
         }
       });
     },
@@ -730,8 +707,8 @@
       const [x, y] = S.heroPoint('head');
       return add(1200, (ctx, p) => {
         const a = 1 - clamp((p - 0.8) / 0.2, 0, 1);
-        drawSprite(ctx, 'pill', x - 30, y - 60 - Math.sin(p * Math.PI) * 120, 8, { rot: p * 8, alpha: a });
-        drawSprite(ctx, 'pill', x + 50, y - 50 - Math.sin(p * Math.PI) * 140, 8, { rot: -p * 9, alpha: a });
+        drawSprite(ctx, 'pill', x - 30, y - 60 - Math.sin(p * Math.PI) * 120, PX * 3, { rot: p * 8, alpha: a });
+        drawSprite(ctx, 'pill', x + 50, y - 50 - Math.sin(p * Math.PI) * 140, PX * 3, { rot: -p * 9, alpha: a });
         for (let i = 0; i < 6; i++) {
           const an = (i / 6) * Math.PI * 2 + S.t * 2;
           star(ctx, x + Math.cos(an) * 150 * p, y + Math.sin(an) * 110 * p, 16 * a, '#fff6c2');
@@ -744,7 +721,7 @@
       C().act('distracted');
       return add(2100, (ctx, p) => {
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
-        drawSprite(ctx, 'keys', 400 + Math.sin(S.t * 40) * (p < 0.3 ? 6 : 0), 600, 8, { alpha: a, rot: Math.sin(S.t * 30) * 0.15 });
+        drawSprite(ctx, 'keys', 400 + Math.sin(S.t * 40) * (p < 0.3 ? 6 : 0), 600, PX * 3, { alpha: a, rot: Math.sin(S.t * 30) * 0.15 });
         if (p > 0.3) windowsFlash(ctx, p);
         if (p > 0.35) bigText(ctx, 'WEE-OOO WEE-OOO', 760, 300, 64, Math.floor(S.t * 6) % 2 ? '#ff6a3c' : '#ffd23f', { alpha: a, rot: -0.04 });
       });
@@ -764,7 +741,7 @@
       sfx('spare');
       return add(1500, (ctx, p) => {
         const a = Math.sin(Math.PI * p);
-        drawSprite(ctx, 'flag', 400, 560, 9, { alpha: a, sx: 1 + Math.sin(S.t * 8) * 0.06 });
+        drawSprite(ctx, 'flag', 400, 560, PX * 3, { alpha: a, sx: 1 + Math.sin(S.t * 8) * 0.06 });
       });
     },
   };
@@ -832,9 +809,10 @@
     return add(dur, (ctx, p) => {
       if (Math.random() < 0.5 * k) {
         for (let i = 0; i < 6; i++) {
-          const y = Math.random() * H;
-          const h = 4 + Math.random() * 30;
-          ctx.drawImage(ctx.canvas, 0, y, W, h, (Math.random() - 0.5) * 60 * k, y, W, h);
+          const y = Math.floor(Math.random() * LH);
+          const h = 1 + Math.floor(Math.random() * 10);
+          // a slice of the room and the creature, slipped sideways
+          ctx.drawImage(document.getElementById('scene'), 0, y * PX, W, h * PX, (Math.random() - 0.5) * 60 * k, y * PX, W, h * PX);
         }
       }
       void p;
@@ -920,7 +898,7 @@
       const a = 2.3 - ease(clamp(p / 0.6, 0, 1)) * 2.9;
       ctx.save();
       ctx.filter = 'brightness(0.15) sepia(1) hue-rotate(-50deg) saturate(3)';
-      drawSprite(ctx, 'sword', x + 200, y - 260, 7, { rot: a, ay: 0.98, alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
+      drawSprite(ctx, 'swordReal', x + 220, y - 260, PX, { rot: a, ay: 0.9, alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
       ctx.restore();
     });
   }
@@ -1052,11 +1030,46 @@
     if (!S.effects.length) S.flicker = 0;
   };
 
-  S.draw = function (ctx) {
+  // The see-through parts of the effects layer, dithered to solid or nothing, like old pixel art.
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) * 16);
+  function dither(lctx) {
+    const d = lctx.getImageData(0, 0, LW, LH);
+    const px = d.data;
+    for (let y = 0; y < LH; y++) {
+      const row = (y & 3) * 4;
+      for (let x = 0; x < LW; x++) {
+        const k = (y * LW + x) * 4 + 3;
+        const a = px[k];
+        if (a === 0 || a === 255) continue;
+        px[k] = a > BAYER[row + (x & 3)] ? 255 : 0;
+      }
+    }
+    lctx.putImageData(d, 0, 0);
+  }
+  function begin(layer, ox, oy) {
+    const l = layer.x;
+    l.setTransform(1, 0, 0, 1, 0, 0);
+    l.clearRect(0, 0, LW, LH);
+    l.setTransform(1 / PX, 0, 0, 1 / PX, ox / PX, oy / PX);
+    l.imageSmoothingEnabled = false;
+    return l;
+  }
+  function blowUp(ctx, layer) {
+    dither(layer.x);
     ctx.save();
-    if (S.shake) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
-    if (S.wobble) ctx.translate(Math.sin(S.t * 7) * S.wobble, Math.cos(S.t * 5) * S.wobble * 0.5);
-    // the room, and the lights when they're up (or flickering)
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(layer.c, 0, 0, LW * PX, LH * PX);
+    ctx.restore();
+  }
+
+  S.draw = function (ctx) {
+    const sx = S.shake ? Math.round(((Math.random() - 0.5) * S.shake) / PX) * PX : 0;
+    const sy = S.shake ? Math.round(((Math.random() - 0.5) * S.shake) / PX) * PX : 0;
+    const wx = S.wobble ? Math.round((Math.sin(S.t * 7) * S.wobble) / PX) * PX : 0;
+    const wy = S.wobble ? Math.round((Math.cos(S.t * 5) * S.wobble * 0.5) / PX) * PX : 0;
+    // the room (darker still), and the lights when they're up (or flickering)
+    ctx.save();
+    ctx.translate(sx + wx, sy + wy);
     ctx.drawImage(S.bg, -8, -8, W + 16, H + 16);
     const lit = Math.max(S.lights, S.flicker);
     if (lit > 0.01) {
@@ -1065,19 +1078,15 @@
       ctx.globalAlpha = 1;
     }
     // the lamp's light breathes a little
-    const breathe = 0.04 + Math.max(0, Math.sin(S.t * 0.7) * Math.sin(S.t * 2.3)) * 0.05;
-    ctx.fillStyle = `rgba(0,0,0,${breathe})`;
-    ctx.fillRect(0, 0, W, H);
-
-    C().draw(ctx);
-    drawHero(ctx);
-    for (const e of S.effects) if (!e.top) e.draw(ctx, clamp((S.t - e.t0) / e.dur, 0, 1));
-    for (const q of S.popups) {
-      const p = (S.t - q.t0) / q.dur;
-      bigText(ctx, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 60, q.size * (p < 0.1 ? 1 + (0.1 - p) * 4 : 1), q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
-    }
-    for (const e of S.effects) if (e.top) e.draw(ctx, clamp((S.t - e.t0) / e.dur, 0, 1));
+    const dark = 0.42 * (1 - 0.65 * lit) + Math.max(0, Math.sin(S.t * 0.7) * Math.sin(S.t * 2.3)) * 0.05;
+    ctx.fillStyle = `rgba(0,0,0,${dark})`;
+    ctx.fillRect(-8, -8, W + 16, H + 16);
     ctx.restore();
+
+    // the creature, at a third of the resolution
+    C().draw(begin(S.low, sx + wx, sy + wy));
+    blowUp(ctx, S.low);
+
     // film grain over everything
     const g = S.grain[Math.floor(Math.random() * S.grain.length)];
     ctx.save();
@@ -1087,34 +1096,47 @@
     const oy = Math.floor(Math.random() * 256);
     for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) ctx.drawImage(g, x, y);
     ctx.restore();
+    portrait();
+    S.shakeAt = [sx + wx, sy + wy];
   };
 
-  function drawHero(ctx) {
+  // The effects and the numbers, over the HUD, at a third of the resolution.
+  S.drawFx = function (ctx) {
+    ctx.clearRect(0, 0, W, H);
+    if (!S.effects.length && !S.popups.length) return;
+    const [ox, oy] = S.shakeAt || [0, 0];
+    const l = begin(S.lowFx, ox, oy);
+    for (const e of S.effects) if (!e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
+    for (const q of S.popups) {
+      const p = (S.t - q.t0) / q.dur;
+      bigText(l, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 60, q.size * (p < 0.1 ? 1 + (0.1 - p) * 4 : 1), q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
+    }
+    for (const e of S.effects) if (e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
+    blowUp(ctx, S.lowFx);
+  };
+
+  // Crispy's portrait in his box: it shakes and flashes red when he's hit, trembles when he's
+  // AFRAID, glows gold when he's FEARLESS or gets back up, pulses red when he's CRITICAL, and
+  // drops when he falls. He breathes: up a pixel, down a pixel.
+  let pic;
+  function portrait() {
+    pic = pic || document.getElementById('me-pic');
+    if (!pic) return;
     const h = S.hero;
-    if (!S.me.complete) return;
-    const sc = h.scale;
-    const w = S.me.width * sc;
-    const hh = S.me.height * sc;
-    // he breathes: up a pixel, down a pixel
-    const bob = Math.sin(S.t * 2.4) > 0.3 ? -sc : 0;
-    let x = h.x + h.dx;
-    let y = h.y + bob + h.down * 140;
-    if (h.shake > 0.5) x += (Math.random() - 0.5) * h.shake * 2;
-    if (h.afraid) x += Math.round((Math.random() - 0.5) * 3) * 2;
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    if (h.gold > 0.01 && S.meGold) {
-      ctx.globalAlpha = Math.min(1, h.gold) * 0.8;
-      for (const [dx, dy] of [[-sc, 0], [sc, 0], [0, -sc], [0, sc]]) ctx.drawImage(S.meGold, x + dx, y + dy, w, hh);
-      ctx.globalAlpha = 1;
+    const k = 5; // his pixels, on screen
+    let x = h.dx;
+    const y = (Math.sin(S.t * 2.4) > 0.3 ? -k : 0) + h.down * 240;
+    if (h.shake > 0.5) x += Math.round(((Math.random() - 0.5) * h.shake * 2) / k) * k;
+    if (h.afraid) x += Math.round(Math.random() - 0.5) * k;
+    pic.style.transform = `translate(${x}px, ${y}px)`;
+    const red = Math.max(h.flash, h.critical ? 0.25 + Math.sin(S.t * 4) * 0.15 : 0);
+    const f = [];
+    if (red > 0.02) f.push(`sepia(${red}) saturate(${1 + red * 5}) hue-rotate(-${red * 40}deg) brightness(${1 + red * 0.3})`);
+    if (h.gold > 0.02) {
+      const c = `rgba(255,207,74,${Math.min(1, h.gold)})`;
+      f.push(`drop-shadow(${k}px 0 0 ${c}) drop-shadow(-${k}px 0 0 ${c}) drop-shadow(0 ${k}px 0 ${c}) drop-shadow(0 -${k}px 0 ${c})`);
     }
-    ctx.drawImage(S.me, x, y, w, hh);
-    const red = Math.max(h.flash, h.critical ? 0.18 + Math.sin(S.t * 4) * 0.12 : 0);
-    if (red > 0.01 && S.meRed) {
-      ctx.globalAlpha = Math.min(0.75, red);
-      ctx.drawImage(S.meRed, x, y, w, hh);
-    }
-    ctx.restore();
+    pic.style.filter = f.join(' ') || 'none';
   }
 
   S.hitHero = function () {

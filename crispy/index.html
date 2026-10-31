@@ -6,7 +6,7 @@
     <title>Crispy vs The Creature</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
@@ -16,64 +16,55 @@
 
         <div id="hud">
           <header id="topbar">
-            <div class="recycle" aria-hidden="true">
-              <svg viewBox="0 0 32 32"><path d="M16 3l5 8h-3.5l-1.5-2.5L13 14l-3-1.7L16 3zm9.3 14.5l3.5 6.2c.6 1-.2 2.3-1.4 2.3H21v3l-4.5-5 4.5-5v3h5l-3.7-6.4 3-1.7zM6.7 17.5l3 1.7L6 25.6h5v-3l4.5 5-4.5 5v-3H4.6c-1.2 0-2-1.3-1.4-2.3l3.5-6.3z" /></svg>
-            </div>
-            <div class="dept"><b>DEPT. OF SANITATION</b><span>HOUSEHOLD DIVISION · NIGHT SHIFT</span></div>
-            <div class="led" id="round">ROUND 01</div>
-            <div class="spacer"></div>
-            <button class="knob" id="btn-music" title="Music">MUSIC</button>
-            <button class="knob" id="btn-sfx" title="Sound effects">SOUND</button>
+            <span class="hazard" aria-hidden="true"></span>
+            <span class="where">CHRIS'S LIVING ROOM · 2:47 AM</span>
+            <span class="round" id="round">ROUND 01</span>
+            <span class="spacer"></span>
+            <button class="toggle" id="btn-music">MUSIC</button>
+            <button class="toggle" id="btn-sfx">SOUND</button>
           </header>
 
-          <section id="foe">
+          <section id="foe" class="box">
             <img id="foe-pic" alt="" />
             <div class="foe-info">
               <div class="foe-name"><span id="foe-name">The Creature</span> <span id="foe-tag">(Stage 1)</span></div>
               <div class="foe-state" id="foe-state">[GOOD]</div>
-              <div class="timer" id="foe-timer"><span class="dial"></span><span class="tlabel">ADJUST IN</span><b id="foe-turns">3</b></div>
+              <div class="timer" id="foe-timer"><i class="clock"></i><span>ADJUST IN</span><b id="foe-turns">3</b></div>
               <div class="tags" id="foe-tags"></div>
             </div>
           </section>
 
-          <section id="console">
-            <div id="card">
-              <div class="idstrip"><span>SANITATION</span><span>EMPLOYEE ID 0099</span></div>
-              <div class="cardbody">
-                <div class="vital">
-                  <div class="heart" id="heart"></div>
-                  <div class="hpword" id="hp-word">[OK]</div>
-                </div>
-                <div class="stats">
-                  <div class="nameline"><b>CRISPY SOTO</b><span>LV 99</span></div>
-                  <div class="hpnum" id="hp-num">HP 280/280</div>
-                  <div class="spline">
-                    <label>SP</label>
-                    <div class="tank"><div id="sp-fill"></div></div>
-                    <span id="sp-num">100</span>
-                  </div>
-                  <div class="pilot" id="pilot"><span class="flame"></span><span>PILOT LIGHT</span></div>
-                </div>
-              </div>
-              <div class="tags" id="hero-tags"></div>
+          <section id="me" class="box">
+            <div class="portrait"><img id="me-pic" alt="Crispy" /></div>
+            <div class="name"><b>CRISPY</b><span>LV 99 · SANITATION</span></div>
+            <div class="vital">
+              <i class="heart" id="heart"></i>
+              <span class="hpword" id="hp-word">[OK]</span>
+              <span class="num" id="hp-num">280/280</span>
             </div>
+            <div class="bar hp"><i id="hp-fill"></i></div>
+            <div class="vital sp"><span class="label">SP</span><span class="num" id="sp-num">100/100</span></div>
+            <div class="bar sp"><i id="sp-fill"></i></div>
+            <div class="pilot" id="pilot"><i class="flame"></i><span>PILOT LIGHT · WILLPOWER</span></div>
+            <div class="tags" id="hero-tags"></div>
+          </section>
 
-            <div id="lcd">
-              <div id="log"></div>
-              <div id="menu" hidden></div>
-              <div id="desc"></div>
-            </div>
+          <section id="lcd" class="box">
+            <div id="log"></div>
+            <div id="menu" hidden></div>
+            <div id="desc"></div>
+          </section>
 
-            <div id="keypad">
-              <button data-cmd="fight"><i class="ic ic-fight"></i><span>FIGHT</span><em></em></button>
-              <button data-cmd="skill"><i class="ic ic-skill"></i><span>SKILL</span><em></em></button>
-              <button data-cmd="act"><i class="ic ic-act"></i><span>ACT</span><em></em></button>
-              <button data-cmd="item"><i class="ic ic-item"></i><span>ITEM</span><em></em></button>
-              <button data-cmd="mercy"><i class="ic ic-mercy"></i><span>MERCY</span><em></em></button>
-            </div>
+          <section id="keypad" class="box">
+            <button data-cmd="fight"><i class="ptr"></i>FIGHT</button>
+            <button data-cmd="skill"><i class="ptr"></i>SKILL</button>
+            <button data-cmd="act"><i class="ptr"></i>ACT</button>
+            <button data-cmd="item"><i class="ptr"></i>ITEM</button>
+            <button data-cmd="mercy"><i class="ptr"></i>MERCY</button>
           </section>
         </div>
 
+        <canvas id="fx" width="1280" height="960"></canvas>
         <div id="screen"></div>
       </div>
     </div>

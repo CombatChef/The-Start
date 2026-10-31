@@ -13,7 +13,7 @@
   const BH = 300;
   const FX = 150; // where its feet go in the buffer
   const FY = 294;
-  const SCALE = 2;
+  const SCALE = 3; // screen pixels to each of its pixels
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   const C = {
@@ -27,8 +27,8 @@
     dissolve: null,
     lights: 0,
     ready: false,
-    x: 690, // its feet, on the stage
-    y: 742,
+    x: 702, // its feet, on the stage (behind the battle box: it's close)
+    y: 906,
     forms: [],
   };
   window.CREATURE = C;
@@ -95,13 +95,11 @@
     const out = Math.sin(Math.PI * p); // out and back
     const snap = p < 0.35 ? p / 0.35 : Math.max(0, 1 - (p - 0.35) / 0.65); // fast out, slow back
     switch (a.type) {
+      // its basic attacks: it doesn't move, the claws just land
       case 'claw':
       case 'rake':
       case 'mimic':
       case 'pat':
-        o.armL = 1.2 * snap;
-        o.stretchL = 1 + 0.25 * snap;
-        o.lean = -14 * snap;
         break;
       case 'reach':
       case 'grab':
@@ -365,17 +363,19 @@
     }
     bctx.putImageData(img, 0, 0);
 
-    const sx = C.x + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0);
-    const sy = C.y + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0);
+    // on whole pixels of its own, so it stays crisp
+    const snap = (v) => Math.round(v / SCALE) * SCALE;
+    const sx = snap(C.x + o.dx + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE : 0));
+    const sy = snap(C.y + (o.shake ? (Math.random() - 0.5) * o.shake * SCALE * 0.5 : 0));
     const sc = SCALE * o.scale;
     ctx.save();
     // its shadow on the floor, and the blood it's left there
-    const g = ctx.createRadialGradient(sx, sy + 2, 4, sx, sy + 2, 110 * o.scale);
+    const g = ctx.createRadialGradient(sx, sy + 2, 4, sx, sy + 2, 160 * o.scale);
     g.addColorStop(0, 'rgba(0,0,0,0.6)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(sx, sy + 2, 110 * o.scale, 22 * o.scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 2, 160 * o.scale, 32 * o.scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(70, 4, 8, 0.85)';
     for (const st of C.stains) ctx.fillRect(Math.round(C.x + st.x * SCALE), Math.round(C.y + st.d), Math.round(st.w * SCALE), 3);

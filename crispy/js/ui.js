@@ -1,8 +1,8 @@
 /*
- * The HUD and the flow of the fight: the menus (FIGHT, SKILL, ACT, ITEM, MERCY) on the
- * keypad and the LCD, Crispy's ID badge (his health shown as on SlashCo VR's HUD: a coloured
- * word under a heart), the creature's panel, and playing out each turn's events: the log,
- * the effects, the hits.
+ * The HUD and the flow of the fight: the commands (FIGHT, SKILL, ACT, ITEM, MERCY) and their
+ * menus in the battle box, Crispy's box (his portrait, and his health shown as on SlashCo VR's
+ * HUD: a coloured word under a heart), the creature's box, and playing out each turn's events:
+ * the log, the effects, the hits.
  */
 (function () {
   const $ = (s) => document.querySelector(s);
@@ -14,8 +14,14 @@
   const SPEED = /[?&]fast/.test(location.search) ? 0.15 : 1;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms * SPEED));
 
-  const HEART = '<svg viewBox="0 0 32 30"><path d="M16 29C16 29 1 19.5 1 9.5 1 4.5 5 1 9.2 1c3.2 0 5.6 2 6.8 4.4C17.2 3 19.6 1 22.8 1 27 1 31 4.5 31 9.5 31 19.5 16 29 16 29Z"/></svg>';
-  const SKULL = '<svg viewBox="0 0 48 44"><g stroke="currentColor" stroke-width="5" stroke-linecap="round"><line x1="8" y1="9" x2="40" y2="37"/><line x1="40" y1="9" x2="8" y2="37"/></g><circle cx="5" cy="10" r="3.6"/><circle cx="9" cy="5.5" r="3.6"/><circle cx="43" cy="10" r="3.6"/><circle cx="39" cy="5.5" r="3.6"/><circle cx="5" cy="36" r="3.6"/><circle cx="9" cy="40.5" r="3.6"/><circle cx="43" cy="36" r="3.6"/><circle cx="39" cy="40.5" r="3.6"/><path d="M24 5c-9 0-13.5 6-13.5 12.8 0 4.4 2 7 4.8 8.6V32h17.4v-5.6c2.8-1.6 4.8-4.2 4.8-8.6C37.5 11 33 5 24 5Z"/><g fill="#000"><ellipse cx="18.6" cy="18.5" rx="3.8" ry="4.2"/><ellipse cx="29.4" cy="18.5" rx="3.8" ry="4.2"/><path d="M24 22.5l-2.4 4.4h4.8Z"/></g></svg>';
+  // A heart for his health, a skull and crossbones when he's CRITICAL, as on SlashCo VR's HUD,
+  // in pixels.
+  const pixels = (rows) =>
+    `<svg viewBox="0 0 ${rows[0].length} ${rows.length}" shape-rendering="crispEdges">` +
+    rows.map((r, y) => [...r].map((c, x) => (c === 'X' ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : '')).join('')).join('') +
+    '</svg>';
+  const HEART = pixels(['.XX...XX.', 'XXXX.XXXX', 'XXXXXXXXX', 'XXXXXXXXX', '.XXXXXXX.', '..XXXXX..', '...XXX...', '....X....']);
+  const SKULL = pixels(['X..XXXXX..X', '.XXXXXXXXX.', '.XX..X..XX.', '.XX..X..XX.', '..XXXXXXX..', '...X.X.X...', '.X.XXXXX.X.', 'X.........X']);
   const HP_COLOR = { OK: 'var(--hp-ok)', STABLE: 'var(--hp-stable)', SCATHED: 'var(--hp-scathed)', HURT: 'var(--hp-hurt)', CRITICAL: 'var(--hp-critical)', DEAD: 'var(--hp-dead)' };
   const FOE_COLOR = { GOOD: 'var(--hp-ok)', BRUISED: 'var(--hp-stable)', WOUNDED: 'var(--hp-scathed)', WEAKENED: 'var(--hp-hurt)', 'BARELY STANDING': 'var(--hp-critical)', DEFEATED: 'var(--hp-dead)' };
   const CMDS = ['fight', 'skill', 'act', 'item', 'mercy'];
@@ -56,8 +62,8 @@
       'title',
       `<div class="kicker">A BIRTHDAY BATTLE</div>
        <h1>CRISPY SOTO<span class="vs">VS</span><span class="red">THE CREATURE</span></h1>
-       <p>It's late. Everyone's asleep upstairs. Something is standing in the living room.</p>
-       <button class="power" id="start"><i></i>PRESS START</button>
+       <p>It's late. Everyone's asleep upstairs. Something is standing in Chris's living room.</p>
+       <button class="go" id="start">PRESS START</button>
        <div class="keys">ARROWS to choose · ENTER / Z to pick · ESC / X to go back · or click</div>`
     );
     $('#start').addEventListener('click', start);
@@ -73,11 +79,12 @@
     C().reset();
     S().reset();
     $('#log').innerHTML = '';
+    $('#me-pic').src = window.CRISPY_IMAGES.crispy;
     refresh();
     UI.mode = 'busy';
     $('#keypad').classList.add('off');
-    await say('Crispy hears something downstairs.', 'sys');
-    await say('Something is standing in the living room. It’s tall. Too tall.', 'foe');
+    await say('2:47 AM. Crispy hears something downstairs.', 'sys');
+    await say('Something is standing in his living room. It’s tall. Too tall.', 'foe');
     await say('The Creature stands between Crispy and the stairs!', 'foe');
     main();
   }
@@ -94,7 +101,7 @@
          <h1>HAPPY BIRTHDAY, DAD!</h1>
          <p>Crispy Soto stood his ground and protected his family.</p>
          <div class="tally">${line}</div>
-         <button class="power" id="again"><i></i>PLAY AGAIN</button>`
+         <button class="go" id="again">PLAY AGAIN</button>`
       );
     else
       screen(
@@ -103,7 +110,7 @@
          <h1>CRISPY SOTO HAS FALLEN</h1>
          <p>His family is still upstairs. Get back up.</p>
          <div class="tally">${line}</div>
-         <button class="power" id="again"><i></i>TRY AGAIN</button>`
+         <button class="go" id="again">TRY AGAIN</button>`
       );
     $('#again').addEventListener('click', () => {
       A().play('confirm');
@@ -118,18 +125,19 @@
     if (!b) return;
     const h = b.hero;
     const hs = b.healthWord(h);
-    const vital = $('.vital');
-    vital.style.setProperty('--hc', HP_COLOR[hs] || HP_COLOR.OK);
+    const box = $('#me');
+    box.style.setProperty('--hc', HP_COLOR[hs] || HP_COLOR.OK);
     const icon = hs === 'CRITICAL' || hs === 'DEAD' ? SKULL : HEART;
     if ($('#heart').dataset.icon !== hs) {
       $('#heart').innerHTML = icon;
       $('#heart').dataset.icon = hs;
     }
-    vital.classList.toggle('beat', hs === 'HURT' || hs === 'CRITICAL');
+    box.classList.toggle('beat', hs === 'HURT' || hs === 'CRITICAL');
     $('#hp-word').textContent = `[${hs}]`;
-    $('#hp-num').textContent = `HP ${h.hp}/${h.hpMax}`;
+    $('#hp-num').textContent = `${h.hp}/${h.hpMax}`;
+    $('#hp-fill').style.width = `${(100 * h.hp) / h.hpMax}%`;
     $('#sp-fill').style.width = `${(100 * h.sp) / h.spMax}%`;
-    $('#sp-num').textContent = `${h.sp}`;
+    $('#sp-num').textContent = `${h.sp}/${h.spMax}`;
     $('#pilot').classList.toggle('out', !h.willpower);
     $('#pilot').lastElementChild.textContent = h.willpower ? 'PILOT LIGHT · WILLPOWER' : 'PILOT LIGHT OUT';
     S().hero.critical = hs === 'CRITICAL';
@@ -139,8 +147,8 @@
     const st = b.stage;
     $('#foe-name').textContent = st.name;
     $('#foe-tag').textContent = st.tag ? `(${st.tag})` : '';
-    const pic = window.CRISPY_IMAGES.profiles[b.foe.stage];
-    if ($('#foe-pic').getAttribute('src') !== pic) $('#foe-pic').src = pic;
+    const pic = thumb(b.foe.stage);
+    if (pic && $('#foe-pic').getAttribute('src') !== pic) $('#foe-pic').src = pic;
     const fw = b.healthWord(b.foe);
     $('#foe-state').textContent = `[${fw}]`;
     $('#foe-state').style.setProperty('--fc', FOE_COLOR[fw]);
@@ -151,6 +159,21 @@
     $('#foe-turns').textContent = n === 1 ? 'NEXT TURN' : `${n} TURNS`;
     tags('#foe-tags', foeTags(b));
     $('#round').textContent = `ROUND ${String(b.round).padStart(2, '0')}`;
+  }
+  // The stage's doc profile, made small so it shows in pixels like everything else.
+  const thumbs = [];
+  function thumb(i) {
+    if (thumbs[i]) return thumbs[i];
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 56;
+      c.getContext('2d').drawImage(im, 0, 0, 56, 56);
+      thumbs[i] = c.toDataURL();
+      refresh();
+    };
+    im.src = window.CRISPY_IMAGES.profiles[i];
+    return null;
   }
   function heroTags(b) {
     const out = b.hero.mods.map((m) => [m.label, m.good ? '' : 'bad']);
@@ -304,11 +327,8 @@
       return;
     }
     if (UI.mode === 'main') {
-      const row = UI.sel < 3 ? 0 : 1;
-      if (k === 'ArrowRight') UI.sel = row ? (UI.sel === 3 ? 4 : 3) : (UI.sel + 1) % 3;
-      else if (k === 'ArrowLeft') UI.sel = row ? (UI.sel === 3 ? 4 : 3) : (UI.sel + 2) % 3;
-      else if (k === 'ArrowDown' && !row) UI.sel = UI.sel === 2 ? 4 : 3;
-      else if (k === 'ArrowUp' && row) UI.sel = UI.sel === 3 ? 0 : 2;
+      if (k === 'ArrowDown' || k === 'ArrowRight') UI.sel = (UI.sel + 1) % CMDS.length;
+      else if (k === 'ArrowUp' || k === 'ArrowLeft') UI.sel = (UI.sel + CMDS.length - 1) % CMDS.length;
       else if (k === 'Enter' || k === 'z' || k === ' ') return open(CMDS[UI.sel]);
       else return;
       A().play('move');

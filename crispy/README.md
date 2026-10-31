@@ -1,7 +1,7 @@
 # Crispy vs The Creature
 
-A turn-based birthday battle. It's late, everyone's asleep upstairs, and something is standing in
-the living room. Crispy Soto (Level 99, from his stats doc) has to fight it with a Hard Foam Buster
+A turn-based birthday battle, all in pixels. It's late, everyone's asleep upstairs, and something
+is standing in Chris's living room. Crispy Soto (Level 99, from his stats doc) has to fight it with a Hard Foam Buster
 Sword, a trash bag and a handheld console while it ADJUSTS through five forms, each more like a
 man, until it calls itself Andy.
 
@@ -45,15 +45,17 @@ node crispy/tools/build.js                            # -> crispy/dist/index.htm
 ## Files
 
 ```
-index.html, css/style.css   the page and its appliance-and-sanitation HUD
+index.html, css/style.css   the page and its pixel HUD (black boxes, a trash-bag cursor)
 js/data.js                  Crispy's stats, skills, items and acts; the creature's stages  <- tune here
 js/battle.js                the turn engine (no DOM; the test runs it too)
 js/creature.js              the creature: its sprites, moving
-js/scene.js                 the room, Crispy, and every move's screen effect
+js/scene.js                 the room, Crispy's portrait, and every move's screen effect, drawn
+                            at a third of the resolution so it's all the same chunky pixels
 js/audio.js                 the music and the synthesized sound effects
 js/ui.js, js/main.js        the HUD, the menus and the flow of a fight
 tests/simulate.js           headless balance test
 tools/                      builds the art, cuts Crispy out, builds the single file
-assets/source/              the creature's sprite sheet and references
+assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
+                            sheet, and references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb
 ```

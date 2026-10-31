@@ -1,0 +1,9 @@
+# Crispy's birthday battle: the family photos, and everything made from them, stay out of the
+# (public) repo. Put the photos in crispy/assets/source/ and run crispy/tools/make_images.py.
+crispy/assets/source/crispy_photo.webp
+crispy/assets/source/crispy_mask.png
+crispy/assets/source/crispy_pixels.png
+crispy/assets/source/living_room.webp
+crispy/assets/source/father_stats.pdf
+crispy/js/images.js
+crispy/dist/

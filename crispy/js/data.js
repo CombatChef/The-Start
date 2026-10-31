@@ -1,0 +1,260 @@
+/*
+ * Everything you'd want to tune about Crispy's birthday battle: his stats, skills, items and
+ * acts, and the creature's stages, from the stats doc ("Father Stats"). Shared by the game and
+ * the headless test (tests/simulate.js).
+ */
+(function (root) {
+  const DATA = {
+    hero: {
+      name: 'Crispy Soto',
+      short: 'Crispy',
+      lv: 99,
+      // doc: Atk 134 | Def 85 | Spd 68 | Mag 17 | Chm 100 | Smt 99 | Brv 81
+      stats: { atk: 134, def: 85, spd: 68, mag: 17, chm: 100, smt: 99, brv: 81 },
+      hp: 280,
+      sp: 100, // SPIRITUAL POWER pays for his skills
+      spPerRound: 4,
+      accuracy: 0.95,
+      // When his health runs out the first time, the will to protect his family brings him back.
+      willpower: { heal: 0.4 },
+      // Hard Foam Buster Sword: "Has a small chance to block an incoming attack and take no damage!"
+      blockChance: 0.1,
+    },
+
+    // Health words, as on SlashCo VR's HUD, by percent of his health.
+    health: [
+      { id: 'CRITICAL', upTo: 20 },
+      { id: 'HURT', upTo: 40 },
+      { id: 'SCATHED', upTo: 60 },
+      { id: 'STABLE', upTo: 80 },
+      { id: 'OK', upTo: 100 },
+    ],
+    // The creature's condition, by percent of its health.
+    foeHealth: [
+      { id: 'BARELY STANDING', upTo: 15 },
+      { id: 'WEAKENED', upTo: 35 },
+      { id: 'WOUNDED', upTo: 55 },
+      { id: 'BRUISED', upTo: 80 },
+      { id: 'GOOD', upTo: 100 },
+    ],
+
+    // FIGHT
+    attack: { name: 'ATTACK', power: 1.0, sp: 6, doc: 'A swing of the Hard Foam Buster Sword. Not real, but pretty heavy. (+6 SP)' },
+
+    // SKILL: Crispy's skills, from the doc.
+    skills: [
+      {
+        id: 'trash',
+        name: 'Trash Bag',
+        sp: 12,
+        power: 1.25,
+        tear: 0.45, // chance the bag tears...
+        tearPower: 0.35, // ...and its garbage lightly damages the creature
+        poison: { turns: 3, perTurn: 0.05 }, // of its health, each turn
+        doc: 'Only a true Sanitation worker can use this as a weapon. Deals damage to one target. When hitting, has a chance to tear, lightly damaging the enemy again and poisoning it.',
+      },
+      {
+        id: 'early',
+        name: 'Early Bird',
+        sp: 20,
+        self: { atk: 1.5, spd: 0.9, turns: 4 },
+        foe: { atk: 0.85, def: 0.85, turns: 3 },
+        doc: "There's always an advantage to waking up first. Heavily increases own attack and slightly decreases speed. Decreases the enemy's attack and defense as well.",
+      },
+      {
+        id: 'authority',
+        name: 'Authority',
+        sp: 15,
+        target: true, // pick: himself (clear his negative effects) or the creature (clear its positive ones)
+        doc: 'What he says, goes. Nullifies all negative effects on yourself, or clears all positive effects on the enemy.',
+      },
+      {
+        id: 'rg',
+        name: 'RG 405M',
+        sp: 30,
+        power: 1.6, // electrical: from his attack and his magic, and it gets through armour
+        disarm: { chance: 0.4, turns: 2 },
+        doc: 'The world altering handheld console. Deals major electrical damage to all enemies, and could potentially disarm them for a while.',
+      },
+      {
+        id: 'wine',
+        name: 'Wine Break',
+        sp: 0,
+        restoreSp: 0.3,
+        heal: 0.1,
+        self: { smt: 0.75, atk: 0.9, turns: 2 },
+        doc: 'Everyone needs some time to heal up... Kind of. Restores 30% spiritual power and 10% health. But slightly decreases smarts and attack for a little bit.',
+      },
+      {
+        id: 'slice',
+        name: 'Crispy Slice',
+        sp: 15,
+        power: 0.9,
+        cut: 0.88, // the target's attack, defense and magic, for the rest of the battle
+        stacks: 2,
+        doc: "A signature move that I made up. Slightly decreases the target's attack, defense, and magic for the rest of the battle. Can stack twice...",
+      },
+      {
+        id: 'taste',
+        name: 'Taste of Reality',
+        sp: 30,
+        once: true,
+        turns: 3,
+        mult: 3,
+        doc: 'That fake sword will turn real for a while, dealing triple the casual damage for 3 turns. Can only be used once per battle.',
+      },
+    ],
+
+    // SPECIAL: only when he's at half health or less, and up to twice in one turn.
+    special: {
+      id: 'nut',
+      name: 'NUTCRACKAAAA!!!',
+      sp: 30,
+      power: 1.7,
+      below: 0.5,
+      perTurn: 2,
+      crit: { chance: 0.4, mult: 2.5 }, // "medium chance to land a fatal critical hit"
+      ko: 0.03, // "small chance to instantly K.O the enemy"
+      foe: { def: 0.6, mag: 0.6, turns: 2 }, // "drastically decreases defense and magic"
+      doc: 'The most deadly attack in all of history. Medium chance to land a fatal critical hit, small chance to instantly K.O. the enemy. Drastically decreases the defense and magic of the enemy for 2 turns. (Only at half health or less; twice per turn.)',
+    },
+
+    acts: [
+      {
+        id: 'lights',
+        name: 'Turn the lights brighter',
+        chance: 0.75,
+        turns: 3,
+        foe: { acc: 0.8, def: 0.8 },
+        doc: 'Reach for the dimmer. It hates being seen. (Its defense and aim drop while the lights are up.)',
+      },
+      {
+        id: 'stance',
+        name: 'Take a fearless stance',
+        turns: 3,
+        self: { def: 1.3, atk: 1.1 },
+        doc: "Plant your feet. Nothing gets past you. (Defense up, attack up a little, and you can't be scared.)",
+      },
+      {
+        id: 'talk',
+        name: 'Talk',
+        foe: { atk: 0.85, turns: 2 },
+        doc: 'Say something to it. The more human it gets, the more it listens.',
+      },
+    ],
+
+    items: [
+      { id: 'choc', name: '70% Dark Chocolate', count: 3, heal: 0.22, doc: 'Bittersweet. Heals lightly.' },
+      { id: 'cheese', name: 'Grilled Cheese', count: 2, heal: 0.45, self: { def: 1.25, turns: 3 }, doc: 'Golden and gooey. Heals significantly and increases defense.' },
+      { id: 'pills', name: 'Allergy Pills', count: 2, self: { atk: 1.2, spd: 1.3, acc: 1.15, turns: 4 }, doc: 'Non-drowsy. Increases attack, speed, and accuracy.' },
+      { id: 'keys', name: 'Car Keys', count: 1, doc: 'Starts the car alarm, momentarily distracting the creature. One time use.' },
+    ],
+
+    mercy: [
+      { id: 'flee', name: 'FLEE', doc: 'Run.' },
+      { id: 'spare', name: 'SPARE', doc: 'Show it mercy.' },
+    ],
+
+    // ------------------------------------------------------------------ THE CREATURE
+    // "ADJUST - To look like them. To look LIKE YOU. Transforms to the follow-up stage. Changing
+    // STATS and appearance." It adjusts with time (its `adjustOn`-th turn in a stage), or the
+    // moment a stage's health runs out. Only Andy can be killed. On a timed ADJUST the new body
+    // keeps the old one's wounds (the same fraction of its health).
+    foe: {
+      name: 'The Creature',
+      adjustOn: 3,
+      health: { Moderate: 200, High: 270, Extreme: 440 },
+      stages: [
+        {
+          name: 'The Creature',
+          tag: 'Stage 1',
+          // doc: Atk 120 | Def 168 | Spd 12 | Mag 0 | Chm 0 | Smt 40 | Brv 100 | Health: Moderate
+          stats: { atk: 120, def: 168, spd: 12, mag: 0, chm: 0, smt: 40, brv: 100 },
+          health: 'Moderate',
+          moves: [
+            { id: 'claw', w: 4 },
+            { id: 'reach', w: 3 },
+            { id: 'screech', w: 2 },
+            { id: 'twitch', w: 1 },
+          ],
+        },
+        {
+          name: 'The Creature',
+          tag: 'Stage 2',
+          stats: { atk: 110, def: 154, spd: 24, mag: 0, chm: 4, smt: 60, brv: 100 },
+          health: 'Moderate',
+          moves: [
+            { id: 'claw', w: 3 },
+            { id: 'lash', w: 3 },
+            { id: 'scream', w: 2 },
+            { id: 'reach', w: 2 },
+          ],
+        },
+        {
+          name: 'The Creature',
+          tag: 'Stage 3',
+          stats: { atk: 100, def: 143, spd: 48, mag: 0, chm: 16, smt: 70, brv: 100 },
+          health: 'High',
+          moves: [
+            { id: 'lash3', w: 3 },
+            { id: 'claw', w: 3 },
+            { id: 'weep', w: 2 },
+            { id: 'lengthen', w: 2 },
+          ],
+        },
+        {
+          name: 'The Creature',
+          tag: 'Stage 4',
+          stats: { atk: 95, def: 133, spd: 96, mag: 0, chm: 32, smt: 80, brv: 100 },
+          health: 'High',
+          moves: [
+            { id: 'rake', w: 3 },
+            { id: 'lunge', w: 3 },
+            { id: 'stare', w: 2 },
+            { id: 'harden', w: 2 },
+          ],
+        },
+        {
+          name: 'Andy',
+          tag: '',
+          stats: { atk: 80, def: 122, spd: 192, mag: 0, chm: 64, smt: 120, brv: 120 },
+          health: 'Extreme',
+          final: true,
+          followUp: 0.22, // so fast it sometimes goes again
+          moves: [
+            { id: 'mimic', w: 3 },
+            { id: 'grab', w: 3 },
+            { id: 'smile', w: 2 },
+            { id: 'pat', w: 2 },
+          ],
+        },
+      ],
+      moves: {
+        claw: { name: 'Claw', power: 1.0, acc: 0.9 },
+        reach: { name: 'Reach', power: 1.3, acc: 0.72 },
+        screech: { name: 'Screech', power: 0.35, acc: 1, afraid: 2 },
+        twitch: { name: 'Twitch', power: 0, acc: 1 },
+        lash: { name: 'Tendril Lash', power: 0.55, hits: 2, acc: 0.85 },
+        lash3: { name: 'Tendril Lash', power: 0.42, hits: 3, acc: 0.85 },
+        scream: { name: 'Scream', power: 0.5, acc: 1, afraid: 2 },
+        weep: { name: 'Weep', heal: 0.12 },
+        lengthen: { name: 'Lengthen', buff: { atk: 1.3, turns: 3 } },
+        rake: { name: 'Rake', power: 0.62, hits: 2, acc: 0.9 },
+        lunge: { name: 'Lunge', power: 1.25, acc: 0.8 },
+        stare: { name: 'Stare', debuff: { def: 0.8, turns: 2 }, acc: 1 },
+        harden: { name: 'Harden', buff: { def: 1.3, turns: 3 } },
+        mimic: { name: 'Mimic', power: 1.05, acc: 0.92 },
+        grab: { name: 'Grab', power: 1.4, acc: 0.8 },
+        smile: { name: 'Smile', debuff: { atk: 0.8, turns: 2 }, afraid: 2, acc: 1 },
+        pat: { name: 'Pat on the Back', power: 0.8, acc: 0.95 },
+        adjust: { name: 'ADJUST' },
+      },
+    },
+
+    afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts
+    poisonMax: 30, // poison never does more than this a turn
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = DATA;
+  else root.CRISPY_DATA = DATA;
+})(typeof window !== 'undefined' ? window : globalThis);

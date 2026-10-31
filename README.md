@@ -372,4 +372,6 @@ assets/               fonts (SIL OFL, see assets/fonts/OFL.txt), the soundtrack 
                       portraits, sprites, icons, source images
 ```
 
+`crispy/` is a separate game: a birthday battle, Crispy Soto vs The Creature (see `crispy/README.md`).
+
 SlashCo VR is by Mantibro. This is a fan project.

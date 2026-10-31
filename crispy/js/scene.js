@@ -5,8 +5,8 @@
  * creature are all the same chunky pixels; even their see-through parts are dithered, and the
  * effects are muted and grainy, like the item sheet: nothing bright, nothing cheerful. The props
  * are pixel art: the trash bag, the grilled cheese and the sword from one sheet; the wine glass,
- * the pills, the cracked phone, the car keys and the text bubble from another; and little ones
- * drawn here (a gavel, the RG 405M, an alarm clock...). Words from attacks go in the battle log,
+ * the pills, the cracked phone, the car keys and the text bubble from another; the alarm clock and
+ * the bird from a third; and little ones drawn here (a gavel, the RG 405M...). Words from attacks go in the battle log,
  * not on screen.
  */
 (function () {
@@ -55,18 +55,6 @@
     choc: {
       pal: { f: '#8e9094', F: '#6a6d72', b: '#2a170e', B: '#3e2416', h: '#55341e' },
       rows: ['ffffbbbbbbbbbb', 'FffFbBhbBhbBhb', 'ffffbBBbBBbBBb', 'FffFbbbbbbbbbb', 'ffffbBhbBhbBhb', 'FffFbBBbBBbBBb', 'ffffbbbbbbbbbb'],
-    },
-    clock: {
-      pal: { r: '#5e2422', R: '#3e1716', w: '#a8a298', k: '#121214', s: '#7a7670' },
-      rows: ['.ss......ss.', 'sss.rrrr.sss', '.s.rrrrrr.s.', '..rrwwwwrr..', '.rrwwwkwwwr.', '.rwwwwkwwwwr', '.rwwwwkkkwwr', '.rwwwwwwwwwr', '.rrwwwwwwwr.', '..rrwwwwrr..', '...RRRRRR...', '..R......R..'],
-    },
-    bird: {
-      pal: { b: '#1c1c20', o: '#26262c', k: '#0a0a0c', y: '#4a4a50' },
-      rows: ['...bb.....', '..bkbbb...', 'ybbbbbbbb.', '..oooobbbb', '..ooobb...', '...b.b....'],
-    },
-    bird2: {
-      pal: { b: '#1c1c20', o: '#26262c', k: '#0a0a0c', y: '#4a4a50' },
-      rows: ['......bb..', '...bbbb...', '..bkbbb...', 'ybbbbbbbb.', '..oooobbbb', '...b.b....'],
     },
     // the family, sneaking out in the dark (lit at the edges by the windows)
     adult: {
@@ -366,14 +354,33 @@
       });
     },
     early() {
+      // the cracked alarm clock rattles; the bird lands on it, pecks, and goes for the creature
       sfx('early');
-      return add(1800, (ctx, p) => {
-        const a = Math.sin(Math.PI * p);
-        // the alarm clock, rattling
-        const shake = p < 0.6 ? Math.round(Math.sin(S.t * 70) * 2) * PX : 0;
-        drawSprite(ctx, 'clock', 470 + shake, 470, PX * 3, { alpha: a });
-        // a crow, past the window
-        drawSprite(ctx, Math.floor(S.t * 8) % 2 ? 'bird' : 'bird2', -60 + p * (W + 120), 330 + Math.sin(p * 7) * 20, PX * 2, { alpha: Math.min(1, a * 2) });
+      const [fx, fy] = S.foePoint('head');
+      return add(2000, (ctx, p) => {
+        const fade = 1 - clamp((p - 0.88) / 0.12, 0, 1);
+        const shake = p > 0.12 && p < 0.6 ? Math.round(Math.sin(S.t * 70) * 1.5) * PX : 0;
+        drawSprite(ctx, 'clock', 470 + shake, 470 + 30 * (1 - ease(Math.min(1, p / 0.15))), PX * 1.5, { alpha: Math.min(1, p / 0.12) * fade, rot: shake ? Math.sin(S.t * 50) * 0.03 : 0 });
+        let bx;
+        let by;
+        let rot = 0;
+        if (p < 0.45) {
+          // it flies in from the dark and lands on top of the clock
+          const q = ease(clamp((p - 0.18) / 0.27, 0, 1));
+          bx = -80 + (470 + 80) * q;
+          by = 140 + (300 - 140) * q - Math.sin(q * Math.PI) * 60;
+        } else if (p < 0.7) {
+          // two pecks at it
+          bx = 470;
+          by = 300;
+          rot = Math.max(0, Math.sin(((p - 0.45) / 0.25) * Math.PI * 2)) * 0.5;
+        } else {
+          // and off, at the creature
+          const q = (p - 0.7) / 0.3;
+          bx = 470 + (fx - 470) * ease(q);
+          by = 300 + (fy - 300) * ease(q) - Math.sin(q * Math.PI) * 60;
+        }
+        if (p > 0.18) drawSprite(ctx, 'bird', bx, by, PX * 1.1, { sx: -1, ay: 1, rot, alpha: fade });
       });
     },
     authority(o = {}) {
@@ -812,8 +819,8 @@
       return add(1800, (ctx, p) => {
         const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
         const shake = Math.round(Math.sin(S.t * 50) * 2) * PX;
-        drawSprite(ctx, 'clock', 470 + shake, 450, PX * 4, { alpha: a, rot: Math.sin(S.t * 40) * 0.08 });
-        if (Math.floor(S.t * 3) % 2) bigText(ctx, '4:00 AM', 470, 350, 40, '#8a3a32', { alpha: a });
+        drawSprite(ctx, 'clock', 470 + shake, 470, PX * 1.3, { alpha: a, rot: Math.sin(S.t * 40) * 0.04 });
+        if (Math.floor(S.t * 3) % 2) bigText(ctx, '4:00 AM', 470, 290, 40, '#8a3a32', { alpha: a });
       });
     },
     hands() {

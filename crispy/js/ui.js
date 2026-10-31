@@ -132,7 +132,7 @@
   // The first time he falls: the screen goes red, the family flashes past, he says it, and he
   // gets back up.
   const LINE = "N-No... You won't take this house... Not this man, and not this man's family.";
-  async function willpower() {
+  async function willpower(e) {
     const cine = $('#cine');
     const pic = $('#cine-pic');
     const box = $('#cine-box');
@@ -156,6 +156,9 @@
     box.hidden = false;
     await type($('#cine-text'), LINE);
     await wait(1800);
+    // he gets back up: his health comes back with him
+    if (UI.view) Object.assign(UI.view, { hp: e.hp, willpower: false, heroTags: heroTags(UI.b) });
+    refresh();
     A().play('rise');
     cine.className = 'up';
     await wait(S().rise());
@@ -180,11 +183,21 @@
   }
 
   // ------------------------------------------------------------------ the HUD
+  // What the HUD shows. The engine works out a whole turn at once, so during a turn the HUD
+  // follows the turn's events as they play instead (UI.view): a heal shows when he eats, a hit
+  // when it lands. Between turns it shows the engine as it is.
+  function snapshot(b) {
+    const h = b.hero;
+    const f = b.foe;
+    return { hp: h.hp, sp: h.sp, willpower: h.willpower, afraid: h.afraid, heroTags: heroTags(b), stage: f.stage, foeHp: f.hp, foeMax: f.hpMax, foeTags: foeTags(b), adjustIn: b.adjustIn(), mercy: b.mercy, family: b.family, round: b.round };
+  }
+  const word = (hp, max, list, gone) => (hp <= 0 ? gone : list.find((x) => (hp / max) * 100 <= x.upTo).id);
   function refresh() {
     const b = UI.b;
     if (!b) return;
+    const v = UI.view || snapshot(b);
     const h = b.hero;
-    const hs = b.healthWord(h);
+    const hs = word(v.hp, h.hpMax, DATA.health, 'DEAD');
     const box = $('#me');
     box.style.setProperty('--hc', HP_COLOR[hs] || HP_COLOR.OK);
     const icon = hs === 'CRITICAL' || hs === 'DEAD' ? SKULL : HEART;
@@ -194,36 +207,36 @@
     }
     box.classList.toggle('beat', hs === 'HURT' || hs === 'CRITICAL');
     $('#hp-word').textContent = `[${hs}]`;
-    $('#hp-num').textContent = `${h.hp}/${h.hpMax}`;
-    $('#hp-fill').style.width = `${(100 * h.hp) / h.hpMax}%`;
-    $('#sp-fill').style.width = `${(100 * h.sp) / h.spMax}%`;
-    $('#sp-num').textContent = `${h.sp}/${h.spMax}`;
-    $('#pilot').classList.toggle('out', !h.willpower);
-    $('#pilot').lastElementChild.textContent = h.willpower ? 'PILOT LIGHT · WILLPOWER' : 'PILOT LIGHT OUT';
+    $('#hp-num').textContent = `${v.hp}/${h.hpMax}`;
+    $('#hp-fill').style.width = `${(100 * v.hp) / h.hpMax}%`;
+    $('#sp-fill').style.width = `${(100 * v.sp) / h.spMax}%`;
+    $('#sp-num').textContent = `${v.sp}/${h.spMax}`;
+    $('#pilot').classList.toggle('out', !v.willpower);
+    $('#pilot').lastElementChild.textContent = v.willpower ? 'PILOT LIGHT · WILLPOWER' : 'PILOT LIGHT OUT';
     S().hero.critical = hs === 'CRITICAL';
-    S().hero.afraid = !!h.afraid;
-    tags('#hero-tags', heroTags(b));
+    S().hero.afraid = !!v.afraid;
+    tags('#hero-tags', v.heroTags);
     // the creature
-    const st = b.stage;
+    const st = DATA.foe.stages[v.stage];
     $('#foe-name').textContent = st.name;
     $('#foe-tag').textContent = st.tag ? `(${st.tag})` : '';
-    const pic = thumb(b.foe.stage);
+    const pic = thumb(v.stage);
     if (pic && $('#foe-pic').getAttribute('src') !== pic) $('#foe-pic').src = pic;
-    const fw = b.healthWord(b.foe);
+    const fw = word(v.foeHp, v.foeMax, DATA.foeHealth, 'DEFEATED');
     $('#foe-state').textContent = `[${fw}]`;
     $('#foe-state').style.setProperty('--fc', FOE_COLOR[fw]);
-    const n = b.adjustIn();
+    const n = v.adjustIn;
     const timer = $('#foe-timer');
     timer.classList.toggle('final', n === null);
     timer.classList.toggle('soon', n === 1);
     $('#foe-turns').textContent = n === 1 ? 'NEXT TURN' : `${n} TURNS`;
-    tags('#foe-tags', foeTags(b));
-    $('#mercy-fill').style.width = `${b.mercy}%`;
-    $('#mercy-num').textContent = `${b.mercy}%`;
-    $('#foe').classList.toggle('spareable', b.mercy >= DATA.mercyRules.full);
-    DATA.family.forEach((p, i) => $(`#fam-${i}`).classList.toggle('out', b.family > i));
-    $('#family').classList.toggle('safe', b.family >= 3);
-    $('#round').textContent = `ROUND ${String(b.round).padStart(2, '0')}`;
+    tags('#foe-tags', v.foeTags);
+    $('#mercy-fill').style.width = `${v.mercy}%`;
+    $('#mercy-num').textContent = `${v.mercy}%`;
+    $('#foe').classList.toggle('spareable', v.mercy >= DATA.mercyRules.full);
+    DATA.family.forEach((p, i) => $(`#fam-${i}`).classList.toggle('out', v.family > i));
+    $('#family').classList.toggle('safe', v.family >= 3);
+    $('#round').textContent = `ROUND ${String(v.round).padStart(2, '0')}`;
   }
   // The stage's doc profile, made small so it shows in pixels like everything else.
   const thumbs = [];
@@ -424,8 +437,11 @@
     UI.mode = 'busy';
     $('#keypad').classList.add('off');
     keypad();
+    UI.view = snapshot(UI.b);
     const events = UI.b.command(cmd);
     await play(events);
+    UI.view = null;
+    refresh();
     if (UI.b.over) return;
     if (UI.b.awaiting === 'again') return again();
     main();
@@ -438,23 +454,32 @@
     UI.mode = 'again';
   }
 
+  // How far into each effect its hit (or heal, or buff) lands, so the HUD moves with it.
+  const FX_AT = { swing: 0.45, realSlash: 0.45, trash: 0.6, tear: 0.35, early: 0.75, authority: 0.35, rg: 0.5, wine: 0.6, slice: 0.3, taste: 0.6, nut: 0.32, choc: 0.42, cheese: 0.45, pills: 0.7, keys: 0.5, stance: 0.5 };
+  const FOE_AT = { claw: 0.3, rake: 0.3, reach: 0.55, screech: 0.4, scream: 0.4, lash: 0.4, lash3: 0.4, lunge: 0.4, mimic: 0.45, grab: 0.45, pat: 0.45, bite: 0.32, flicker: 0.55, bile: 0.45, drop: 0.5, joke: 0.55 };
+
   async function play(events) {
     for (const e of events) {
+      const v = UI.view; // (null outside a turn: then the HUD just shows the engine)
       switch (e.t) {
         case 'log':
           await say(e.text, e.tone);
           break;
         case 'fx': {
           const ms = S().play(e.name, e);
-          await wait(ms * 0.85);
+          await wait(ms * (FX_AT[e.name] || 0.85));
           break;
         }
         case 'foe': {
           const ms = Math.max(C().act(e.move), S().foeMove(e.move, e));
-          await wait(ms * 0.7);
+          await wait(ms * (FOE_AT[e.move] || 0.7));
           break;
         }
         case 'hit': {
+          if (v) {
+            if (e.who === 'foe') v.foeHp = Math.max(0, v.foeHp - e.amount);
+            else v.hp = Math.max(0, v.hp - e.amount);
+          }
           if (e.who === 'foe') {
             UI.stats.dealt += e.amount;
             C().act('hurt');
@@ -488,6 +513,10 @@
           await wait(320);
           break;
         case 'heal': {
+          if (v) {
+            if (e.who === 'foe') v.foeHp = Math.min(v.foeMax, v.foeHp + e.amount);
+            else v.hp = Math.min(UI.b.hero.hpMax, v.hp + e.amount);
+          }
           if (e.amount > 0) {
             A().play('heal');
             const [x, y] = e.who === 'foe' ? C().point('chest') : S().heroPoint('head');
@@ -498,20 +527,30 @@
           break;
         }
         case 'sp':
+          if (v) v.sp = e.value;
           refresh();
           break;
         case 'tag':
+          if (v) {
+            v.heroTags = heroTags(UI.b);
+            v.foeTags = foeTags(UI.b);
+            v.afraid = UI.b.hero.afraid;
+          }
           refresh(); // (it shows in the boxes' tags)
           break;
         case 'adjust': {
           const ms = Math.max(C().adjust(e.to), S().adjust());
-          setTimeout(refresh, ms * 0.5);
+          // halfway through, it's the new body
+          wait(ms * 0.5).then(() => {
+            if (v) Object.assign(v, { stage: e.to, foeHp: e.hp, foeMax: e.hpMax, foeTags: [], adjustIn: DATA.foe.stages[e.to].final ? null : DATA.foe.adjustOn });
+            refresh();
+          });
           await wait(ms);
           refresh();
           break;
         }
         case 'revive':
-          await willpower();
+          await willpower(e);
           refresh();
           break;
         case 'lights':
@@ -521,11 +560,14 @@
           S().real = e.real;
           break;
         case 'round':
+          // the end of the round: the HUD catches up with everything (SP back, effects worn off)
+          if (v) Object.assign(v, snapshot(UI.b));
           refresh();
           break;
         case 'again':
           break;
         case 'mercy': {
+          if (v) v.mercy = e.value;
           refresh();
           if (e.quiet) break; // creeping up by itself at the end of a round
           const up = e.delta > 0;
@@ -536,6 +578,7 @@
           break;
         }
         case 'family': {
+          if (v) v.family = e.value;
           refresh();
           const [x, y] = S().heroPoint('head');
           S().popup(`${e.name.toUpperCase()} IS OUT`, x + 90, y - 160, { color: '#7e9a84', size: 24, dur: 1.6 });

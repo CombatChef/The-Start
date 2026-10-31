@@ -11,7 +11,8 @@ From crispy/assets/source/ (the photos aren't in the repo: put them there first)
                        crispy/tools/cutout.py; the pixels are kept as crispy_pixels.png once made)
 the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), the trash bag,
 grilled cheese and sword from theirs (props_sheet.png), the wine glass, pills, phone, car keys
-and text bubble from theirs (items_sheet.png), the creature's doc profiles (the repo's
+and text bubble from theirs (items_sheet.png), the alarm clock and the bird from theirs
+(early_sheet.png), the creature's doc profiles (the repo's
 assets/profiles/) for the HUD, and the family photos he sees when he falls (memory_1..4.webp,
 not in the repo either).
 """
@@ -260,6 +261,35 @@ def items():
     return out
 
 
+def early_bird():
+    """The alarm clock (cracked, dripping) and the bird, for Early Bird, from their pixel-art sheet
+    (early_sheet.png, 6 screen pixels to each of theirs), without the shadow, and the bird without
+    the crumbs round its feet."""
+    src = np.asarray(Image.open(os.path.join(SRC, 'early_sheet.png')).convert('RGB')).astype(int)
+    px = src[3::6, 3::6]
+    fig = (np.abs(px - 40).sum(2) > 6) & ~np.all(px == 30, axis=2)
+    cols = fig.any(0)
+    spans, start = [], None
+    for x, v in enumerate(list(cols) + [False]):
+        if v and start is None:
+            start = x
+        if not v and start is not None:
+            spans.append((start, x))
+            start = None
+    out = {}
+    for name, (a, b) in zip(('clock', 'bird'), spans):
+        m = fig[:, a:b].copy()
+        if name == 'bird':
+            n, lab, stats, _ = cv2.connectedComponentsWithStats(m.astype(np.uint8), connectivity=8)
+            m = lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        rows = np.flatnonzero(m.any(1))
+        cs = np.flatnonzero(m.any(0))
+        rgb = px[rows[0]:rows[-1] + 1, a + cs[0]:a + cs[-1] + 1]
+        al = m[rows[0]:rows[-1] + 1, cs[0]:cs[-1] + 1]
+        out[name] = Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))
+    return out
+
+
 def memories():
     """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
     item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
@@ -303,7 +333,7 @@ if __name__ == '__main__':
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],
         'creatureMeta': [m for _, m in forms],
-        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}},
+        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}},
         'memories': [data_url(m) for m in memories()],
         'profiles': [data_url(p) for p in profiles()],
     }

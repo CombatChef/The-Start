@@ -687,7 +687,7 @@
       f.poison = 0;
       f.disarmed = 0;
       f.distracted = false;
-      ev.push({ t: 'adjust', from, to: f.stage, forced });
+      ev.push({ t: 'adjust', from, to: f.stage, forced, hp: f.hp, hpMax: f.hpMax });
       if (this.stage.final) {
         ev.push({ t: 'log', text: 'It ADJUSTS one last time.', tone: 'foe' });
         ev.push({ t: 'log', text: 'It looks like a man now. It looks like YOU. It says its name is Andy.', tone: 'foe' });
@@ -747,7 +747,6 @@
       const say = (text, tone = 'foe') => ev.push({ t: 'log', text, tone });
       // Lure: in one of their voices
       const voice = id === 'lure' ? Math.floor(this.rand() * 4) : 0;
-      ev.push({ t: 'foe', move: id, voice });
       const lines = {
         bite: `${name} unhinges its jaw and BITES!`,
         flicker: 'The lamp flickers. When it comes back on, it’s right in Crispy’s face!',
@@ -774,7 +773,9 @@
         smile: 'Andy smiles. Wider. Wider. It doesn’t stop.',
         pat: 'Andy pats Crispy on the back. "Proud of you, champ." His hand is so cold.',
       };
+      // what it does, then it does it (so its hit lands in the middle of its animation)
       say(lines[id]);
+      ev.push({ t: 'foe', move: id, voice });
       if (mv.door) {
         this.door = false;
         ev.push({ t: 'door', open: false });

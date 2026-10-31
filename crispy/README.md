@@ -50,9 +50,11 @@ picks, Esc or X goes back; or click.
 
 Each one ends the same way: a long, calm breath and a fade to black.
 
-The effects are kept dark and quiet, in the grainy, washed-out style of the item sheet (the wine
-glass, the pills, the cracked phone, the car keys and the text bubble are its sprites). Words
-from attacks (NUTCRACKAAAA!!!, CRACK...) are in the battle log, not on screen.
+The effects are kept dark and quiet, in the grainy, washed-out style of the item sheets (the wine
+glass, the pills, the cracked phone, the car keys and the text bubble are from one; Early Bird's
+cracked alarm clock and bird from another). Words from attacks (NUTCRACKAAAA!!!, CRACK...) are in
+the battle log, not on screen. Health and SP move when the animation does: a heal when he takes
+the bite, a hit when the claws land, not when the button is pressed.
 
 `node crispy/tests/simulate.js` plays thousands of fights with a few kinds of player to check the
 balance: someone who plays normally wins about 9 times in 10, mashing ATTACK about half the time;
@@ -85,7 +87,7 @@ js/ui.js, js/main.js        the HUD, the menus and the flow of a fight
 tests/simulate.js           headless balance test
 tools/                      builds the art, cuts Crispy out, builds the single file
 assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
-                            sheet, the wine / pills / phone / keys / text bubble sheet, and
-                            references
+                            sheet, the wine / pills / phone / keys / text bubble sheet, the
+                            Early Bird clock and bird sheet, and references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb
 ```

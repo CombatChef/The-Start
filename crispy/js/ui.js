@@ -372,24 +372,60 @@
       if (MENU.includes(UI.mode) && !UI.b.over && !S().killer) S().spawnKiller(K.approach[st]);
     }, (1.5 + Math.random() * 3) * 1000 * SPEED);
   }
-  // He got all the way in: the jumpscare, the pictures, and what he does to Crispy. (The one
-  // behind him: and that's the end of him.)
+  // He got all the way in: the jumpscare, and while it plays, what he does to Crispy (no numbers:
+  // when it's over, Crispy just has less health). Then the fight goes on; or, if that was the end
+  // of him, the screen stays black and he falls. (The one behind him: always the end.)
   async function killerStrike(behind = false) {
     UI.scaring = true;
     if (UI.mode === 'turned') faceFront();
     UI.mode = 'busy';
     $('#keypad').classList.add('off');
     keypad();
-    A().play('jumpscare');
-    await wait(S().jumpscare(behind));
-    UI.scaring = false;
-    UI.view = snapshot(UI.b);
     UI.killed = behind;
-    await play(behind ? UI.b.killerKill() : UI.b.killerAttack());
+    const before = snapshot(UI.b);
+    const events = behind ? UI.b.killerKill() : UI.b.killerAttack();
+    const dead = UI.b.over === 'lose';
+    const hit = events.find((e) => e.t === 'hit');
+    if (hit) UI.stats.taken += hit.amount;
+    if (dead) S().fadeOut(1); // (under the jumpscare: when it's done, black)
+    A().play('jumpscare');
+    const ms = S().jumpscare(behind);
+    if (!dead) {
+      // behind it, halfway through: his health drops, and the log has it
+      wait(ms * 0.5).then(() => {
+        UI.view = { ...before, hp: Math.max(0, before.hp - (hit ? hit.amount : 0)) };
+        refresh();
+        const first = events[0];
+        if (first && first.t === 'log') note(first.text, first.tone);
+      });
+    }
+    await wait(ms);
+    UI.scaring = false;
+    if (dead) return fall();
+    // (if he went down, WILLPOWER gets him back up)
+    await play(events.slice(1).filter((e) => e.t !== 'hit'));
     UI.view = null;
     refresh();
     if (UI.b.over) return;
     main();
+  }
+  // The killer got him: no getting back up, the screen already black. He falls; it ends.
+  async function fall() {
+    A().stopMusic(2);
+    A().play('lose');
+    S().hero.down = 1;
+    await wait(2200);
+    end('lose');
+  }
+  // a line in the log, all at once (while nobody can see it being written)
+  function note(text, tone) {
+    const log = $('#log');
+    for (const p of log.querySelectorAll('p')) p.classList.add('old');
+    const p = document.createElement('p');
+    p.className = 't-' + tone;
+    p.innerHTML = markup(text);
+    log.appendChild(p);
+    while (log.children.length > 5) log.removeChild(log.firstChild);
   }
 
   // ------------------------------------------------------------------ THE KILLER, BEHIND CRISPY

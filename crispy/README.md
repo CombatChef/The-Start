@@ -44,7 +44,9 @@ picks, Esc or X goes back; or click.
   and faster, the further the creature has gone (6 seconds to click him at first, 3.6 against
   Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
-  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
+  and while it plays he takes a chunk of Crispy's health (no numbers: when the room comes back,
+  Crispy just has less). Then the fight goes on; or, if that was the last of him, the screen
+  stays black and he falls (unless WILLPOWER gets him back up). (Not again for a couple of rounds.)
 - **And the one behind him.** All the while, he's in the kitchen behind Crispy, coming from
   the back door towards him (a minute from the door to right in his face at first, 34 seconds
   against Andy). The portrait shows how close he is: the closer, the more he fades in behind
@@ -56,8 +58,8 @@ picks, Esc or X goes back; or click.
   scream if he's close; right in Crispy's face if he's a second or two from him); the light
   dies and he's gone back into the dark, a good way back. Then it needs 10 seconds, and
   flashing before that only brings him closer. While a turn plays out he waits just short of
-  Crispy; if he ever gets all the way there, it's over: no WILLPOWER, four more pictures, and
-  Crispy has fallen.
+  Crispy; if he ever gets all the way there, it's over: no WILLPOWER, his jumpscare with four
+  more pictures, then black, and Crispy has fallen.
 
 ## Three ways out
 

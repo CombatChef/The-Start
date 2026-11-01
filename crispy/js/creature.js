@@ -2,7 +2,8 @@
  * The creature: its five forms (stages 1-4, then Andy) as pixel-art sprites, brought to life a
  * pixel at a time. It sways from its ankles, breathes, swings its arms, twitches its head; the
  * wound in its chest pulses and drips; it reaches for Crispy with an arm that stretches far too
- * long; it convulses and tears itself apart to ADJUST into the next form. Spared, it's simply
+ * long; to ADJUST into the next form it snaps, a crack at a time, into shapes a body shouldn't
+ * make, the new body replacing the old in chunks. Spared, it's simply
  * not there any more when Crispy opens his eyes (`gone`). It's lit by the lamp
  * above it and falls into the dark towards its feet.
  *
@@ -89,7 +90,10 @@
       shake: 0,
       flash: 0, // 1 white, 2 red
       glitch: 0,
-      tear: 0, // 0..1: its body coming apart in rows, when it ADJUSTS
+      headX: 0, // its head, off its neck (pixels)
+      headY: 0,
+      segs: null, // bands of its body knocked out of line: [{ a, b, dx }], a..b down its height
+      swap: 0, // 0..1: how much of it is the new body yet, when it ADJUSTS
     };
     const a = C.action;
     if (!a) return o;
@@ -217,14 +221,22 @@
         break;
       }
       case 'adjust': {
-        const conv = p < 0.75 ? Math.min(1, p / 0.4) : Math.max(0, 1 - (p - 0.75) / 0.25);
-        o.shake = 5 * conv;
-        o.glitch = 1.2 * conv;
-        o.armL = Math.sin(C.t * 23) * 0.6 * conv;
-        o.armR = Math.sin(C.t * 19 + 1) * 0.6 * conv;
-        o.lean = Math.sin(C.t * 13) * 14 * conv;
-        o.tear = p > 0.3 && p < 0.7 ? Math.sin(((p - 0.3) / 0.4) * Math.PI) : 0;
-        o.flash = p > 0.3 && p < 0.7 && Math.random() < 0.3 ? 2 : 0;
+        // not a smooth change: the last snap's wrong shape, held dead still until the next
+        const T = C.t - a.t0;
+        let n = -1;
+        for (let i = 0; i < C.snaps.length; i++) if (C.snaps[i].t <= T) n = i;
+        const snap = n >= 0 ? C.snaps[n] : null;
+        o.sway = 0;
+        o.breathe = 0;
+        o.armL = 0;
+        o.armR = 0;
+        o.swap = n < 0 ? 0 : Math.min(1, (n + 1) / (C.snaps.length - 1));
+        if (snap && snap.shape) Object.assign(o, snap.shape);
+        if (snap && T - snap.t < 0.05) {
+          // the instant it cracks
+          o.flash = 2;
+          o.shake = 2.5;
+        }
         break;
       }
     }
@@ -236,10 +248,33 @@
     C.action = { type, t0: C.t, dur };
     return dur * 1000;
   };
-  // ADJUST: the gruesome change from one form to the next.
+  // ADJUST: the gruesome change from one form to the next. It snaps, a dozen times or more:
+  // each time its arms jump to angles they shouldn't reach, its head to where a head shouldn't
+  // be, its spine out of line, and more of it is the new body. Then once more, into the new
+  // shape.
+  const BAND = 7; // rows of its body swapped for the new one's at a time
+  function wrongShape() {
+    const r = (lo, hi) => lo + Math.random() * (hi - lo);
+    const sign = () => (Math.random() < 0.5 ? -1 : 1);
+    return {
+      armL: Math.random() < 0.75 ? sign() * r(0.9, 2.9) : r(-0.2, 0.2),
+      armR: Math.random() < 0.75 ? sign() * r(0.9, 2.9) : r(-0.2, 0.2),
+      stretchL: Math.random() < 0.3 ? r(1.3, 1.9) : 1,
+      headX: sign() * r(5, 15),
+      headY: r(-5, 9),
+      lean: sign() * r(3, 20),
+      segs: [[0.22, 0.42], [0.42, 0.62], [0.62, 0.82]].map(([lo, hi]) => ({ a: lo, b: hi, dx: Math.random() < 0.6 ? sign() * r(2, 9) : 0 })),
+    };
+  }
   C.adjust = function (to) {
     C.from = C.stage;
     C.adjustTo = to;
+    const snaps = [];
+    for (let t = 0.3; t < 2.85; t += 0.1 + Math.random() * 0.22) snaps.push({ t, shape: wrongShape() });
+    snaps.push({ t: 3.05, shape: null }); // into its new shape
+    C.snaps = snaps;
+    C.snapAt = 0;
+    C.bands = Array.from({ length: Math.ceil(BH / BAND) }, () => Math.random());
     return C.act('adjust');
   };
   C.die = function () {
@@ -265,10 +300,13 @@
       C.action = null;
     }
     if (a && a.type === 'adjust') {
-      const p = (C.t - a.t0) / a.dur;
-      if (p >= 0.5) C.stage = C.adjustTo;
-      // it tears: blood sprays from it
-      if (p > 0.25 && p < 0.8 && C.blood.length < 280) for (let k = 0; k < 5; k++) C.blood.push(spray());
+      const T = C.t - a.t0;
+      if (T / a.dur >= 0.5) C.stage = C.adjustTo;
+      // every snap, a spurt of blood
+      while (C.snapAt < C.snaps.length && C.snaps[C.snapAt].t <= T) {
+        if (C.snaps[C.snapAt].shape && C.blood.length < 300) for (let k = 0; k < 14; k++) C.blood.push(spray());
+        C.snapAt++;
+      }
     }
     if (C.t > C.twitchAt) {
       const andy = C.stage === 4;
@@ -311,7 +349,7 @@
   };
 
   // ------------------------------------------------------------------ drawing
-  // One form into the buffer, posed. `rowFilter` (while it tears) picks the rows to draw.
+  // One form into the buffer, posed. `rowFilter` (while it ADJUSTS) picks the rows to draw.
   function render(f, o, rowFilter) {
     const lit0 = 1 + C.lights * 0.6;
     const pivots = { [-1]: [f.cx - f.core, f.armpit - 14], [1]: [f.cx + f.core, f.armpit - 14] };
@@ -336,10 +374,11 @@
       for (let x = x0; x < x1; x++) {
         let sx = x - (FX - f.cx) - bend - glitchShift;
         let sy = sy0;
+        if (o.segs) for (const g of o.segs) if (sy0 >= g.a * f.h && sy0 < g.b * f.h) sx -= g.dx;
         if (sy < f.head + 6) {
           const k = clamp((f.head + 6 - sy) / 6, 0, 1);
-          sx -= C.twitch.x * k;
-          sy -= C.twitch.y * k;
+          sx -= (C.twitch.x + o.headX) * k;
+          sy -= (C.twitch.y + o.headY) * k;
         }
         if (sy > f.armpit - 30 && sy < f.armpit + 20) sy += o.breathe * Math.sin(((sy - f.armpit + 30) / 50) * Math.PI);
         // arms first: is an arm, turned (and stretched) about its shoulder, over this pixel?
@@ -394,12 +433,11 @@
     const o = pose();
     buf.fill(0);
     const a = C.action;
-    if (a && a.type === 'adjust' && o.tear > 0) {
-      // tearing between the two bodies: rows of the old one and the new one, shuffled
-      const seed = Math.floor(C.t * 20);
-      const pick = (y) => ((y * 7 + seed * 13) % 11) / 11 < o.tear * 0.8;
-      render(C.forms[C.from], o, (y) => !pick(y));
-      render(C.forms[C.adjustTo], o, pick);
+    if (a && a.type === 'adjust') {
+      // the old body and the new, in chunks: more of the new one with every snap
+      const isNew = (y) => C.bands[Math.floor(y / BAND)] < o.swap;
+      render(C.forms[C.from], o, (y) => !isNew(y));
+      render(C.forms[C.adjustTo], o, isNew);
     } else render(C.forms[C.stage], o);
     // blood in the air
     for (const b of C.blood) {

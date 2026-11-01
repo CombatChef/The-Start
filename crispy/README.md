@@ -26,7 +26,8 @@ picks, Esc or X goes back; or click.
   take this house... Not this man, and not this man's family."* The **pilot light** (his
   willpower) brings him back with his defense sharply up for a few turns; the second time he
   falls.
-- **The creature** ADJUSTS into its next form every third turn (the oven timer counts down), or
+- **The creature** ADJUSTS (snapping, a crack at a time, into shapes a body shouldn't make, as the
+  new body replaces the old in chunks) into its next form every third turn (the oven timer counts down), or
   the moment a form's health runs out; each form has its own stats from the doc and six attacks
   (bites, ceiling drops, the lights cutting out, black bile, calling to Crispy in his family's
   voices, Andy stealing his jokes and locking the front door...). Only Andy can be killed.
@@ -52,7 +53,7 @@ Each one ends the same way: a long, calm breath and a fade to black.
 
 The effects are kept dark and quiet, in the grainy, washed-out style of the item sheets (the wine
 glass, the pills, the cracked phone, the car keys and the text bubble are from one; Early Bird's
-cracked alarm clock and bird from another). Words from attacks (NUTCRACKAAAA!!!, CRACK...) are in
+cracked alarm clock and bird from another; the RG 405M console from its own). Words from attacks (NUTCRACKAAAA!!!, CRACK...) are in
 the battle log, not on screen. Health and SP move when the animation does: a heal when he takes
 the bite, a hit when the claws land, not when the button is pressed.
 
@@ -88,6 +89,7 @@ tests/simulate.js           headless balance test
 tools/                      builds the art, cuts Crispy out, builds the single file
 assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
                             sheet, the wine / pills / phone / keys / text bubble sheet, the
-                            Early Bird clock and bird sheet, and references
+                            Early Bird clock and bird sheet, the RG 405M console, and
+                            references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb
 ```

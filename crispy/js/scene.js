@@ -6,7 +6,7 @@
  * effects are muted and grainy, like the item sheet: nothing bright, nothing cheerful. The props
  * are pixel art: the trash bag, the grilled cheese and the sword from one sheet; the wine glass,
  * the pills, the cracked phone, the car keys and the text bubble from another; the alarm clock and
- * the bird from a third; and little ones drawn here (a gavel, the RG 405M...). Words from attacks go in the battle log,
+ * the bird from a third; the RG 405M from its own; and little ones drawn here (a gavel...). Words from attacks go in the battle log,
  * not on screen.
  */
 (function () {
@@ -47,10 +47,6 @@
     gavel: {
       pal: { b: '#5e4a36', d: '#3a2c20', l: '#7a6448', y: '#8a7440' },
       rows: ['..llllllll....', '.lbbbbbbbbd...', 'ylbbbbbbbbdy..', 'ylbbbbbbbbdy..', '.lbbbbbbbbd...', '..dddddddd....', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....dd.......'],
-    },
-    rg: {
-      pal: { k: '#1e2023', e: '#3a3c40', s: '#5e7a84', S: '#9fb2b8', d: '#0d0e10', r: '#6e2626', g: '#2e5a3e', b: '#2e3e5a', w: '#7a6a34', t: '#55585e' },
-      rows: ['.eeeeeeeeeeeeeeeeeeee.', 'ekkkkkkkkkkkkkkkkkkkke', 'ekkkkdddddddddddkkkkke', 'ekdkksSssssssssskkkwke', 'edddksssssssssskkbkrke', 'ekdkksssssssssskkkgkke', 'ekkkksssssssssskkkkkke', 'ekkkkdddddddddddkkkkke', 'ekkkkkkkkttkkkkkkkkkke', '.eeeeeeeeeeeeeeeeeeee.'],
     },
     choc: {
       pal: { f: '#8e9094', F: '#6a6d72', b: '#2a170e', B: '#3e2416', h: '#55341e' },
@@ -406,19 +402,32 @@
       });
     },
     rg() {
+      // the RG 405M comes up; its screen (something is standing in it) fizzes with static, and
+      // thin, cold arcs leave the screen for the creature
       sfx('rg');
       const [cx, cy] = S.foePoint('chest');
-      const ox = 400;
-      const oy = 640;
-      return add(1700, (ctx, p) => {
+      const ox = 500;
+      const oy = 620;
+      const k = PX * 1.2; // screen pixels to each of the console's
+      return add(1800, (ctx, p) => {
         const rise = ease(clamp(p / 0.25, 0, 1));
-        drawSprite(ctx, 'rg', ox, oy + 80 - 80 * rise, PX * 3, { alpha: 1 - clamp((p - 0.88) / 0.12, 0, 1) });
-        if (p > 0.28 && p < 0.85) {
-          // thin, cold arcs, and static over it, like a bad signal
-          for (let k = 0; k < 2; k++) bolt(ctx, ox, oy - 10, cx + (Math.random() - 0.5) * 80, cy + (Math.random() - 0.5) * 160, 70, PX, k ? '#4e5e66' : '#8a9ca4');
-          for (let k = 0; k < 3; k++) {
-            const a = Math.random() * Math.PI * 2;
-            bolt(ctx, cx, cy, cx + Math.cos(a) * 100, cy + Math.sin(a) * 160, 30, PX, '#5e7480');
+        const y = oy + 90 * (1 - rise);
+        const a = 1 - clamp((p - 0.88) / 0.12, 0, 1);
+        drawSprite(ctx, 'rg', ox, y, k, { alpha: a });
+        const sx = ox + 1.5 * k;
+        const sy = y - 3 * k;
+        if (p > 0.2 && p < 0.88) {
+          // static over its screen
+          ctx.fillStyle = `rgba(150,170,154,${0.12 + Math.random() * 0.25})`;
+          ctx.fillRect(sx - 17 * k, sy - 14 * k, 34 * k, 28 * k);
+          ctx.fillStyle = 'rgba(20,26,22,0.6)';
+          for (let i = 0; i < 4; i++) ctx.fillRect(sx - 17 * k, sy - 14 * k + Math.floor(Math.random() * 28) * k, 34 * k, k);
+        }
+        if (p > 0.32 && p < 0.85) {
+          for (let i = 0; i < 2; i++) bolt(ctx, sx, sy, cx + (Math.random() - 0.5) * 80, cy + (Math.random() - 0.5) * 160, 70, PX, i ? '#4e5e66' : '#8a9ca4');
+          for (let i = 0; i < 3; i++) {
+            const an = Math.random() * Math.PI * 2;
+            bolt(ctx, cx, cy, cx + Math.cos(an) * 100, cy + Math.sin(an) * 160, 30, PX, '#5e7480');
           }
           ctx.fillStyle = 'rgba(150,158,162,0.35)';
           for (let i = 0; i < 46; i++) ctx.fillRect(cx - 160 + Math.random() * 320, cy - 260 + Math.random() * 520, PX * (1 + Math.floor(Math.random() * 5)), PX);
@@ -1171,7 +1180,8 @@
   S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
   S.foeMove = (name, o) => (FOE[name] ? FOE[name](o) : 0);
 
-  // ADJUST: the screen shakes and bleeds while it changes.
+  // ADJUST: its body snaps into the wrong shapes, one crack at a time (see creature.js); the
+  // screen jolts with each snap, and bleeds.
   S.adjust = function () {
     sfx('adjust');
     S.splats = [];
@@ -1179,13 +1189,15 @@
       const side = i % 4;
       S.splats.push({ x: side === 0 ? 0 : side === 1 ? W : Math.random() * W, y: side === 2 ? 0 : side === 3 ? H : Math.random() * H, r: 60 + Math.random() * 120, at: 0.9 + Math.random() * 1.5, drops: Math.floor(4 + Math.random() * 6), seed: Math.random() * 100 });
     }
+    const snaps = (C().snaps || []).map((n) => n.t);
+    let next = 0;
     return add(3800, (ctx, p) => {
       const T = p * 3.8;
-      if (T > 0.3 && T < 2.6 && Math.random() < 0.06) {
-        ctx.fillStyle = 'rgba(90,0,6,0.2)';
-        ctx.fillRect(0, 0, W, H);
+      while (next < snaps.length && T >= snaps[next]) {
+        sfx('snap');
+        S.shake = Math.max(S.shake, 9);
+        next++;
       }
-      S.shake = Math.max(S.shake, T < 2.6 ? 3 + Math.random() * 5 : 0);
       for (const sp of S.splats) {
         if (T < sp.at) continue;
         const a = 1 - clamp((T - 3.2) / 0.6, 0, 1);

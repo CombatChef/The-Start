@@ -392,13 +392,19 @@
     },
     distracted: () => S.alarm(),
     // ADJUST: bones snapping, wet tearing, a groan bending lower
+    // ADJUST: under it, a groan and something wet; each of its snaps is its own sound (snap)
     adjust: () => {
-      for (let i = 0; i < 18; i++) crack(0.1 + i * 0.13 + Math.random() * 0.06, 0.28 + Math.random() * 0.2);
       noise(0.8, 1.4, 0.3, { type: 'bandpass', f: [400, 1400], q: 2, attack: 0.3 });
       noise(1.0, 1.2, 0.2, { f: 500, attack: 0.2 });
       for (const d of [-30, 0, 20]) tone('sawtooth', [160, 55], 0.3, 2.8, 0.08, { detune: d, filter: ['lowpass', 700], vibrato: [4, 10], attack: 0.5 });
       thump(1.9, 70, 0.7, 0.5);
       noise(1.9, 0.4, 0.3, { f: [800, 200] }); // squelch
+    },
+    // a bone, snapping out of place
+    snap: () => {
+      crack(0, 0.5 + Math.random() * 0.2);
+      thump(0, 140 + Math.random() * 60, 0.35, 0.07);
+      noise(0.01, 0.08, 0.2, { type: 'bandpass', f: 1800 + Math.random() * 1500, q: 3 });
     },
     // when Crispy's health runs out the first time: he hits the floor; his heart, slow; a memory
     // at a time, like a music box running down; then he gets back up

@@ -15,3 +15,5 @@ crispy/assets/audio/song_*.mp3
 crispy/assets/source/scare_*
 # the killer's jumpscare sound (not ours to share)
 crispy/assets/audio/jumpscare.mp3
+# nor the pictures when the killer behind Crispy gets all the way in
+crispy/assets/source/behind_*

@@ -198,6 +198,8 @@
     if (images.scareFace) load('scareFace', images.scareFace);
     (images.scares || []).forEach((src, i) => load('scare' + i, src));
     SCARES = (images.scares || []).length;
+    (images.behind || []).forEach((src, i) => load('behind' + i, src));
+    BEHIND = (images.behind || []).length;
     // the layers everything but the room is drawn on, small: the creature (under the HUD), and
     // the effects (over it)
     const layer = () => {
@@ -231,6 +233,7 @@
   let ARM_META = [];
   let JAW_META = [];
   let SCARES = 0;
+  let BEHIND = 0;
   const SPEAKER = [1000, 734]; // where the speaker sits on the floor (its base)
   S.heroPoint = (k) => ({ head: [160, 600], chest: [160, 690], eyes: [165, 620], side: [330, 640] }[k] || [160, 640]);
   S.foePoint = (k) => C().point(k);
@@ -1476,14 +1479,16 @@
   // the screen, slowly, breathing quick and shallow. Click him and he sinks back out of sight.
   // If he gets all the way in: the jumpscare (ui.js plays it, and what he does to Crispy).
   const CORNERS = [
-    { from: [-110, 1010], to: [280, 540], rot: 0.35 }, // rising out of the bottom left, leaning in
-    { from: [1390, 1010], to: [1000, 540], rot: -0.35 }, // the bottom right
-    { from: [-110, -60], to: [290, 360], rot: Math.PI - 0.4 }, // hanging down from the top left
-    { from: [1390, -60], to: [990, 360], rot: Math.PI + 0.4 }, // the top right
+    // (`from`: just out of sight, all of him)
+    { from: [-60, 960], to: [280, 540], rot: 0.35 }, // rising out of the bottom left, leaning in
+    { from: [1340, 960], to: [1000, 540], rot: -0.35 }, // the bottom right
+    { from: [-60, 0], to: [290, 360], rot: Math.PI - 0.4 }, // hanging down from the top left
+    { from: [1340, 0], to: [990, 360], rot: Math.PI + 0.4 }, // the top right
   ];
   const KK = PX * 2.2; // screen pixels to each of his
   S.spawnKiller = function (approach = 6) {
-    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [], approach };
+    // (he's heard breathing a moment before he starts to come)
+    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [], approach, wait: 1.3 };
   };
   function killerAt(kl) {
     const c = CORNERS[kl.corner];
@@ -1511,7 +1516,8 @@
       kl.a -= dt * 2.2;
       if (kl.a <= 0) return (S.killer = null);
     } else if (kl.state === 'in' && S.killerCanMove && S.killerCanMove()) {
-      kl.a += dt / kl.approach;
+      if (kl.wait > 0) kl.wait -= dt;
+      else kl.a += dt / kl.approach;
       if (kl.a >= 1) {
         kl.a = 1;
         kl.state = 'strike';
@@ -1532,7 +1538,7 @@
   function drawKiller(l) {
     const kl = S.killer;
     const sp = sprites.killer;
-    if (!kl || !sp) return;
+    if (!kl || !sp || kl.a <= 0) return;
     const at = killerAt(kl);
     const k = at.k;
     l.save();
@@ -1551,12 +1557,14 @@
   }
   // If he gets all the way in: he's right in front of the screen; then that face, up close;
   // then the pictures, very fast, dim; all through static. Then back to the room.
-  S.jumpscare = function () {
+  // (behind: the one behind Crispy: just him, briefly, then the four drawings, in order)
+  S.jumpscare = function (behind = false) {
     S.killer = null;
-    const order = [...Array(SCARES).keys()].sort(() => Math.random() - 0.5);
-    const HIM = 0.6;
-    const FACE = 0.45;
-    const EACH = 0.16;
+    const set = behind ? 'behind' : 'scare';
+    const order = behind ? [...Array(BEHIND).keys()] : [...Array(SCARES).keys()].sort(() => Math.random() - 0.5);
+    const HIM = behind ? 0.35 : 0.6;
+    const FACE = behind ? 0 : 0.45;
+    const EACH = behind ? 0.22 : 0.16;
     const total = HIM + FACE + order.length * EACH + 0.3;
     const fill = (ctx, img) => {
       // as big as it'll go, and centred
@@ -1591,7 +1599,7 @@
       } else {
         const t = T - HIM - FACE;
         const i = Math.floor(t / EACH);
-        if (i < order.length && t - i * EACH < EACH * 0.7 && sprites['scare' + order[i]]) fill(ctx, sprites['scare' + order[i]]);
+        if (i < order.length && t - i * EACH < EACH * 0.75 && sprites[set + order[i]]) fill(ctx, sprites[set + order[i]]);
       }
       // static, over all of it
       const n = T < total - 0.3 ? 260 : 60;

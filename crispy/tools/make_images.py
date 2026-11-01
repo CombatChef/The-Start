@@ -16,7 +16,7 @@ and text bubble from theirs (items_sheet.png), the alarm clock and the bird from
 flag (flag_sheet.png), the creature's doc profiles (the repo's
 assets/profiles/) for the HUD, the family photos he sees when he falls (memory_1..4.webp, not in
 the repo either), the creature's arms (arms_sheet.png) and jaw (jaw_frames.png), the killer
-(killer_sheet.png), and the pictures after his jumpscare (scare_1..5, not in the repo).
+(killer_sheet.png), and the pictures after his jumpscares (scare_1..5 and behind_1..4, not in the repo).
 """
 import base64
 import io
@@ -435,6 +435,23 @@ def scare_face():
     return Image.fromarray(np.clip(np.asarray(im).astype(float) * 0.8, 0, 255).astype(np.uint8))
 
 
+def behind():
+    """The pictures that flash when the killer behind Crispy gets all the way in (behind_1..4 in
+    assets/source, not in the repo): cropped clear of their borders (and the arrows and dots of
+    the screenshots), to fill the screen, small, dim."""
+    crops = {1: (0, 6, 508, 387), 2: (0, 6, 508, 387), 3: (0, 60, 715, 596), 4: (34, 0, 867, 625)}
+    out = []
+    for i in range(1, 5):
+        path = next((os.path.join(SRC, f'behind_{i}.{e}') for e in ('png', 'webp', 'jpg') if os.path.exists(os.path.join(SRC, f'behind_{i}.{e}'))), None)
+        if not path:
+            continue
+        im = Image.open(path).convert('RGB').crop(crops[i]).resize((160, 120), Image.LANCZOS)
+        a = np.asarray(im).astype(float)
+        a = (a @ [0.3, 0.59, 0.11])[..., None].repeat(3, 2) * 0.6 + a * 0.4
+        out.append(Image.fromarray(np.clip(a * 0.6, 0, 255).astype(np.uint8)))
+    return out
+
+
 def memories():
     """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
     item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
@@ -489,6 +506,7 @@ if __name__ == '__main__':
         'killer': data_url(killer()),
         'scares': [data_url(x) for x in scares()],
         'scareFace': data_url(face) if (face := scare_face()) else None,
+        'behind': [data_url(x) for x in behind()],
         'profiles': [data_url(p) for p in profiles()],
     }
     with open(os.path.join(CRISPY, 'js', 'images.js'), 'w') as f:

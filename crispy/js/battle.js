@@ -922,11 +922,11 @@
       }
     }
     // THE KILLER (see ui.js): not part of the fight. If he gets all the way in, he gets Crispy.
-    killerAttack() {
+    killerAttack(behind = false) {
       const ev = [];
       if (this.over) return ev;
-      const dmg = Math.max(1, Math.round(this.hero.hpMax * DATA.killer.hit * (0.9 + this.rand() * 0.2)));
-      ev.push({ t: 'log', text: 'Something else is in the house.', tone: 'bad' });
+      const dmg = Math.max(1, Math.round(this.hero.hpMax * (behind ? DATA.killer.behind.hit : DATA.killer.hit) * (0.9 + this.rand() * 0.2)));
+      ev.push({ t: 'log', text: behind ? 'It was right behind him the whole time.' : 'Something else is in the house.', tone: 'bad' });
       ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'killer' });
       this.hurtHero(dmg, ev);
       return ev;

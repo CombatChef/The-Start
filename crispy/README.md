@@ -44,7 +44,10 @@ picks, Esc or X goes back; or click.
   and faster, the further the creature has gone (6 seconds to click him at first, 3.6 against
   Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
-  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
+  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.) And all the while
+  he's standing behind Crispy, in his box, slowly fading in (faster as the creature goes on):
+  click him, again and again, to fade him back. If he's ever all the way there, he gets Crispy
+  for a quarter of his health, with four more pictures.
 
 ## Three ways out
 
@@ -81,7 +84,8 @@ someone who only goes for SPARE or FLEE gets there almost every time.
 The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
 `living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
 in `crispy/assets/source/`; nor are the pictures that flash after the killer's jumpscare
-(`scare_face.png`, and `scare_1` to `scare_5`, png or webp, also in `crispy/assets/source/`), nor
+(`scare_face.png`, `scare_1` to `scare_5` and `behind_1` to `behind_4`, png or webp, also in
+`crispy/assets/source/`), nor
 its sound (`crispy/assets/audio/jumpscare.mp3`). The speaker's songs aren't either: put `clint_eastwood.mp3`,
 `feel_good_inc.mp3` and `on_melancholy_hill.mp3` in `crispy/assets/audio/songs/` (without them
 the speaker still works, silently). Then:

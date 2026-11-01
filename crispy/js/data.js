@@ -342,7 +342,17 @@
     // he takes `approach` seconds of Crispy deciding to get all the way in, unless he's clicked.
     // Then the jumpscare, and `hit` of Crispy's health.
     // By the creature's stage (0..4): he comes more often, and faster, the further it's gone.
-    killer: { from: 2, chance: [0.55, 0.65, 0.75, 0.85, 0.95], gap: [2, 2, 2, 1, 1], approach: [6, 5.4, 4.8, 4.2, 3.6], hit: 0.15 },
+    killer: {
+      from: 2,
+      chance: [0.55, 0.65, 0.75, 0.85, 0.95],
+      gap: [2, 2, 2, 1, 1],
+      approach: [6, 5.4, 4.8, 4.2, 3.6],
+      hit: 0.15,
+      // ...and the whole time, he's standing behind Crispy (in his portrait), fading in, faster
+      // the further the creature has gone (`full`: seconds from nothing to all the way there).
+      // Each click fades him back by `click`; all the way there: `hit` of Crispy's health.
+      behind: { full: [40, 36, 32, 29, 26], click: 0.12, hit: 0.25 },
+    },
 
     afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts
     poisonMax: 30, // poison never does more than this a turn

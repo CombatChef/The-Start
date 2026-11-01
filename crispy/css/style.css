@@ -273,6 +273,26 @@ img {
   height: 240px;
   display: block;
   will-change: transform, filter;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+/* the killer, standing behind Crispy: fading in; click him (again and again) to fade him back */
+.portrait {
+  position: relative;
+}
+#behind {
+  position: absolute;
+  left: 76px;
+  top: -24px;
+  width: 229px;
+  image-rendering: pixelated;
+  opacity: 0;
+  cursor: crosshair;
+  filter: brightness(0.75) contrast(1.1);
+}
+#behind.hit {
+  animation: rattle 0.15s steps(2);
 }
 #me .name {
   display: flex;

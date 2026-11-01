@@ -69,6 +69,27 @@
     // he only moves while Crispy's deciding what to do
     S().killerCanMove = () => MENU.includes(UI.mode);
     S().onKiller = killerStrike;
+    // and the one behind Crispy: click him, again and again, to fade him back
+    const behind = $('#behind');
+    behind.src = window.CRISPY_IMAGES.killer;
+    behind.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!UI.b || UI.b.over || UI.scaring) return;
+      UI.behind = Math.max(0, UI.behind - DATA.killer.behind.click);
+      A().play('killerBack');
+      behind.classList.remove('hit');
+      void behind.offsetWidth;
+      behind.classList.add('hit');
+      drawBehind();
+    });
+    let last = performance.now();
+    const tick = (now) => {
+      behindTick(Math.min(0.1, (now - last) / 1000));
+      last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
     title();
   };
 
@@ -99,6 +120,9 @@
     $('#hud').style.visibility = 'visible';
     UI.b = new window.CRISPY_BATTLE.Battle(Date.now() & 0xffffff);
     UI.killerNext = 0;
+    UI.behind = 0;
+    UI.scaring = false;
+    drawBehind();
     UI.stats = { dealt: 0, taken: 0, t0: Date.now() };
     C().reset();
     S().reset();
@@ -342,18 +366,45 @@
     }, (1.5 + Math.random() * 3) * 1000 * SPEED);
   }
   // He got all the way in: the jumpscare, the pictures, and what he does to Crispy.
-  async function killerStrike() {
+  async function killerStrike(behind = false) {
+    UI.scaring = true;
     UI.mode = 'busy';
     $('#keypad').classList.add('off');
     keypad();
     A().play('jumpscare');
-    await wait(S().jumpscare());
+    await wait(S().jumpscare(behind));
+    if (behind) {
+      UI.behind = 0;
+      drawBehind();
+    }
+    UI.scaring = false;
     UI.view = snapshot(UI.b);
-    await play(UI.b.killerAttack());
+    await play(UI.b.killerAttack(behind));
     UI.view = null;
     refresh();
     if (UI.b.over) return;
     main();
+  }
+  // THE KILLER, BEHIND CRISPY: always there, fading in, while Crispy decides and while a turn
+  // plays out (not during the scares, or the willpower scene). He only gets him when Crispy is
+  // back at the menu: until then, all the way there, he waits.
+  UI.behind = 0;
+  function behindTick(dt) {
+    const b = UI.b;
+    if (!b || b.over || UI.scaring || !$('#cine').hidden) return;
+    const playing = MENU.includes(UI.mode) || UI.mode === 'busy' || UI.mode === 'again';
+    if (!playing) return;
+    if (UI.behind < 1) {
+      const before = UI.behind;
+      UI.behind = Math.min(1, UI.behind + dt / DATA.killer.behind.full[Math.min(4, b.foe.stage)]);
+      // breathing, once he's more there than not
+      if (UI.behind > 0.5 && Math.floor(UI.behind * 40) !== Math.floor(before * 40)) A().play('pant', (UI.behind - 0.5) * 0.6);
+      drawBehind();
+    } else if (MENU.includes(UI.mode)) killerStrike(true);
+  }
+  function drawBehind() {
+    // in steps, like the rest of the pixels
+    $('#behind').style.opacity = String(Math.round(Math.min(1, UI.behind) * 12) / 12);
   }
 
   function main() {

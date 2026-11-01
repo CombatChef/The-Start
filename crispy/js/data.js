@@ -188,11 +188,11 @@
         id: 'speaker',
         name: 'Speaker',
         count: 1,
-        turns: 2, // how long the song plays
+        turns: 3, // how long the song plays
         aim: 0.8, // the music distracts it
         shield: 0.5, // its hits on Crispy, while the music plays
         smash: 0.3, // the chance, each of its turns, that it goes for the speaker instead
-        doc: 'Turn it all the way up. For 2 turns the music distracts it (its aim drops), its hits on Crispy are halved, and anyone he gets out is sure to make it. It might go for the speaker instead.',
+        doc: 'Turn it all the way up. For 3 turns the music distracts it (its aim drops), its hits on Crispy are halved, and anyone he gets out is sure to make it. It might go for the speaker instead.',
       },
       { id: 'keys', name: 'Car Keys', count: 1, alarm: 2, doc: 'Starts the car alarm, momentarily distracting the creature (and covering any noise for a moment). One time use.' },
     ],
@@ -288,6 +288,25 @@
           ],
         },
       ],
+      // Andy's Mimic: he does whatever Crispy did last. An attack comes back at Crispy (darker);
+      // anything that helped Crispy helps Andy, just as much. (Anything he can't copy: a swing.)
+      mimic: {
+        attack: { power: 1.05, acc: 0.92, line: 'Andy copies Crispy’s swing, with a sword of his own. A dark one.' },
+        trash: { power: 1.2, acc: 0.9, line: 'Andy swings a trash bag of his own at Crispy. It’s darker. Wetter.' },
+        slice: { power: 0.9, acc: 0.95, debuff: { atk: 0.88, def: 0.88, turns: 3 }, label: 'SLICED', line: 'Andy does the Crispy Slice. Crispy’s own move, on Crispy.' },
+        rg: { power: 1.3, acc: 0.85, line: 'Andy holds up a console just like Crispy’s. Its screen is black.' },
+        nut: { power: 1.45, acc: 0.85, line: 'Andy screams "NUTCRACKAAAA!!!" in Crispy’s voice.' },
+        early: { self: { atk: 1.5, turns: 4 }, debuff: { atk: 0.85, def: 0.85, turns: 3 }, label: 'EARLY BIRD', line: 'Andy sets an alarm clock of his own. He was up before Crispy.' },
+        authority: { cleanse: true, line: 'Andy puts his foot down. What HE says, goes.' },
+        wine: { heal: 0.1, self: { atk: 0.9, turns: 2 }, label: 'TIPSY', line: 'Andy pours himself a glass of Crispy’s wine.' },
+        taste: { self: { atk: 1.6, turns: 3 }, label: 'REAL', line: 'Andy’s copy of the sword turns real too.' },
+        choc: { heal: 0.22, line: 'Andy eats a square of Crispy’s chocolate.' },
+        cheese: { heal: 0.45, self: { def: 1.25, turns: 3 }, label: 'WELL FED', line: 'Andy eats a grilled cheese. He makes the same face Crispy does.' },
+        pills: { self: { atk: 1.2, spd: 1.3, acc: 1.15, turns: 4 }, label: 'CLEAR-HEADED', line: 'Andy takes two of Crispy’s allergy pills.' },
+        stance: { self: { def: 1.3, atk: 1.1, turns: 3 }, label: 'FEARLESS', line: 'Andy plants his feet, exactly like Crispy.' },
+        talk: { afraid: 2, line: 'Andy says it back to him, word for word, in Crispy’s voice.' },
+        lights: { debuff: { acc: 0.85, turns: 2 }, label: 'IN THE DARK', line: 'Andy turns the lights back down. "Better."' },
+      },
       moves: {
         claw: { name: 'Claw', power: 1.0, acc: 0.9 },
         reach: { name: 'Reach', power: 1.3, acc: 0.72 },
@@ -302,7 +321,7 @@
         lunge: { name: 'Lunge', power: 1.25, acc: 0.8 },
         stare: { name: 'Stare', debuff: { def: 0.8, turns: 2 }, acc: 1 },
         harden: { name: 'Harden', buff: { def: 1.3, turns: 3 } },
-        mimic: { name: 'Mimic', power: 1.05, acc: 0.92 },
+        mimic: { name: 'Mimic' }, // see `mimic` below
         grab: { name: 'Grab', power: 1.4, acc: 0.8 },
         smile: { name: 'Smile', debuff: { atk: 0.8, turns: 2 }, afraid: 2, acc: 1 },
         pat: { name: 'Pat on the Back', power: 0.8, acc: 0.95 },
@@ -322,7 +341,8 @@
     // `chance` he starts coming up out of a corner of the screen (not again for `gap` rounds);
     // he takes `approach` seconds of Crispy deciding to get all the way in, unless he's clicked.
     // Then the jumpscare, and `hit` of Crispy's health.
-    killer: { from: 2, chance: 0.6, gap: 2, approach: 6, hit: 0.15 },
+    // By the creature's stage (0..4): he comes more often, and faster, the further it's gone.
+    killer: { from: 2, chance: [0.55, 0.65, 0.75, 0.85, 0.95], gap: [2, 2, 2, 1, 1], approach: [6, 5.4, 4.8, 4.2, 3.6], hit: 0.15 },
 
     afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts
     poisonMax: 30, // poison never does more than this a turn

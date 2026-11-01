@@ -21,7 +21,7 @@ picks, Esc or X goes back; or click.
   fearless stance, talk to it, show it who he is (a different ACT each time), open the front door,
   or get the family out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys
   (the alarm makes it lose a turn, once), and the **speaker**: it plays one of three songs,
-  slowed down and drenched in reverb, instead of the battle music. For 2 turns the music
+  slowed down and drenched in reverb, instead of the battle music. For 3 turns the music
   distracts the creature (its aim drops), halves its hits on Crispy, and makes sure anyone he
   gets out makes it; but each turn it might go for the speaker instead, and tear it apart.
 - **Health** reads as on SlashCo VR's HUD: a coloured word under a heart. The first time it runs
@@ -35,11 +35,14 @@ picks, Esc or X goes back; or click.
   (bites, ceiling drops, the lights cutting out, black bile, calling to Crispy in his family's
   voices, Andy stealing his jokes and locking the front door...). When it reaches for Crispy (to
   claw, grab his shoulders, pat him on the back) its arm comes off at the shoulder, far too long,
-  over his box: a different arm for each stage. When it bites, a jaw clamps shut on him. Only Andy
-  can be killed.
+  over his box: a different arm for each stage. When it bites, a jaw clamps shut on him. Andy's
+  **Mimic** does whatever Crispy did last, darker: his own trash bag, his own Crispy Slice, his
+  own NUTCRACKAAAA come back at Crispy, and his Early Bird, grilled cheese, pills (and so on)
+  help Andy as much as they helped Crispy. Only Andy can be killed.
 - **The killer** isn't part of the fight. From round 2, while Crispy is deciding what to do, he
-  often starts coming up out of a corner of the screen, breathing quick and shallow. Click him
-  (quick: about 6 seconds) and he sinks back out of sight. If he gets all the way in: he's right
+  often starts coming up out of a corner of the screen, breathing quick and shallow; more often,
+  and faster, the further the creature has gone (6 seconds to click him at first, 3.6 against
+  Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
   and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
 

@@ -327,15 +327,18 @@
   }
 
   // ------------------------------------------------------------------ menus
-  // THE KILLER: from round DATA.killer.from, when the menu opens, he may start coming.
+  // THE KILLER: from round DATA.killer.from, when the menu opens, he may start coming: more
+  // often, and faster, the further the creature has gone.
   const MENU = ['main', 'sub', 'target'];
   function maybeKiller() {
     const K = DATA.killer;
     const b = UI.b;
-    if (!b || b.over || S().killer || b.round < K.from || b.round < UI.killerNext || Math.random() >= K.chance) return;
-    UI.killerNext = b.round + K.gap;
+    if (!b || b.over || S().killer || b.round < K.from || b.round < UI.killerNext) return;
+    const st = Math.min(4, b.foe.stage);
+    if (Math.random() >= K.chance[st]) return;
+    UI.killerNext = b.round + K.gap[st];
     setTimeout(() => {
-      if (MENU.includes(UI.mode) && !UI.b.over && !S().killer) S().spawnKiller();
+      if (MENU.includes(UI.mode) && !UI.b.over && !S().killer) S().spawnKiller(K.approach[st]);
     }, (1.5 + Math.random() * 3) * 1000 * SPEED);
   }
   // He got all the way in: the jumpscare, the pictures, and what he does to Crispy.

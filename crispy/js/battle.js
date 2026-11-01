@@ -250,6 +250,7 @@
       const h = this.hero;
       this.justAdjusted = false;
       const say = (text, tone = 'hero') => ev.push({ t: 'log', text, tone });
+      h.lastCmd = { type: cmd.type, id: cmd.type === 'special' ? 'nut' : cmd.id, target: cmd.target }; // (for Andy's Mimic)
       if (cmd.type === 'attack') {
         h.last = 'attack';
         say(h.real ? 'Crispy swings the Buster Sword. It is REAL.' : 'Crispy swings the Hard Foam Buster Sword!');
@@ -775,6 +776,7 @@
     }
     foeMove(ev) {
       const id = this.pickMove();
+      if (id === 'mimic') return this.mimic(ev);
       const mv = DATA.foe.moves[id];
       const f = this.foe;
       const name = this.stage.name;
@@ -803,7 +805,6 @@
         lunge: `${name} lunges out of the dark!`,
         stare: `${name} just stares. Crispy can feel it under his skin.`,
         harden: 'Its skin pulls tight and turns hard as a shell.',
-        mimic: `Andy copies Crispy’s ${this.hero.last && this.hero.last !== 'attack' ? this.hero.last : 'swing'}. It’s almost right. Almost.`,
         grab: 'Andy grabs Crispy by the shoulders and squeezes. "Gotcha."',
         smile: 'Andy smiles. Wider. Wider. It doesn’t stop.',
         pat: 'Andy pats Crispy on the back. "Proud of you, champ." His hand is so cold.',
@@ -838,6 +839,13 @@
       }
       if (mv.afraid && !mv.power) this.scare(mv.afraid, ev);
       if (!mv.power) return;
+      this.strike(mv, id, ev);
+    }
+    // Its hits on Crispy: each may miss, or be blocked; then whatever a hit leaves behind.
+    strike(mv, id, ev) {
+      const f = this.foe;
+      const andy = this.stage.final;
+      const say = (text, tone = 'foe') => ev.push({ t: 'log', text, tone });
       for (let i = 0; i < (mv.hits || 1); i++) {
         const dodge = clamp((this.heroStat('spd') - this.foeStat('spd')) / 800, 0, 0.12);
         if (this.rand() > mv.acc * this.mult(f, 'acc') - dodge) {
@@ -868,6 +876,50 @@
         }
       }
       if (mv.afraid) this.scare(mv.afraid, ev);
+    }
+    // Andy's Mimic: whatever Crispy did last, Andy does too. An attack comes back at Crispy;
+    // anything that helped Crispy helps Andy, as much as it helped him.
+    mimic(ev) {
+      const h = this.hero;
+      const f = this.foe;
+      const c = h.lastCmd || { type: 'attack' };
+      const key = c.type === 'attack' ? 'attack' : c.id;
+      const copy = DATA.foe.mimic[key] ? key : 'attack';
+      const M = DATA.foe.mimic[copy];
+      const say = (text, tone = 'foe') => ev.push({ t: 'log', text, tone });
+      say(M.line);
+      ev.push({ t: 'foe', move: 'mimic', copy });
+      if (M.heal) {
+        const n = Math.min(Math.round(h.hpMax * M.heal), f.hpMax - f.hp);
+        f.hp += n;
+        ev.push({ t: 'heal', who: 'foe', amount: n });
+      }
+      if (M.self) {
+        const { turns, ...stats } = M.self;
+        f.mods = f.mods.filter((m) => m.label !== M.label);
+        ev.push(this.addMod(f, stats, turns, M.label));
+      }
+      if (M.cleanse) {
+        if (c.target === 'foe') {
+          // Crispy took its good effects away: Andy takes his
+          const n = h.mods.filter((m) => m.good).length;
+          h.mods = h.mods.filter((m) => !m.good);
+          say(n ? 'Every good effect on Crispy is cancelled.' : 'There was nothing to take from him.', n ? 'bad' : 'sys');
+        } else {
+          const n = f.mods.filter((m) => !m.good).length + (f.poison ? 1 : 0);
+          f.mods = f.mods.filter((m) => m.good);
+          f.poison = 0;
+          say(n ? 'Everything Crispy did to him is cancelled.' : 'There was nothing on him to cancel.', n ? 'bad' : 'sys');
+        }
+        ev.push({ t: 'tag', who: 'foe', text: 'AUTHORITY', good: false, quiet: true });
+      }
+      if (M.afraid) this.scare(M.afraid, ev);
+      if (M.power) return this.strike(M, 'mimic', ev);
+      if (M.debuff) {
+        const { turns, ...stats } = M.debuff;
+        h.mods = h.mods.filter((m) => m.label !== (M.label === 'EARLY BIRD' ? 'A STEP BEHIND' : M.label));
+        ev.push(this.addMod(h, stats, turns, M.label === 'EARLY BIRD' ? 'A STEP BEHIND' : M.label));
+      }
     }
     // THE KILLER (see ui.js): not part of the fight. If he gets all the way in, he gets Crispy.
     killerAttack() {

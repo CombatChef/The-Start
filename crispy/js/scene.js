@@ -1004,7 +1004,7 @@
     lunge: () => (sfx('lunge'), heroClaw(700, 3, 0.35)),
     stare: () => (sfx('stare'), stareFx(1500)),
     harden: () => (sfx('harden'), hardenFx(1100)),
-    mimic: () => (sfx('swing'), darkSwing(800)),
+    mimic: (o = {}) => mimicFx(o.copy || 'attack'),
     grab: () => (sfx('grab', 500), armFx(1200, 'grab')),
     smile: () => (sfx('smile'), stareFx(1700, true)),
     pat: () => (sfx('pat'), armFx(1000, 'pat')),
@@ -1293,6 +1293,139 @@
       ctx.restore();
     });
   }
+  // Andy's Mimic: the same thing Crispy did, but his, and darker. Attacks come at Crispy; the
+  // rest (the clock, the glass, the grilled cheese...) are in Andy's hand.
+  function dark(key) {
+    const k = 'dark:' + key;
+    if (sprites[k]) return k;
+    const sp = sprites[key];
+    if (!sp || !sp.width) return key;
+    const c = document.createElement('canvas');
+    c.width = sp.width;
+    c.height = sp.height;
+    const x = c.getContext('2d');
+    x.filter = 'brightness(0.45) contrast(1.25) saturate(0.6) sepia(0.35) hue-rotate(-25deg)';
+    x.drawImage(sp, 0, 0);
+    sprites[k] = c;
+    return k;
+  }
+  function heldFx(key, scale, dur, o = {}) {
+    const [, cy] = C().point('chest');
+    const x = C().x + 190;
+    const y = cy + 40;
+    return add(dur, (ctx, p) => {
+      const a = Math.min(1, p * 6) * (1 - clamp((p - 0.8) / 0.2, 0, 1));
+      const tilt = o.drink && p > 0.35 && p < 0.8 ? Math.sin(((p - 0.35) / 0.45) * Math.PI) * 0.8 : 0;
+      const shake = o.rattle && p < 0.6 ? Math.round(Math.sin(S.t * 70)) * PX : 0;
+      drawSprite(ctx, dark(key), x + shake, y - ease(Math.min(1, p * 4)) * 30, scale, { alpha: a, sx: -1, rot: tilt });
+      if (o.slam && p > 0.3 && p < 0.36) S.shake = Math.max(S.shake, 7);
+    });
+  }
+  function darkThrow(dur) {
+    const [fx, fy] = C().point('hand');
+    const [hx, hy] = S.heroPoint('chest');
+    return add(dur, (ctx, p) => {
+      const q = ease(clamp(p / 0.45, 0, 1));
+      const x = fx + (hx - fx) * q;
+      const y = fy - Math.sin(q * Math.PI) * 260 + (hy - 60 - fy) * q;
+      const squash = p > 0.45 && p < 0.65 ? 1 - Math.sin(((p - 0.45) / 0.2) * Math.PI) * 0.3 : 1;
+      drawSprite(ctx, dark('bag'), x, y, PX, { rot: -q * 2.6, sx: 1 / squash, sy: squash, alpha: 1 - clamp((p - 0.82) / 0.18, 0, 1) });
+    });
+  }
+  function darkSlice(dur) {
+    const [x, y] = S.heroPoint('chest');
+    return add(dur, (ctx, p) => {
+      ctx.save();
+      for (const [k, t0] of [[0, 0.15], [1, 0.3]]) {
+        const q = clamp((p - t0) / 0.12, 0, 1);
+        const fade = 1 - clamp((p - t0 - 0.25) / 0.3, 0, 1);
+        if (q <= 0 || fade <= 0) continue;
+        ctx.globalAlpha = fade;
+        const s = k ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(x - 150 * s, y - 220);
+        ctx.lineTo(x - 150 * s + 300 * s * q, y - 220 + 300 * q);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = PX * 3;
+        ctx.stroke();
+        ctx.strokeStyle = '#5a1414';
+        ctx.lineWidth = PX;
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+  function darkRg(dur) {
+    const ox = C().x + 200;
+    const oy = 560;
+    const [hx, hy] = S.heroPoint('chest');
+    return add(dur, (ctx, p) => {
+      const a = Math.min(1, p * 5) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
+      drawSprite(ctx, dark('rg'), ox, oy, PX, { alpha: a, sx: -1 });
+      if (p > 0.3 && p < 0.8) {
+        for (let i = 0; i < 2; i++) bolt(ctx, ox, oy - 10, hx + (Math.random() - 0.5) * 60, hy - 60 + (Math.random() - 0.5) * 120, 70, PX, i ? '#2a1a1a' : '#5a3a3a');
+        S.hero.shake = Math.max(S.hero.shake, 3);
+      }
+    });
+  }
+  function darkBlast(dur) {
+    const [x, y0] = S.heroPoint('head');
+    const y = y0 + 20;
+    const smoke = particles(22, x, y, (i, a, b) => ({ a: a * Math.PI * 2, v: 80 + b * 220, r: 14 + (i % 4) * 10 }));
+    return add(dur, (ctx, p) => {
+      if (p < 0.4) {
+        if (Math.random() < 0.85) star(ctx, x, y, 4 + (p / 0.4) * 24, '#5a4a4a', 0.14);
+        return;
+      }
+      const q = (p - 0.4) / 0.6;
+      if (q < 0.1) S.shake = Math.max(S.shake, 9);
+      ctx.globalAlpha = 1 - clamp((q - 0.6) / 0.4, 0, 1);
+      for (const [k, col] of [[1.1, '#0e0a0a'], [0.6, '#3a1410']]) {
+        ctx.fillStyle = col;
+        for (const f of smoke) {
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(f.a) * f.v * Math.min(q, 0.5), y + Math.sin(f.a) * f.v * Math.min(q, 0.5) * 0.7, Math.max(0, f.r * (1 + q) * (1 - q * 0.5) * k), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+  function mimicFx(copy) {
+    switch (copy) {
+      case 'trash':
+        return sfx('trash'), sfx('thud', 430), darkThrow(950);
+      case 'slice':
+        return sfx('slice'), darkSlice(1000);
+      case 'rg':
+        return sfx('rg'), darkRg(1400);
+      case 'nut':
+        return sfx('nutShine'), sfx('boom', 650), darkBlast(1400);
+      case 'early':
+        return sfx('early'), heldFx('clock', PX * 1.2, 1500, { rattle: true });
+      case 'authority':
+        return sfx('gavel', 330), heldFx('gavelHit', PX * 1.1, 1200, { slam: true });
+      case 'wine':
+        return sfx('wine'), heldFx('glass', PX * 1.1, 1400, { drink: true });
+      case 'taste':
+        return sfx('taste'), heldFx('swordReal', PX, 1600);
+      case 'choc':
+        return sfx('bite', 500), heldFx('choc', PX * 3, 1200);
+      case 'cheese':
+        return sfx('sizzle'), sfx('bite', 600), heldFx('cheese', PX, 1400);
+      case 'pills':
+        return sfx('pills'), heldFx('pills', PX * 1.2, 1300);
+      case 'stance':
+        return sfx('stance'), stareFx(1200);
+      case 'talk':
+        return sfx('reply'), dots(1300);
+      case 'lights':
+        return sfx('lightsFail'), blackout(900);
+      default:
+        return sfx('swing'), darkSwing(800);
+    }
+  }
+
   // Its arms: torn off at the shoulder (the arm of the stage it's at), from its shoulder to
   // Crispy, stretched far too long to get there, and drawn over the HUD so the attack lands on
   // him. reach: one arm, claws at him; grab: both, by the shoulders, squeezing; pat: one hand on
@@ -1349,8 +1482,8 @@
     { from: [1390, -60], to: [990, 360], rot: Math.PI + 0.4 }, // the top right
   ];
   const KK = PX * 2.2; // screen pixels to each of his
-  S.spawnKiller = function () {
-    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [] };
+  S.spawnKiller = function (approach = 6) {
+    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [], approach };
   };
   function killerAt(kl) {
     const c = CORNERS[kl.corner];
@@ -1374,12 +1507,11 @@
   function updateKiller(dt) {
     const kl = S.killer;
     if (!kl) return;
-    const D = window.CRISPY_DATA.killer;
     if (kl.state === 'back') {
       kl.a -= dt * 2.2;
       if (kl.a <= 0) return (S.killer = null);
     } else if (kl.state === 'in' && S.killerCanMove && S.killerCanMove()) {
-      kl.a += dt / D.approach;
+      kl.a += dt / kl.approach;
       if (kl.a >= 1) {
         kl.a = 1;
         kl.state = 'strike';

@@ -577,14 +577,11 @@
           await wait(up ? 420 : 200);
           break;
         }
-        case 'family': {
+        case 'family':
+          // (crossed off the checklist, in the effect, and in his box)
           if (v) v.family = e.value;
           refresh();
-          const [x, y] = S().heroPoint('head');
-          S().popup(`${e.name.toUpperCase()} IS OUT`, x + 90, y - 160, { color: '#7e9a84', size: 24, dur: 1.6 });
-          await wait(500);
           break;
-        }
         case 'door':
           S().setDoor(e.open !== false);
           break;

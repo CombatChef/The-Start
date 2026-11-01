@@ -41,13 +41,13 @@ picks, Esc or X goes back; or click.
   his hands, a staring contest, then holding the line), with **Talk**, and once with **Open the
   front door**; after three Shows it creeps up on its own every round. Hurting it lowers it. At
   100%, MERCY > SPARE: Crispy blinks, and when he opens his eyes it's gone. It's the long way:
-  about 23 rounds.
+  about 20 rounds.
 - **Flee**: get the family out, one at a time: **Veranda** (his wife, upstairs), then **Justin**
   (in the basement), then **Erik** (his younger son, in his room upstairs). Each is a risk: if it
   hears them, it lunges and Crispy takes the hit. The car alarm or the lights make it a sure thing;
-  an open front door helps. Their names in his box turn green as they get to the car. Once all
-  three are out, MERCY > FLEE; with the front door shut it gets one swipe at him on the way out.
-  His texts to them show up on his cracked phone.
+  an open front door helps. His text to each shows up on his cracked phone, then a scrap of paper
+  checklist: their name is crossed off if they got out (and in his box too). Once all three are
+  out, MERCY > FLEE; with the front door shut it gets one swipe at him on the way out.
 
 Each one ends the same way: a long, calm breath and a fade to black.
 

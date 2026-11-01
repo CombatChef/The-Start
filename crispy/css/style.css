@@ -392,7 +392,10 @@ img {
   color: var(--dim);
 }
 .family .who.out {
-  color: #8dffc4;
+  color: #8a8478;
+  text-decoration: line-through;
+  text-decoration-color: #b8584a;
+  text-decoration-thickness: 2px;
 }
 .family.safe {
   color: #8dffc4;

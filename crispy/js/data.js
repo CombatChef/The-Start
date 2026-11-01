@@ -125,7 +125,7 @@
         id: 'talk',
         name: 'Talk',
         foe: { atk: 0.85, turns: 2 },
-        mercy: [1, 2, 3, 5, 7], // by stage: the more human it gets, the more it listens
+        mercy: [2, 3, 4, 6, 8], // by stage: the more human it gets, the more it listens
         doc: 'Say something to it. The more human it gets, the more it listens. (MERCY up a little)',
       },
       {
@@ -150,17 +150,17 @@
         id: 'show',
         name: 'Show it who he is',
         steps: [
-          { name: 'Show it the photos', fx: 'photos', mercy: 3, doc: 'Point at the family photos on the wall. Show it whose house this is.' },
-          { name: 'Say their names', fx: 'names', mercy: 4, doc: 'Veranda. Justin. Erik. Make sure it knows exactly who it would have to get through.' },
-          { name: 'Tell it about 4 AM', fx: 'fourAm', mercy: 5, doc: 'Tell it what time he gets up. Every day.' },
-          { name: 'Show it his hands', fx: 'hands', mercy: 6, doc: 'Every can, on every route. It wants this life? Show it what it costs.' },
-          { name: 'Don’t blink', fx: 'noBlink', mercy: 7, doc: 'Stare it down.' },
-          { name: 'Hold the line', fx: 'hold', mercy: 3, doc: 'Stay right where he is, in its way. Again.' },
+          { name: 'Show it the photos', fx: 'photos', mercy: 4, doc: 'Point at the family photos on the wall. Show it whose house this is.' },
+          { name: 'Say their names', fx: 'names', mercy: 5, doc: 'Veranda. Justin. Erik. Make sure it knows exactly who it would have to get through.' },
+          { name: 'Tell it about 4 AM', fx: 'fourAm', mercy: 6, doc: 'Tell it what time he gets up. Every day.' },
+          { name: 'Show it his hands', fx: 'hands', mercy: 7, doc: 'Every can, on every route. It wants this life? Show it what it costs.' },
+          { name: 'Don’t blink', fx: 'noBlink', mercy: 8, doc: 'Stare it down.' },
+          { name: 'Hold the line', fx: 'hold', mercy: 4, doc: 'Stay right where he is, in its way. Again.' },
         ],
         trickle: [0, 0, 0, 1, 1, 1], // MERCY each round, by how many steps he's shown it
         doc: '(MERCY up a little, and a different ACT each time. After a few, MERCY keeps creeping up on its own.)',
       },
-      { id: 'door', name: 'Open the front door', mercy: 8, doc: 'Prop the front door open and show it the way out. (MERCY up a little, once. It also makes getting the family out, and running, safer.)' },
+      { id: 'door', name: 'Open the front door', mercy: 10, doc: 'Prop the front door open and show it the way out. (MERCY up a little, once. It also makes getting the family out, and running, safer.)' },
       {
         id: 'family',
         name: 'Get the family out',
@@ -172,7 +172,7 @@
     ],
     // MERCY: at 100 it's lost interest, and will take a truce (SPARE). Hurting it costs some
     // back; the higher it is, the more often it can't be bothered to attack.
-    mercyRules: { full: 100, hurt: 12, sting: 6, hesitate: 0.001 },
+    mercyRules: { full: 100, hurt: 12, sting: 6, hesitate: 0.0012 },
     // Who Crispy gets out, in order, and how likely each is to get past it unheard.
     family: [
       { name: 'Veranda', pron: 'her', who: 'his wife', where: 'upstairs', chance: 0.55 },

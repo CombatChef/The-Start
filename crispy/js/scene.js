@@ -52,7 +52,7 @@
       pal: { f: '#8e9094', F: '#6a6d72', b: '#2a170e', B: '#3e2416', h: '#55341e' },
       rows: ['ffffbbbbbbbbbb', 'FffFbBhbBhbBhb', 'ffffbBBbBBbBBb', 'FffFbbbbbbbbbb', 'ffffbBhbBhbBhb', 'FffFbBBbBBbBBb', 'ffffbbbbbbbbbb'],
     },
-    // the family, sneaking out in the dark (lit at the edges by the windows)
+    // the family's shapes in the dark, for the creature's Lure (lit at the edges by the windows)
     adult: {
       pal: { k: '#1d222b', r: '#7d8ea6' },
       rows: ['..rrr..', '.rkkkr.', '.rkkkr.', '..rkr..', '.rkkkr.', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', 'rkkkkkr', '.kkkkk.', '.kkkkk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.kk.kk.', '.rr.rr.'],
@@ -89,6 +89,11 @@
     '?': ['XX.', '..X', '.X.', '...', '.X.'], '!': ['.X.', '.X.', '.X.', '...', '.X.'], ':': ['...', '.X.', '...', '.X.', '...'],
     "'": ['.X.', '.X.', '...', '...', '...'], '-': ['...', '...', 'XXX', '...', '...'],
   };
+  // Writes in those letters, at one canvas pixel to each of theirs.
+  function pixText(x, str, x0, y0, col) {
+    x.fillStyle = col;
+    [...str].forEach((ch, i) => (GLYPHS[ch] || []).forEach((row, yy) => [...row].forEach((v, xx) => v === 'X' && x.fillRect(x0 + i * 4 + xx, y0 + yy, 1, 1))));
+  }
   // The item sheet's blank text bubble, with lines of text in it and a "read" time under it.
   function textBubble(lines, read) {
     const key = 'msg:' + lines.join('|') + '|' + read;
@@ -100,12 +105,48 @@
     c.height = base.height + 8;
     const x = c.getContext('2d');
     x.drawImage(base, 0, 0);
-    const put = (str, x0, y0, col) => {
-      x.fillStyle = col;
-      [...str].forEach((ch, i) => (GLYPHS[ch] || []).forEach((row, yy) => [...row].forEach((v, xx) => v === 'X' && x.fillRect(x0 + i * 4 + xx, y0 + yy, 1, 1))));
-    };
-    lines.forEach((l, i) => put(l, 6, 5 + i * 7, '#161618'));
-    if (read) put(read, base.width - read.length * 4, base.height + 2, '#58585a');
+    lines.forEach((l, i) => pixText(x, l, 6, 5 + i * 7, '#161618'));
+    if (read) pixText(x, read, base.width - read.length * 4, base.height + 2, '#58585a');
+    sprites[key] = c;
+    return key;
+  }
+  // The family checklist: a scrap of paper, with the ones already out crossed off.
+  const FAMILY = ['veranda', 'justin', 'erik'];
+  const LIST = { w: 44, h: 34, row: (i) => 11 + i * 7, name: 11 };
+  function checklist(done) {
+    const key = 'list:' + done;
+    if (sprites[key]) return key;
+    const c = document.createElement('canvas');
+    c.width = LIST.w;
+    c.height = LIST.h;
+    const x = c.getContext('2d');
+    for (let yy = 0; yy < LIST.h; yy++) {
+      for (let xx = 0; xx < LIST.w; xx++) {
+        if (yy >= LIST.h - 3 && (xx * 7 + yy * 3) % 5 < yy - (LIST.h - 4)) continue; // torn along the bottom
+        const n = ((xx * 73856093) ^ (yy * 19349663)) & 7;
+        x.fillStyle = n < 2 ? '#86817a' : n < 6 ? '#9a958a' : '#aaa59a';
+        x.fillRect(xx, yy, 1, 1);
+      }
+    }
+    pixText(x, 'get out', 3, 3, '#161618');
+    FAMILY.forEach((nm, i) => {
+      const y = LIST.row(i);
+      x.fillStyle = '#161618';
+      x.fillRect(3, y, 5, 1);
+      x.fillRect(3, y + 4, 5, 1);
+      x.fillRect(3, y, 1, 5);
+      x.fillRect(7, y, 1, 5);
+      pixText(x, nm, LIST.name, y, i < done ? '#4a4844' : '#161618');
+      if (i < done) {
+        x.fillStyle = '#5a1414';
+        x.fillRect(LIST.name - 1, y + 2, nm.length * 4 + 1, 1); // crossed off
+        x.fillRect(4, y + 1, 1, 1);
+        x.fillRect(5, y + 2, 1, 1);
+        x.fillRect(6, y + 3, 1, 1);
+        x.fillRect(6, y + 1, 1, 1);
+        x.fillRect(4, y + 3, 1, 1);
+      }
+    });
     sprites[key] = c;
     return key;
   }
@@ -768,46 +809,48 @@
         }
       });
     },
-    // ACT: Get the family out. Crispy texts one of them, then they sneak out behind its back:
-    // Veranda down the stairs (at the left of the room), Justin up from the basement, Erik down
-    // the stairs. If it hears them, they freeze.
+    // ACT: Get the family out: Veranda, then Justin, then Erik. Crispy texts one of them, and
+    // the checklist: crossed off if they got out unheard, shaking if it heard them.
     family(o = {}) {
+      // he texts the next one, then the checklist: crossed off if they got out
       const step = o.step || 0;
       const ok = o.ok !== false;
-      const sprite = ['veranda', 'adult', 'adult'][step];
-      const label = ['VERANDA', 'JUSTIN', 'ERIK'][step];
       const msg = [
         ['somethings in', 'the house. out', 'the back. now'],
         ['basement stairs', 'slow. out the', 'back. to the car'],
         ['erik. shoes on', 'dont look at it', 'go when i say'],
       ][step];
-      const path = step === 1 ? [[392, 476], [300, 478], [-60, 478]] : [[318, 395], [175, 478], [-60, 478]];
+      const k = PX * 1.3; // screen pixels to each of the list's
+      const nx = 600;
+      const ny = 520;
       sfx('phone');
-      sfx('sneak', 1300);
-      if (!ok) sfx(step === 1 ? 'groan' : 'creak', 1900);
-      return add(3200, (ctx, p) => {
+      if (ok) sfx('scratch', 1650);
+      else sfx(step === 1 ? 'groan' : 'creak', 1500);
+      return add(2700, (ctx, p) => {
         const a = 1 - clamp((p - 0.9) / 0.1, 0, 1);
         // the text: his cracked phone, and the message
         if (p < 0.42) {
           const fa = 1 - clamp((p - 0.36) / 0.06, 0, 1);
           const buzz = p < 0.1 ? Math.round(Math.sin(S.t * 60)) * PX : 0;
           drawSprite(ctx, 'phone', 390 + buzz, 610, PX, { alpha: fa });
-          const k = textBubble(msg, p > 0.22 ? `read 2:${49 + step * 3}` : '');
-          if (k && p > 0.05) drawSprite(ctx, k, 600, 520, PX, { alpha: fa });
+          const key = textBubble(msg, p > 0.22 ? `read 2:${49 + step * 3}` : '');
+          if (key && p > 0.05) drawSprite(ctx, key, 600, 520, PX, { alpha: fa });
+          return;
         }
-        if (p < 0.38) return;
-        const q0 = (p - 0.38) / 0.52;
-        const q = ok ? clamp(q0, 0, 1) : Math.min(clamp(q0, 0, 1), 0.4); // heard: frozen part way
-        const seg = q < 0.5 ? 0 : 1;
-        const t = seg ? (q - 0.5) * 2 : q * 2;
-        const [x0, y0] = path[seg];
-        const [x1, y1] = path[seg + 1];
-        const x = x0 + (x1 - x0) * t;
-        const y = y0 + (y1 - y0) * t + (q0 < 0.4 || ok ? (Math.sin(S.t * 9) > 0 ? -PX : 0) : 0);
-        const fade = step === 1 ? clamp(q0 * 5, 0, 1) : 1; // Justin, out of the dark of the basement
-        drawSprite(ctx, sprite, x, y, PX * 2, { ay: 1, alpha: a * fade, sy: step === 2 ? 0.94 : 1 });
-        bigText(ctx, label, x, y - 116, 20, '#7d8ea6', { alpha: a * fade });
-        if (!ok && q0 > 0.4) bigText(ctx, step === 1 ? 'groan' : 'creak', x + 60, y - 160, 30, '#8a7a52', { rot: -0.08, alpha: a });
+        // the list, with the ones already out crossed off
+        const shake = !ok && p > 0.55 && p < 0.7 ? Math.round(Math.sin(S.t * 50)) * PX : 0;
+        drawSprite(ctx, checklist(step), nx + shake, ny, k, { alpha: Math.min(1, (p - 0.42) * 10) * a });
+        const x0 = nx - (LIST.w / 2) * k + shake;
+        const y0 = ny - (LIST.h / 2) * k + (LIST.row(step) + 2) * k;
+        if (ok && p > 0.6) {
+          // and this one, crossed off now
+          const q = clamp((p - 0.6) / 0.14, 0, 1);
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#5a1414';
+          ctx.fillRect(x0 + (LIST.name - 1) * k, y0, (FAMILY[step].length * 4 + 1) * k * q, k);
+          if (q >= 1) for (const [dx, dy] of [[4, -1], [5, 0], [6, 1], [6, -1], [4, 1]]) ctx.fillRect(x0 + dx * k, y0 + dy * k, k, k);
+          ctx.globalAlpha = 1;
+        }
       });
     },
     // ACT: Show it who he is, a step at a time (the first is the photos, above).

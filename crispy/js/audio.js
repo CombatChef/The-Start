@@ -460,9 +460,10 @@
       for (let i = 0; i < 2; i++) tone('sawtooth', 150, i * 0.32, 0.22, 0.08, { filter: ['lowpass', 400] });
       chime(1.1, [1568, 2093], 0.08, 0.05, 'sine', 0.25);
     },
-    // footsteps, trying to be quiet
-    sneak: () => {
-      for (let i = 0; i < 5; i++) thump(i * 0.28, 90, 0.18, 0.09);
+    // a pen, crossing a name off
+    scratch: () => {
+      noise(0, 0.22, 0.12, { type: 'bandpass', f: [2500, 3800], q: 4, attack: 0.02 });
+      noise(0.05, 0.12, 0.06, { type: 'highpass', f: 5000 });
     },
     // a stair creaking
     creak: () => {

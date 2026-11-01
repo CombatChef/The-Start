@@ -39,6 +39,9 @@
     beam: 0, // the car's headlights through the blinds, when they get away
     beamX: 0,
     doorTarget: 0,
+    look: 0, // turned around to the kitchen behind him, 0 .. 1 (and on the way)
+    lookTarget: 0,
+    flash: null, // his phone's flash, going off: { t, from, to } (where the one behind him stood, and goes back to)
     hero: { shake: 0, flash: 0, dx: 0, gold: 0, afraid: false, critical: false, down: 0, away: 0 }, // his portrait's state
   };
   window.SCENE = S;
@@ -163,6 +166,13 @@
     S.bg.src = images.night;
     S.bgLit = new Image();
     S.bgLit.src = images.nightLit;
+    // the kitchen behind him (all but black), and as the flash shows it
+    if (images.kitchen) {
+      S.kitchen = new Image();
+      S.kitchen.src = images.kitchen;
+      S.kitchenFlash = new Image();
+      S.kitchenFlash.src = images.kitchenFlash;
+    }
     for (const k in PROPS) sprites[k] = pixelSprite(PROPS[k]);
     // the trash bag, the grilled cheese and the sword, from their sheet. The game's sword is
     // foam, so it's the sheet's sword greyed and lightened, until Taste of Reality makes it real.
@@ -1508,7 +1518,7 @@
   // Did a click (in stage pixels) land on him? Then he goes.
   S.killerHit = function (x, y) {
     const kl = S.killer;
-    if (!kl || kl.state !== 'in') return false;
+    if (!kl || kl.state !== 'in' || S.look > 0) return false;
     const at = killerAt(kl);
     if (!faceOnScreen(at)) return false; // (not before he's really there)
     const ux = -Math.sin(at.rot);
@@ -1631,6 +1641,107 @@
       }
     }, { top: true });
   };
+
+  // ------------------------------------------------------------------ turned around
+  // Behind him is the kitchen, all but pitch black. The one behind him is standing on its floor,
+  // somewhere between the back door and Crispy, along the boards, and he's only seen when the
+  // phone's flash goes off. (The picture is a phone's, held about 1.5 m up: CAM is where the
+  // floor meets the horizon, the lens, and how tall he is, so he stands on the floor at every
+  // distance.)
+  const CAM = { cx: 640, hz: 358, f: 922, h: 1.5, tall: 2.0 };
+  // where he stands at `s` (0 in the back doorway .. 4 right there), on the stage: his feet, his
+  // height, and how far off he is (metres)
+  function standAt(s) {
+    const z = 5.25 - s * 0.925;
+    const x = 1.9 - 0.555 * (5.25 - z); // (the boards run off to the right, towards the back door)
+    return { x: CAM.cx + (CAM.f * x) / z, y: CAM.hz + (CAM.f * CAM.h) / z, h: (CAM.f * CAM.tall) / z, z };
+  }
+  S.standAt = standAt;
+  // He turns around (or back): a quick turn of the head, through the dark.
+  S.turnAround = function (on) {
+    S.lookTarget = on ? 1 : 0;
+    if (!on) S.flash = null;
+    return 320;
+  };
+  // The flash: he's seen where he stands (`from`), and he's sent back (`to`) as it dies away.
+  S.flashAt = function (from, to) {
+    S.flash = { t: 0, from, to };
+    if (from >= 3) S.shake = 10;
+  };
+  // how much light there is from it, `t` seconds after: all of it, then dying away
+  const flashLight = (t) => (t < 0.09 ? 1 : Math.pow(Math.max(0, 1 - (t - 0.09) / 1.15), 1.7));
+  // the killer's shape, all black, for his shadow
+  let shade;
+  function killerShade() {
+    const sp = sprites.killer;
+    if (shade || !sp) return shade;
+    shade = document.createElement('canvas');
+    shade.width = sp.width;
+    shade.height = sp.height;
+    const x = shade.getContext('2d');
+    x.drawImage(sp, 0, 0);
+    x.globalCompositeOperation = 'source-in';
+    x.fillStyle = '#000';
+    x.fillRect(0, 0, sp.width, sp.height);
+    return shade;
+  }
+  function drawStalker(l) {
+    const sp = sprites.killer;
+    const F = S.flash;
+    if (!sp || !F) return;
+    const fl = flashLight(F.t);
+    if (fl <= 0.01) return;
+    // knocked back as the light dies
+    const at = standAt(F.from + (F.to - F.from) * ease(clamp((F.t - 0.15) / 0.9, 0, 1)));
+    const k = at.h / sp.height;
+    const w = sp.width * k;
+    const x = at.x - w / 2;
+    const y = at.y - at.h;
+    // his shadow, thrown back from the flash: under his feet, and (in the back doorway) on the
+    // door behind him, just to the side
+    l.globalAlpha = Math.min(1, fl * 2) * 0.6;
+    l.fillStyle = '#000';
+    l.beginPath();
+    l.ellipse(at.x + w * 0.03, at.y - at.h * 0.01, w * 0.55, Math.max(3, at.h * 0.016), 0, 0, Math.PI * 2);
+    l.fill();
+    l.globalAlpha = Math.min(1, fl * 2);
+    const sh = killerShade();
+    if (sh && at.z > 4.8) l.drawImage(sh, x + w * 0.1, y + at.h * 0.01, w, at.h * 0.99);
+    l.globalAlpha = 1;
+    l.drawImage(sp, x, y, w, at.h);
+    // as lit as the flash leaves him: dim at the back door, blinding up close
+    const lit = clamp(1.6 * (1.7 / at.z) ** 2, 0.14, 1.3) * fl;
+    l.save();
+    l.globalCompositeOperation = 'source-atop';
+    if (lit < 1) {
+      l.fillStyle = `rgba(0,0,0,${1 - lit})`;
+      l.fillRect(x - w, y - 10, w * 3, at.h + 20);
+    } else {
+      l.fillStyle = `rgba(214,222,236,${Math.min(0.3, (lit - 1) * 1.2)})`;
+      l.fillRect(x, y, w, at.h);
+    }
+    l.restore();
+  }
+  function drawKitchen(ctx, ox, oy) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    if (S.kitchen) ctx.drawImage(S.kitchen, ox - 8, oy - 8, W + 16, H + 16);
+    const F = S.flash;
+    const fl = F ? flashLight(F.t) : 0;
+    if (fl > 0.004 && S.kitchenFlash) {
+      ctx.globalAlpha = fl;
+      ctx.drawImage(S.kitchenFlash, ox - 8, oy - 8, W + 16, H + 16);
+      ctx.globalAlpha = 1;
+    }
+    const low = begin(S.low, ox, oy);
+    drawStalker(low);
+    blowUp(ctx, S.low, true);
+    // the pop of the flash itself
+    if (F && F.t < 0.12) {
+      ctx.fillStyle = `rgba(236,240,248,${0.9 * (1 - F.t / 0.12)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
 
   S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
   S.foeMove = (name, o) => (FOE[name] ? FOE[name](o) : 0);
@@ -1834,6 +1945,9 @@
       if (!h.down) h.rising = false;
     }
     updateKiller(dt);
+    // turning around: a third of a second
+    if (S.look !== S.lookTarget) S.look = S.lookTarget > S.look ? Math.min(1, S.look + dt / 0.32) : Math.max(0, S.look - dt / 0.32);
+    if (S.flash && (S.flash.t += dt) > 1.6) S.flash = null;
     S.effects = S.effects.filter((e) => S.t - e.t0 < e.dur);
     S.popups = S.popups.filter((q) => S.t - q.t0 < q.dur);
     if (!S.effects.length) S.flicker = S.black = 0;
@@ -1886,9 +2000,38 @@
     const sy = S.shake ? Math.round(((Math.random() - 0.5) * S.shake) / PX) * PX : 0;
     const wx = S.wobble ? Math.round((Math.sin(S.t * 7) * S.wobble) / PX) * PX : 0;
     const wy = S.wobble ? Math.round((Math.cos(S.t * 5) * S.wobble * 0.5) / PX) * PX : 0;
+    // turning around: the room swings away to the left, into the dark, and the kitchen comes in
+    // from the right (and back again)
+    const lk = S.look;
+    if (lk < 0.5) {
+      const slide = lk > 0 ? -Math.round((ease(lk * 2) * 420) / PX) * PX : 0;
+      if (slide) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+      }
+      drawRoom(ctx, sx + wx + slide, sy + wy);
+    } else drawKitchen(ctx, sx + Math.round(((1 - ease((lk - 0.5) * 2)) * 420) / PX) * PX, sy);
+    if (lk > 0 && lk < 1) {
+      ctx.fillStyle = `rgba(0,0,0,${0.95 * (1 - Math.abs(lk - 0.5) * 2)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // film grain over everything
+    const g = S.grain[Math.floor(Math.random() * S.grain.length)];
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.globalCompositeOperation = 'overlay';
+    const ox = Math.floor(Math.random() * 256);
+    const oy = Math.floor(Math.random() * 256);
+    for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) ctx.drawImage(g, x, y);
+    ctx.restore();
+    portrait();
+    S.shakeAt = [sx + wx, sy + wy];
+  };
+  function drawRoom(ctx, ox, oy) {
     // the room (darker still), and the lights when they're up (or flickering)
     ctx.save();
-    ctx.translate(sx + wx, sy + wy);
+    ctx.translate(ox, oy);
     ctx.drawImage(S.bg, -8, -8, W + 16, H + 16);
     const lit = Math.max(S.lights, S.flicker);
     if (lit > 0.01) {
@@ -1944,7 +2087,7 @@
     ctx.restore();
 
     // the speaker, if it's out, and the creature, at a third of the resolution
-    const low = begin(S.low, sx + wx, sy + wy);
+    const low = begin(S.low, ox, oy);
     drawSpeaker(low);
     C().draw(low);
     blowUp(ctx, S.low);
@@ -1952,19 +2095,7 @@
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
     }
-
-    // film grain over everything
-    const g = S.grain[Math.floor(Math.random() * S.grain.length)];
-    ctx.save();
-    ctx.globalAlpha = 0.07;
-    ctx.globalCompositeOperation = 'overlay';
-    const ox = Math.floor(Math.random() * 256);
-    const oy = Math.floor(Math.random() * 256);
-    for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) ctx.drawImage(g, x, y);
-    ctx.restore();
-    portrait();
-    S.shakeAt = [sx + wx, sy + wy];
-  };
+  }
 
   // The effects and the numbers, over the HUD, at a third of the resolution.
   S.drawFx = function (ctx) {
@@ -1978,7 +2109,7 @@
       bigText(l, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 30, q.size, q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
     }
     for (const e of S.effects) if (e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
-    drawKiller(l);
+    if (S.look < 0.5) drawKiller(l);
     blowUp(ctx, S.lowFx, true);
   };
 
@@ -2021,5 +2152,7 @@
     S.speaker = null;
     S.killer = null;
     S.turned = false;
+    S.look = S.lookTarget = 0;
+    S.flash = null;
   };
 })();

@@ -922,13 +922,27 @@
       }
     }
     // THE KILLER (see ui.js): not part of the fight. If he gets all the way in, he gets Crispy.
-    killerAttack(behind = false) {
+    killerAttack() {
       const ev = [];
       if (this.over) return ev;
-      const dmg = Math.max(1, Math.round(this.hero.hpMax * (behind ? DATA.killer.behind.hit : DATA.killer.hit) * (0.9 + this.rand() * 0.2)));
-      ev.push({ t: 'log', text: behind ? 'It was right behind him the whole time.' : 'Something else is in the house.', tone: 'bad' });
+      const dmg = Math.max(1, Math.round(this.hero.hpMax * DATA.killer.hit * (0.9 + this.rand() * 0.2)));
+      ev.push({ t: 'log', text: 'Something else is in the house.', tone: 'bad' });
       ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'killer' });
       this.hurtHero(dmg, ev);
+      return ev;
+    }
+    // The one behind him got all the way there: that's it. (No WILLPOWER: he never saw it.)
+    killerKill() {
+      const ev = [];
+      if (this.over) return ev;
+      const h = this.hero;
+      ev.push({ t: 'log', text: 'It was right behind him.', tone: 'bad' });
+      ev.push({ t: 'hit', who: 'hero', amount: h.hp, kind: 'killer' });
+      h.hp = 0;
+      h.willpower = false;
+      this.over = 'lose';
+      ev.push({ t: 'log', text: 'Crispy never turned around in time.', tone: 'bad' });
+      ev.push({ t: 'lose' });
       return ev;
     }
     scare(turns, ev) {

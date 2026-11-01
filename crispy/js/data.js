@@ -348,10 +348,15 @@
       gap: [2, 2, 2, 1, 1],
       approach: [6, 5.4, 4.8, 4.2, 3.6],
       hit: 0.15,
-      // ...and the whole time, he's standing behind Crispy (in his portrait), fading in, faster
-      // the further the creature has gone (`full`: seconds from nothing to all the way there).
-      // Each click fades him back by `click`; all the way there: `hit` of Crispy's health.
-      behind: { full: [18, 16, 14, 12.5, 11], click: 0.12, hit: 0.25 },
+      // ...and the whole time, he's behind Crispy, in the dark kitchen, coming closer: the
+      // portrait shows how close (he fades in behind him). `full`: seconds from the back door to
+      // right there, by the creature's stage; he comes in `stages` steps across the floor. Crispy
+      // TURNS AROUND (it isn't a turn) and his phone's flash sends him back `flash` of the way;
+      // then it needs `cooldown` seconds, and flashing before that brings him `early` closer.
+      // Within `scare` of him, the flash shows him close enough to scream. While a turn plays
+      // out he comes no closer than `cap`; all the way there (at the menu, or turned around),
+      // he kills Crispy outright. WILLPOWER doesn't help.
+      behind: { full: [60, 52, 45, 39, 34], stages: 5, flash: 0.4, cooldown: 10, early: 0.2, scare: 0.6, cap: 0.9 },
     },
 
     afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts

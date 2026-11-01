@@ -6,6 +6,8 @@
 From crispy/assets/source/ (the photos aren't in the repo: put them there first):
   living_room.webp  -> the room at night, lit faintly orange from the ceiling fan's lamp (and a
                        brighter version, for when the lights are turned up), not pixelated
+  kitchen.webp      -> the kitchen behind him, when he turns around: all but pitch black (and as
+                       his phone's flash shows it)
   crispy_photo.webp -> Crispy as a pixel sprite in colour, from the collar up, his face turned a
   crispy_mask.png      little to the right (the mask cuts him out of the photo: make it with
                        crispy/tools/cutout.py; the pixels are kept as crispy_pixels.png once made)
@@ -64,6 +66,52 @@ def night(exposure):
     light = np.array([0.030, 0.038, 0.070], np.float32) + np.array([1.0, 0.64, 0.27], np.float32) * (0.27 * pool ** 1.5 + 0.16 * fall ** 2 + 0.9 * glow)[..., None]
     a = a * light * exposure
     v = np.clip(1 - 0.55 * (((xx - W / 2) / (W * 0.62)) ** 2 + ((yy - H * 0.45) / (H * 0.7)) ** 2), 0.25, 1)
+    a *= v[..., None]
+    return Image.fromarray((np.clip(a, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8))
+
+
+# ---------------------------------------------------------------- the kitchen, behind him
+
+# Where the kitchen's light comes from: nowhere much. The fan's lamp is in the living room behind
+# Crispy, so a little of its orange falls in from where he stands, onto the near things; the far
+# end, by the back door, is black, but for the night through the door's glass and the sink's
+# blinds, and the stove's clock.
+FAR = (0.66 * W, 0.47 * H)  # the far end of the room, on the screen
+
+
+def kitchen(flash=False):
+    """The kitchen at night (kitchen.webp, not in the repo): all but pitch black, in the living
+    room's colours (the faintest orange on the nearest things, the night just there in the back
+    door's glass, the stove's clock): or, with flash=True, as a phone's flash shows it for the
+    instant it goes off: cold white, blinding up close, falling away to nothing at the far end."""
+    src = Image.open(os.path.join(SRC, 'kitchen.webp')).convert('RGB').resize((W, H), Image.LANCZOS)
+    a = (np.asarray(src).astype(np.float32) / 255) ** 2.2
+    lum = a @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    win = np.zeros((H, W), np.float32)
+    for x0, y0, x1, y1 in ((416, 118, 548, 452), (920, 276, 1040, 456)):  # the sink's blinds, the back door's glass
+        win[y0:y1, x0:x1] = 1
+    win = cv2.GaussianBlur(win, (0, 0), 3)
+    bright = np.clip((lum - 0.2) / 0.4, 0, 1) * win
+    a = a * (1 - 0.96 * bright[..., None]) + bright[..., None] * np.array([0.006, 0.008, 0.016], np.float32)
+    grey = (a @ np.array([0.2126, 0.7152, 0.0722], np.float32))[..., None]
+    a = a * 0.5 + grey * 0.5
+    # how near each part of the picture is, roughly: the far end at FAR, nearer outwards from it
+    r = np.sqrt(((xx - FAR[0]) / (0.62 * W)) ** 2 + ((yy - FAR[1]) / (0.6 * H)) ** 2)
+    if flash:
+        # the flash: cold, white, falling off sharply with distance
+        near = np.clip(r, 0.05, 1.6)
+        light = np.array([0.92, 0.96, 1.0], np.float32) * (0.012 + 2.4 * near ** 4)[..., None]
+        a = a * light
+        a = a / (1 + a * 0.5)  # (blown out up close, not clipped flat)
+    else:
+        warm = np.array([1.0, 0.64, 0.27], np.float32)
+        light = np.array([0.0006, 0.0006, 0.0009], np.float32) + warm * (0.011 * np.clip(r, 0, 1.4) ** 3)[..., None]
+        a = a * light
+        a += bright[..., None] * np.array([0.0012, 0.0016, 0.0036], np.float32)  # the night, in the glass
+        clock = np.exp(-(((xx - 806) / 16) ** 2 + ((yy - 424) / 4) ** 2))
+        a += clock[..., None] * np.array([0.0, 0.006, 0.007], np.float32)
+    v = np.clip(1 - 0.6 * (((xx - W / 2) / (W * 0.6)) ** 2 + ((yy - H * 0.48) / (H * 0.68)) ** 2), 0.2, 1)
     a *= v[..., None]
     return Image.fromarray((np.clip(a, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8))
 
@@ -493,6 +541,7 @@ if __name__ == '__main__':
     images = {
         'night': data_url(night(1.0), 'JPEG', quality=86),
         'nightLit': data_url(night(2.6), 'JPEG', quality=86),
+        **({'kitchen': data_url(kitchen(), 'JPEG', quality=90), 'kitchenFlash': data_url(kitchen(True), 'JPEG', quality=86)} if os.path.exists(os.path.join(SRC, 'kitchen.webp')) else {}),
         'crispy': data_url(sprite),
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],

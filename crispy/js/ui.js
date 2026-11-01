@@ -24,6 +24,10 @@
   const SKULL = pixels(['X..XXXXX..X', '.XXXXXXXXX.', '.XX..X..XX.', '.XX..X..XX.', '..XXXXXXX..', '...X.X.X...', '.X.XXXXX.X.', 'X.........X']);
   const HP_COLOR = { OK: 'var(--hp-ok)', STABLE: 'var(--hp-stable)', SCATHED: 'var(--hp-scathed)', HURT: 'var(--hp-hurt)', CRITICAL: 'var(--hp-critical)', DEAD: 'var(--hp-dead)' };
   const FOE_COLOR = { GOOD: 'var(--hp-ok)', BRUISED: 'var(--hp-stable)', WOUNDED: 'var(--hp-scathed)', WEAKENED: 'var(--hp-hurt)', 'BARELY STANDING': 'var(--hp-critical)', DEFEATED: 'var(--hp-dead)' };
+  // turning around, turning back, and the flash
+  const TURN = pixels(['.XXXXXX...', 'X......X..', 'X......X..', 'X....XXXXX', 'X.....XXX.', 'X......X..']);
+  const BACK = pixels(['...XXXXXX.', '..X......X', '..X......X', 'XXXXX....X', '.XXX.....X', '..X......X']);
+  const BOLT = pixels(['...XXX', '..XXX.', '..XX..', '.XXXXX', '...XX.', '..XX..', '.XX...', '.X....']);
   const CMDS = ['fight', 'skill', 'act', 'item', 'mercy'];
   // the sound of each kind of hit landing on the creature
   const IMPACT = { foam: 'foam', real: 'thud', trash: 'thud', garbage: 'thud', elec: 'hurt', slice: 'hurt', nut: 'thud', ko: 'boom', poison: 'poison' };
@@ -69,23 +73,22 @@
     // he only moves while Crispy's deciding what to do
     S().killerCanMove = () => MENU.includes(UI.mode);
     S().onKiller = killerStrike;
-    // and the one behind Crispy: click him, again and again, to fade him back
-    const behind = $('#behind');
-    behind.src = window.CRISPY_IMAGES.killer;
-    behind.addEventListener('pointerdown', (e) => {
+    // and the one behind Crispy: the portrait shows how close he is; TURN AROUND to face him
+    $('#behind').src = window.CRISPY_IMAGES.killer;
+    const tb = $('#turn-btn');
+    tb.insertAdjacentHTML('afterbegin', TURN);
+    tb.addEventListener('click', (e) => {
       e.stopPropagation();
-      e.preventDefault();
-      if (!UI.b || UI.b.over || UI.scaring) return;
-      UI.behind = Math.max(0, UI.behind - DATA.killer.behind.click);
-      A().play('killerBack');
-      behind.classList.remove('hit');
-      void behind.offsetWidth;
-      behind.classList.add('hit');
-      drawBehind();
+      turnAround();
     });
+    $('#back-btn').insertAdjacentHTML('afterbegin', BACK);
+    $('#back-btn').addEventListener('click', turnBack);
+    $('#flash-btn .bolt').innerHTML = BOLT;
+    $('#flash-btn').addEventListener('click', flash);
     let last = performance.now();
     const tick = (now) => {
       behindTick(Math.min(0.1, (now - last) / 1000));
+      turnTick(now);
       last = now;
       requestAnimationFrame(tick);
     };
@@ -122,6 +125,9 @@
     UI.killerNext = 0;
     UI.behind = 0;
     UI.scaring = false;
+    UI.flashReady = 0;
+    UI.killed = false;
+    faceFront();
     drawBehind();
     UI.stats = { dealt: 0, taken: 0, t0: Date.now() };
     C().reset();
@@ -134,6 +140,7 @@
     await say('2:47 AM. Crispy hears something downstairs.', 'sys');
     await say('Something is standing in his living room. It’s tall. Too tall.', 'foe');
     await say('The Creature stands between Crispy and the stairs!', 'foe');
+    await say('Behind him, in the dark kitchen, a floorboard creaks. (TURN AROUND)', 'sys');
     main();
   }
   // The three good endings close the same way: a breath, black, and one quiet line.
@@ -152,7 +159,7 @@
       const line = `ROUND ${UI.b.round} · ${st.dealt} DAMAGE DEALT · ${st.taken} TAKEN · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
       screen(
         'lose',
-        `<div class="kicker">THE LIGHTS GO OUT</div>
+        `<div class="kicker">${UI.b.hero.hp <= 0 && UI.killed ? 'IT WAS RIGHT BEHIND HIM' : 'THE LIGHTS GO OUT'}</div>
          <h1>CRISPY SOTO HAS FALLEN</h1>
          <p>Veranda, Justin and Erik are still in the house. Get back up.</p>
          <div class="tally">${line}</div>
@@ -365,46 +372,120 @@
       if (MENU.includes(UI.mode) && !UI.b.over && !S().killer) S().spawnKiller(K.approach[st]);
     }, (1.5 + Math.random() * 3) * 1000 * SPEED);
   }
-  // He got all the way in: the jumpscare, the pictures, and what he does to Crispy.
+  // He got all the way in: the jumpscare, the pictures, and what he does to Crispy. (The one
+  // behind him: and that's the end of him.)
   async function killerStrike(behind = false) {
     UI.scaring = true;
+    if (UI.mode === 'turned') faceFront();
     UI.mode = 'busy';
     $('#keypad').classList.add('off');
     keypad();
     A().play('jumpscare');
     await wait(S().jumpscare(behind));
-    if (behind) {
-      UI.behind = 0;
-      drawBehind();
-    }
     UI.scaring = false;
     UI.view = snapshot(UI.b);
-    await play(UI.b.killerAttack(behind));
+    UI.killed = behind;
+    await play(behind ? UI.b.killerKill() : UI.b.killerAttack());
     UI.view = null;
     refresh();
     if (UI.b.over) return;
     main();
   }
-  // THE KILLER, BEHIND CRISPY: always there, fading in, while Crispy decides and while a turn
-  // plays out (not during the scares, or the willpower scene). He only gets him when Crispy is
-  // back at the menu: until then, all the way there, he waits.
+
+  // ------------------------------------------------------------------ THE KILLER, BEHIND CRISPY
+  // He's in the kitchen behind him, in the dark, coming across the floor from the back door, in
+  // steps: the portrait shows how close (he fades in behind Crispy). He comes the whole time
+  // Crispy's deciding, turned around, or a turn's playing out (but not all the way, then); not
+  // during the scares, or the willpower scene. All the way there: it's over.
+  // Crispy can TURN AROUND whenever he's deciding (it isn't a turn): the HUD goes, there's only
+  // the dark, his phone's FLASH and the way back. The flash shows him where he stands, sends him
+  // back, and needs BH.cooldown seconds; flashing before that only brings him closer.
+  const BH = DATA.killer.behind;
+  const DECIDING = [...MENU, 'again'];
   UI.behind = 0;
+  UI.flashReady = 0; // (performance.now() when the flash is ready again)
+  const stageOf = (v) => Math.min(BH.stages - 1, Math.floor(v * BH.stages));
   function behindTick(dt) {
     const b = UI.b;
     if (!b || b.over || UI.scaring || !$('#cine').hidden) return;
-    const playing = MENU.includes(UI.mode) || UI.mode === 'busy' || UI.mode === 'again';
-    if (!playing) return;
-    if (UI.behind < 1) {
-      const before = UI.behind;
-      UI.behind = Math.min(1, UI.behind + dt / DATA.killer.behind.full[Math.min(4, b.foe.stage)]);
-      // breathing, once he's more there than not
-      if (UI.behind > 0.5 && Math.floor(UI.behind * 40) !== Math.floor(before * 40)) A().play('pant', (UI.behind - 0.5) * 0.6);
-      drawBehind();
-    } else if (MENU.includes(UI.mode)) killerStrike(true);
+    const deciding = DECIDING.includes(UI.mode) || UI.mode === 'turned';
+    if (!deciding && UI.mode !== 'busy') return;
+    const before = UI.behind;
+    const top = deciding ? 1 : BH.cap;
+    if (UI.behind < top) UI.behind = Math.min(top, UI.behind + dt / BH.full[Math.min(4, b.foe.stage)]);
+    if (UI.behind === before) return;
+    // a board giving under him with each step; his breathing, once he's more there than not
+    if (stageOf(UI.behind) > stageOf(before)) A().play('step', UI.behind);
+    if (UI.behind > 0.5 && Math.floor(UI.behind * 40) !== Math.floor(before * 40)) A().play('pant', (UI.behind - 0.5) * 0.6);
+    drawBehind();
+    if (UI.behind >= 1 && deciding) killerStrike(true);
   }
   function drawBehind() {
     // in steps, like the rest of the pixels
     $('#behind').style.opacity = String(Math.round(Math.min(1, UI.behind) * 12) / 12);
+  }
+  const canTurn = () => UI.b && !UI.b.over && !UI.scaring && DECIDING.includes(UI.mode) && $('#cine').hidden;
+  function turnAround() {
+    if (!canTurn()) return;
+    UI.turnFrom = UI.mode;
+    UI.mode = 'turned';
+    A().play('turn');
+    A().duck(true);
+    S().turnAround(true);
+    $('#hud').classList.add('away');
+    $('#turned').hidden = false;
+    turnTick(performance.now());
+  }
+  // (straight back to the room: no sound, no fuss)
+  function faceFront() {
+    S().turnAround(false);
+    $('#turned').hidden = true;
+    $('#hud').classList.remove('away');
+    A().duck(false);
+  }
+  function turnBack() {
+    if (UI.mode !== 'turned') return;
+    A().play('turn');
+    faceFront();
+    UI.mode = UI.turnFrom || 'main';
+  }
+  function flash() {
+    if (UI.mode !== 'turned') return;
+    const btn = $('#flash-btn');
+    const now = performance.now();
+    if (now < UI.flashReady) {
+      // too soon: nothing, and he heard it
+      A().play('dud');
+      btn.classList.remove('no');
+      void btn.offsetWidth;
+      btn.classList.add('no');
+      const before = UI.behind;
+      UI.behind = Math.min(1, UI.behind + BH.early);
+      A().play('step', UI.behind);
+      if (stageOf(UI.behind) === stageOf(before)) A().play('pant', 0.6);
+      drawBehind();
+      return;
+    }
+    UI.flashReady = now + BH.cooldown * 1000;
+    const from = UI.behind;
+    const to = Math.max(0, from - BH.flash);
+    A().play('flash');
+    if (from >= BH.scare) A().play('jumpscare');
+    else A().play('killerBack');
+    S().flashAt(stageOf(from), stageOf(to));
+    UI.behind = to;
+    drawBehind();
+  }
+  // every frame: the flash's cooldown, and whether he can turn around
+  function turnTick(now) {
+    $('#turn-btn').classList.toggle('off', !canTurn());
+    if (UI.mode !== 'turned') return;
+    const left = Math.max(0, UI.flashReady - now);
+    const btn = $('#flash-btn');
+    btn.classList.toggle('ready', !left);
+    btn.classList.toggle('wait', !!left);
+    $('#flash-num').textContent = left ? String(Math.ceil(left / 1000)) : '';
+    $('#flash-fill').style.width = `${Math.round((1 - left / (BH.cooldown * 1000)) * 20) * 5}%`;
   }
 
   function main() {
@@ -502,6 +583,18 @@
     }
     if (UI.mode === 'end') {
       if (k === 'Enter' || k === 'z') $('#again') && $('#again').click();
+      return;
+    }
+    if (UI.mode === 'turned') {
+      if (k === 'f' || k === 'F' || k === 'Enter' || k === 'z' || k === ' ') flash();
+      else if (k === 't' || k === 'T' || k === 'Escape' || k === 'x' || k === 'Backspace') turnBack();
+      else return;
+      e.preventDefault();
+      return;
+    }
+    if ((k === 't' || k === 'T') && canTurn()) {
+      turnAround();
+      e.preventDefault();
       return;
     }
     if (UI.typing && (k === 'Enter' || k === 'z' || k === ' ')) {
@@ -730,5 +823,5 @@
   }
 
   UI.refresh = refresh;
-  UI.debug = { run, open, main, play };
+  UI.debug = { run, open, main, play, turnAround, turnBack, flash };
 })();

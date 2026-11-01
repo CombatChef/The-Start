@@ -277,7 +277,7 @@ img {
   z-index: 1;
   pointer-events: none;
 }
-/* the killer, standing behind Crispy: fading in; click him (again and again) to fade him back */
+/* the killer, behind Crispy: the closer he is in the kitchen, the more he's there */
 .portrait {
   position: relative;
 }
@@ -288,11 +288,130 @@ img {
   width: 229px;
   image-rendering: pixelated;
   opacity: 0;
-  cursor: crosshair;
+  pointer-events: none;
   filter: brightness(0.75) contrast(1.1);
 }
-#behind.hit {
+/* TURN AROUND: on the portrait, over him */
+#turn-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  z-index: 2;
+  border: 0;
+  background: #000;
+  font-size: 18px;
+  letter-spacing: 2px;
+  padding: 3px 12px 3px 34px;
+  white-space: nowrap;
+  box-shadow: 0 0 0 3px var(--frame);
+}
+#turn-btn svg,
+#back-btn svg {
+  position: absolute;
+  left: 9px;
+  top: 7px;
+  width: 17px;
+  height: 14px;
+  fill: currentColor;
+}
+#turn-btn:hover {
+  color: var(--gold);
+}
+#turn-btn.off {
+  color: var(--dim);
+  box-shadow: 0 0 0 3px #3a352c;
+  cursor: default;
+}
+#hud {
+  transition: opacity 0.18s steps(3);
+}
+#hud.away {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* turned around: just the phone's flash (and its cooldown), and a little way back in the corner */
+#turned {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  animation: appear 0.2s steps(2) 0.25s forwards;
+}
+#turned button {
+  pointer-events: auto;
+  border: 0;
+  background: #000;
+  position: absolute;
+}
+#flash-btn {
+  left: calc(50% - 190px);
+  bottom: 48px;
+  width: 380px;
+  height: 124px;
+  font-size: 58px;
+  letter-spacing: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-bottom: 8px;
+  box-shadow: 0 0 0 4px var(--frame), 0 0 0 8px #000;
+}
+#flash-btn .bolt svg {
+  display: block;
+  width: 36px;
+  height: 56px;
+  fill: currentColor;
+}
+#flash-btn b {
+  position: absolute;
+  right: 14px;
+  top: 8px;
+  font-size: 22px;
+  letter-spacing: 0;
+  color: var(--dim);
+}
+#flash-btn .cd {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  height: 8px;
+  background: #1c1b18;
+}
+#flash-btn .cd i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--frame);
+}
+#flash-btn.ready {
+  color: var(--text);
+}
+#flash-btn.ready:hover {
+  color: var(--gold);
+}
+#flash-btn.wait {
+  color: #5c574d;
+  box-shadow: 0 0 0 4px #3a352c, 0 0 0 8px #000;
+}
+#flash-btn.no {
   animation: rattle 0.15s steps(2);
+}
+#back-btn {
+  left: 16px;
+  bottom: 16px;
+  font-size: 18px;
+  letter-spacing: 2px;
+  padding: 4px 12px 4px 34px;
+  color: var(--dim);
+  box-shadow: 0 0 0 3px #3a352c;
+}
+#back-btn:hover {
+  color: var(--text);
+  box-shadow: 0 0 0 3px var(--frame);
 }
 #me .name {
   display: flex;

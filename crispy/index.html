@@ -36,7 +36,7 @@
           </section>
 
           <section id="me" class="box">
-            <div class="portrait"><img id="behind" alt="" /><img id="me-pic" alt="Crispy" /></div>
+            <div class="portrait"><img id="behind" alt="" /><img id="me-pic" alt="Crispy" /><button id="turn-btn" title="Turn around (T)">TURN AROUND</button></div>
             <div class="name"><b>CRISPY</b><span>LV 99 · SANITATION</span></div>
             <div class="vital">
               <i class="heart" id="heart"></i>
@@ -67,6 +67,11 @@
         </div>
 
         <canvas id="fx" width="1280" height="960"></canvas>
+        <!-- turned around, facing the dark kitchen: just his phone's flash, and the way back -->
+        <div id="turned" hidden>
+          <button id="flash-btn" title="Flash (F)"><i class="bolt"></i><span>FLASH</span><b id="flash-num"></b><span class="cd"><i id="flash-fill"></i></span></button>
+          <button id="back-btn" title="Turn back (T)"><i class="arrow"></i>TURN BACK</button>
+        </div>
         <div id="screen"></div>
         <!-- when he falls the first time: his family, flashing past, and what he says -->
         <div id="cine" hidden>

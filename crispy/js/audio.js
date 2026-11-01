@@ -70,6 +70,12 @@
       m.volume = 0.55;
     });
   };
+  // Turned around, in the dark, the music drops away (to hear him breathing), and comes back.
+  A.duck = function (on) {
+    const el = A.song ? A.song.el : A.music;
+    if (!el || el.paused) return;
+    fadeEl(el, on ? 0.1 : A.song ? 0.9 : 0.55, on ? 0.3 : 0.6);
+  };
   A.toggleMusic = function () {
     A.musicOn = !A.musicOn;
     const el = A.song ? A.song.el : A.music;
@@ -561,6 +567,28 @@
       noise(0, 2.1, 0.22, { type: 'highpass', f: 1500, attack: 0.005, hold: 1.9 });
       noise(0, 2.1, 0.12, { type: 'bandpass', f: 600, q: 0.5, attack: 0.005, hold: 1.9 });
       for (let i = 0; i < 7; i++) noise(0.6 + i * 0.16 + Math.random() * 0.04, 0.09, 0.3, { type: 'bandpass', f: 2500 + Math.random() * 3000, q: 2 });
+    },
+    // turning around: a shuffle, and the floor taking his weight
+    turn: () => {
+      whoosh(0, 0.26, 0.16);
+      thump(0.16, 80, 0.18, 0.12);
+    },
+    // his phone's flash: the camera's shutter, and the whine of the flash
+    flash: () => {
+      tone('sine', [5200, 7400], 0, 0.1, 0.025);
+      click(0.02, 0.4, 2600);
+      noise(0.03, 0.12, 0.18, { type: 'highpass', f: 2500 });
+      click(0.1, 0.32, 1700);
+    },
+    // too soon: the shutter clicks, and nothing
+    dud: () => {
+      click(0, 0.25, 1400);
+      tone('square', [160, 120], 0, 0.06, 0.05, { filter: ['lowpass', 900] });
+    },
+    // a step on the kitchen floor: a board giving under his weight
+    step: (v = 0.5) => {
+      thump(0, 62, 0.12 + 0.3 * v, 0.22);
+      tone('sawtooth', [190, 130], 0.04, 0.35, 0.02 + 0.05 * v, { filter: ['bandpass', 650, 7], vibrato: [15, 20] });
     },
     // a pen, crossing a name off
     scratch: () => {

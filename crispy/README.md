@@ -44,11 +44,17 @@ picks, Esc or X goes back; or click.
   and faster, the further the creature has gone (6 seconds to click him at first, 3.6 against
   Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
-  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.) And all the while
-  he's standing behind Crispy, in his box, fading in (18 seconds to all the way there at first,
-  11 against Andy):
-  click him, again and again, to fade him back. If he's ever all the way there, he gets Crispy
-  for a quarter of his health, with four more pictures.
+  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
+- **And the one behind him.** All the while, he's in the kitchen behind Crispy, in the dark,
+  coming across the floor from the back door in five steps (a minute from the door to right
+  there at first, 34 seconds against Andy). The portrait shows how close he is: the closer, the
+  more he fades in behind Crispy. **TURN AROUND** (the button on the portrait, or T) whenever
+  Crispy's deciding: it isn't a turn. The HUD goes, the kitchen's all but pitch black, and
+  there's only a big **FLASH** button (F) and a little TURN BACK in the corner. The phone's flash
+  shows him, standing on the floor where he's got to, and sends him back two steps (if he was
+  close, it's a scream); then it needs 10 seconds, and flashing before that only brings him a
+  step closer. While a turn plays out he waits just short of Crispy; if he ever gets all the
+  way there, it's over: no WILLPOWER, four more pictures, and Crispy has fallen.
 
 ## Three ways out
 
@@ -83,7 +89,7 @@ someone who only goes for SPARE or FLEE gets there almost every time.
 ## Building
 
 The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
-`living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
+`living_room.webp`, `kitchen.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
 in `crispy/assets/source/`; nor are the pictures that flash after the killer's jumpscare
 (`scare_face.png`, `scare_1` to `scare_5` and `behind_1` to `behind_4`, png or webp, also in
 `crispy/assets/source/`), nor

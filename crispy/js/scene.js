@@ -190,6 +190,20 @@
       };
       im.src = src;
     }
+    // the creature's arms (one for each stage), its jaw (in halves), the killer, and the
+    // pictures after his jumpscare
+    const load = (key, src) => {
+      const im = new Image();
+      im.onload = () => (sprites[key] = im);
+      im.src = src;
+    };
+    (images.arms || []).forEach((src, i) => load('arm' + i, src));
+    ARM_META = images.armMeta || [];
+    (images.jaw || []).forEach((src, i) => load('jaw' + i, src));
+    JAW_META = images.jawMeta || [];
+    if (images.killer) load('killer', images.killer);
+    (images.scares || []).forEach((src, i) => load('scare' + i, src));
+    SCARES = (images.scares || []).length;
     // the layers everything but the room is drawn on, small: the creature (under the HUD), and
     // the effects (over it)
     const layer = () => {
@@ -220,6 +234,9 @@
   // ------------------------------------------------------------------ positions
   const C = () => window.CREATURE;
   // Crispy's portrait, in his box at the bottom left
+  let ARM_META = [];
+  let JAW_META = [];
+  let SCARES = 0;
   const SPEAKER = [1000, 734]; // where the speaker sits on the floor (its base)
   S.heroPoint = (k) => ({ head: [160, 600], chest: [160, 690], eyes: [165, 620], side: [330, 640] }[k] || [160, 640]);
   S.foePoint = (k) => C().point(k);
@@ -951,7 +968,7 @@
   const FOE = {
     claw: () => (sfx('claw', 200), heroClaw(700, 3)),
     rake: () => (sfx('claw', 120), sfx('claw', 330), heroClaw(800, 2)),
-    reach: () => (sfx('reach'), sfx('claw', 650), heroClaw(1200, 3, 0.5)),
+    reach: () => (sfx('reach'), sfx('claw', 650), armFx(1200, 'reach')),
     screech: () => (sfx('screech'), waves(1300, '#6a6660')),
     scream: () => (sfx('scream'), waves(1300, '#4a1414')),
     twitch: () => (sfx('twitch'), glitch(1100)),
@@ -963,12 +980,12 @@
     stare: () => (sfx('stare'), stareFx(1500)),
     harden: () => (sfx('harden'), hardenFx(1100)),
     mimic: () => (sfx('swing'), darkSwing(800)),
-    grab: () => (sfx('grab', 500), hands(1200)),
+    grab: () => (sfx('grab', 500), armFx(1200, 'grab')),
     smile: () => (sfx('smile'), stareFx(1700, true)),
-    pat: () => (sfx('pat'), patFx(1000)),
+    pat: () => (sfx('pat'), armFx(1000, 'pat')),
     hesitate: () => (sfx('hesitate'), dots(1500)),
     smash: () => (sfx('smash', 300), smashFx(1200)),
-    bite: () => (sfx('chomp', 220), jaws(800)),
+    bite: () => (sfx('chomp', 430), jawFx(900)),
     flicker: () => (sfx('flicker'), blackout(1000)),
     bile: () => (sfx('bile'), spit(1000)),
     lure: (o = {}) => (sfx('lure'), voiceFx(1600, o.voice || 0)),
@@ -976,29 +993,33 @@
     joke: () => (sfx('rimshot', 300), jokeFx(1300)),
     lock: () => (sfx('slam'), lockFx(900)),
   };
-  // Bite: jaws close over Crispy.
-  function jaws(dur) {
+  // Bite: the jaw (its ten frames, shut to wide open) opens wide... and snaps shut on Crispy,
+  // and holds on. It comes from its side of him, facing back at him.
+  function jawFx(dur) {
     const [x, y] = S.heroPoint('head');
+    const k = PX * 1.3;
+    const hx = x + 150; // the hinge
+    const hy = y + 10;
+    const n = JAW_META.length;
     return add(dur, (ctx, p) => {
-      const close = p < 0.3 ? ease(p / 0.3) : 1; // (bone-coloured, not white)
-      const a = 1 - clamp((p - 0.7) / 0.3, 0, 1);
-      const gap = 160 * (1 - close);
+      if (!n) return;
+      let f; // which frame: 0 shut .. n-1 wide open
+      if (p < 0.34) f = (p / 0.34) * (n - 1); // opening
+      else if (p < 0.42) f = n - 1; // wide
+      else if (p < 0.48) f = (1 - (p - 0.42) / 0.06) * (n - 1); // SNAP
+      else f = 0; // and it holds on
+      const i = Math.max(0, Math.min(n - 1, Math.round(f)));
+      const img = sprites['jaw' + i];
+      const m = JAW_META[i];
+      if (!img) return;
+      if (p > 0.48 && p < 0.78) S.hero.shake = Math.max(S.hero.shake, 5);
+      const jit = p > 0.48 && p < 0.78 ? Math.round((Math.random() - 0.5) * 2) * PX : 0;
       ctx.save();
-      ctx.globalAlpha = a;
-      for (const dir of [-1, 1]) {
-        const yy = y + 20 + dir * (gap / 2 + 30);
-        ctx.fillStyle = '#160404';
-        ctx.fillRect(x - 175, dir < 0 ? yy - 42 : yy, 350, 42);
-        ctx.fillStyle = '#9a917e';
-        for (let i = 0; i < 9; i++) {
-          const tx = x - 165 + i * 37;
-          ctx.beginPath();
-          ctx.moveTo(tx, yy);
-          ctx.lineTo(tx + 33, yy);
-          ctx.lineTo(tx + 16, yy - dir * 34);
-          ctx.fill();
-        }
-      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = Math.min(1, p / 0.08) * (1 - clamp((p - 0.82) / 0.18, 0, 1));
+      ctx.translate(hx + jit, hy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, -m.hx * k, -m.hy * k, m.w * k, m.h * k);
       ctx.restore();
     });
   }
@@ -1247,29 +1268,167 @@
       ctx.restore();
     });
   }
-  function hands(dur) {
-    const [x, y] = S.heroPoint('chest');
-    return add(dur, (ctx, p) => {
-      const q = ease(clamp(p / 0.4, 0, 1));
-      ctx.fillStyle = '#6e6258';
-      for (const s of [-1, 1]) {
-        const hx = x + s * (420 - 260 * q);
-        ctx.fillRect(hx - 60, y - 140, 120, 34);
-        for (let k = 0; k < 4; k++) ctx.fillRect(hx - s * 60 - (s > 0 ? 0 : 0), y - 140 + k * 9, -s * 50 * q, 6);
-      }
-      if (p > 0.4 && p < 0.7) S.hero.shake = 6;
-    });
+  // Its arms: torn off at the shoulder (the arm of the stage it's at), from its shoulder to
+  // Crispy, stretched far too long to get there, and drawn over the HUD so the attack lands on
+  // him. reach: one arm, claws at him; grab: both, by the shoulders, squeezing; pat: one hand on
+  // his shoulder, patting.
+  function drawArm(ctx, from, to, reach) {
+    const i = Math.min(4, C().stage);
+    const sp = sprites['arm' + i];
+    const m = ARM_META[i];
+    if (!sp || !m || reach <= 0.01) return;
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const k = PX; // its thickness, in its own pixels
+    const along = (Math.hypot(dx, dy) * reach) / ((m.w - m.px) * k);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(from[0], from[1]);
+    const ang = Math.atan2(dy, dx);
+    ctx.rotate(ang);
+    if (Math.abs(ang) > Math.PI / 2) ctx.scale(1, -1); // (not upside down)
+    ctx.drawImage(sp, -m.px * k * along, -m.py * k, m.w * k * along, m.h * k);
+    ctx.restore();
   }
-  function patFx(dur) {
-    const [x, y] = S.heroPoint('head');
+  function armFx(dur, kind) {
+    const [hx, hy] = S.heroPoint('chest');
     return add(dur, (ctx, p) => {
-      const bob = Math.abs(Math.sin(p * Math.PI * 2)) * 30;
-      ctx.fillStyle = '#6e6258';
-      ctx.fillRect(x + 70, y + 70 - bob, 110, 36);
+      const sL = C().point('shoulderL');
+      const sR = C().point('shoulderR');
+      let reach;
+      if (kind === 'pat') reach = p < 0.3 ? ease(p / 0.3) : p < 0.75 ? 1 : 1 - ease((p - 0.75) / 0.25);
+      else reach = p < 0.42 ? ease(p / 0.42) : p < 0.72 ? 1 : 1 - ease((p - 0.72) / 0.28);
+      if (kind === 'grab') {
+        const sq = p > 0.42 && p < 0.72 ? Math.round(Math.sin(S.t * 40)) * PX : 0;
+        drawArm(ctx, sR, [hx + 70 + sq, hy - 10], reach);
+        drawArm(ctx, sL, [hx - 40 - sq, hy - 20], reach);
+        if (p > 0.42 && p < 0.72) S.hero.shake = Math.max(S.hero.shake, 6);
+      } else if (kind === 'pat') {
+        const bob = p > 0.3 && p < 0.75 ? -Math.abs(Math.sin(((p - 0.3) / 0.45) * Math.PI * 2)) * 34 : 0;
+        drawArm(ctx, sL, [hx + 60, hy - 10 + bob], reach);
+      } else {
+        drawArm(ctx, sL, [hx + 30, hy - 60], reach);
+        if (p > 0.5) clawMarks(ctx, hx, hy - 80, (p - 0.5) / 0.5, 3);
+      }
     });
   }
 
-  S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
+  // ------------------------------------------------------------------ the killer
+  // Not part of the fight. While Crispy is deciding what to do, he comes up out of a corner of
+  // the screen, slowly, breathing quick and shallow. Click him and he sinks back out of sight.
+  // If he gets all the way in: the jumpscare (ui.js plays it, and what he does to Crispy).
+  const CORNERS = [
+    { from: [-110, 1010], to: [280, 540], rot: 0.35 }, // rising out of the bottom left, leaning in
+    { from: [1390, 1010], to: [1000, 540], rot: -0.35 }, // the bottom right
+    { from: [-110, -60], to: [290, 360], rot: Math.PI - 0.4 }, // hanging down from the top left
+    { from: [1390, -60], to: [990, 360], rot: Math.PI + 0.4 }, // the top right
+  ];
+  const KK = PX * 2.2; // screen pixels to each of his
+  S.spawnKiller = function () {
+    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [] };
+  };
+  function killerAt(kl) {
+    const c = CORNERS[kl.corner];
+    const e = kl.a; // steadily
+    return { x: c.from[0] + (c.to[0] - c.from[0]) * e, y: c.from[1] + (c.to[1] - c.from[1]) * e, rot: c.rot, k: KK * (1 + 0.2 * kl.a) };
+  }
+  // Did a click (in stage pixels) land on him? Then he goes.
+  S.killerHit = function (x, y) {
+    const kl = S.killer;
+    if (!kl || kl.state !== 'in' || kl.a < 0.02) return false;
+    const at = killerAt(kl);
+    const ux = -Math.sin(at.rot);
+    const uy = Math.cos(at.rot);
+    // along his body from the top of his head: how far, and how far off it
+    const t = (x - at.x) * ux + (y - at.y) * uy;
+    const off = Math.abs((x - at.x) * uy - (y - at.y) * ux);
+    if (t < -20 || t > 160 * at.k || off > 32 * at.k) return false;
+    kl.state = 'back';
+    return true;
+  };
+  function updateKiller(dt) {
+    const kl = S.killer;
+    if (!kl) return;
+    const D = window.CRISPY_DATA.killer;
+    if (kl.state === 'back') {
+      kl.a -= dt * 2.2;
+      if (kl.a <= 0) return (S.killer = null);
+    } else if (kl.state === 'in' && S.killerCanMove && S.killerCanMove()) {
+      kl.a += dt / D.approach;
+      if (kl.a >= 1) {
+        kl.a = 1;
+        kl.state = 'strike';
+        if (S.onKiller) S.onKiller();
+      }
+    }
+    // quick, shallow breaths: faster the closer he is
+    kl.phase += dt * (2.4 + kl.a * 1.8);
+    if (kl.phase >= 1) {
+      kl.phase -= 1;
+      for (let i = 0; i < 3; i++) kl.puffs.push({ x: 26 + (Math.random() - 0.5) * 4, y: 33, vx: (Math.random() - 0.5) * 10, vy: -4 - Math.random() * 8, age: 0 });
+      if (kl.state === 'in') A().play('pant', 0.25 + 0.75 * kl.a);
+    }
+    kl.br = 0.5 - 0.5 * Math.cos(kl.phase * Math.PI * 2);
+    for (const pf of kl.puffs) pf.age += dt;
+    kl.puffs = kl.puffs.filter((pf) => pf.age < 0.6);
+  }
+  function drawKiller(l) {
+    const kl = S.killer;
+    const sp = sprites.killer;
+    if (!kl || !sp) return;
+    const at = killerAt(kl);
+    const k = at.k;
+    l.save();
+    l.imageSmoothingEnabled = false;
+    l.translate(at.x, at.y);
+    l.rotate(at.rot);
+    // the chest heaves, a pixel at a time
+    const lift = kl.br > 0.5 ? -k : 0;
+    l.drawImage(sp, (-sp.width * k) / 2, lift, sp.width * k, sp.height * k * (1 + 0.012 * kl.br));
+    // and his breath, in pixels
+    for (const pf of kl.puffs) {
+      l.fillStyle = `rgba(150,150,156,${0.7 * (1 - pf.age / 0.6)})`;
+      l.fillRect((pf.x - sp.width / 2 + pf.vx * pf.age) * k, (pf.y + pf.vy * pf.age) * k + lift, k, k);
+    }
+    l.restore();
+  }
+  // If he gets all the way in: his face, right up against the screen, then the pictures, very
+  // fast, dim; then back to the room.
+  S.jumpscare = function () {
+    S.killer = null;
+    const order = [...Array(SCARES).keys()].sort(() => Math.random() - 0.5);
+    const FACE = 1.0;
+    const EACH = 0.16;
+    const total = FACE + order.length * EACH + 0.3;
+    return add(total * 1000, (ctx, p) => {
+      const T = p * total;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      const sp = sprites.killer;
+      if (T < FACE) {
+        if (!sp || Math.random() < 0.1) return; // it flickers
+        const rows = 58;
+        const s = ((H * 1.3) / rows) * (1 + T * 0.18);
+        const jx = (Math.random() - 0.5) * 50;
+        const jy = (Math.random() - 0.5) * 40;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sp, 0, 0, sp.width, rows, W / 2 - (sp.width * s) / 2 + jx, H / 2 - (rows * s) / 2 + jy, sp.width * s, rows * s);
+        S.shake = 16;
+        return;
+      }
+      const t = T - FACE;
+      const i = Math.floor(t / EACH);
+      if (i < order.length && t - i * EACH < EACH * 0.7) {
+        const img = sprites['scare' + order[i]];
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, W, H);
+        }
+      }
+    }, { top: true });
+  };
+
+  S.play = (name, o) =>  S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
   S.foeMove = (name, o) => (FOE[name] ? FOE[name](o) : 0);
 
   // ADJUST: its body snaps into the wrong shapes, one crack at a time (see creature.js); the
@@ -1470,6 +1629,7 @@
       h.down = Math.max(0, h.down - dt * 1.4);
       if (!h.down) h.rising = false;
     }
+    updateKiller(dt);
     S.effects = S.effects.filter((e) => S.t - e.t0 < e.dur);
     S.popups = S.popups.filter((q) => S.t - q.t0 < q.dur);
     if (!S.effects.length) S.flicker = S.black = 0;
@@ -1605,7 +1765,7 @@
   // The effects and the numbers, over the HUD, at a third of the resolution.
   S.drawFx = function (ctx) {
     ctx.clearRect(0, 0, W, H);
-    if (!S.effects.length && !S.popups.length) return;
+    if (!S.effects.length && !S.popups.length && !S.killer) return;
     const [ox, oy] = S.shakeAt || [0, 0];
     const l = begin(S.lowFx, ox, oy);
     for (const e of S.effects) if (!e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
@@ -1614,6 +1774,7 @@
       bigText(l, q.text, q.x, q.y - ease(Math.min(1, p * 2)) * 30, q.size, q.color, { alpha: 1 - clamp((p - 0.7) / 0.3, 0, 1) });
     }
     for (const e of S.effects) if (e.top) e.draw(l, clamp((S.t - e.t0) / e.dur, 0, 1));
+    drawKiller(l);
     blowUp(ctx, S.lowFx, true);
   };
 
@@ -1654,6 +1815,7 @@
     S.red = null;
     S.door = S.doorTarget = S.beam = S.black = 0;
     S.speaker = null;
+    S.killer = null;
     S.turned = false;
   };
 })();

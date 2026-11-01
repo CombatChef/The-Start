@@ -13,8 +13,9 @@ the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp),
 grilled cheese and sword from theirs (props_sheet.png), the wine glass, pills, phone, car keys
 and text bubble from theirs (items_sheet.png), the alarm clock and the bird from theirs
 (early_sheet.png), the RG 405M console from its own (rg_sheet.png), the speaker from its own (speaker_sheet.png), the creature's doc profiles (the repo's
-assets/profiles/) for the HUD, and the family photos he sees when he falls (memory_1..4.webp,
-not in the repo either).
+assets/profiles/) for the HUD, the family photos he sees when he falls (memory_1..4.webp, not in
+the repo either), the creature's arms (arms_sheet.png) and jaw (jaw_frames.png), the killer
+(killer_sheet.png), and the pictures after his jumpscare (scare_1..5, not in the repo).
 """
 import base64
 import io
@@ -314,6 +315,92 @@ def speaker():
     return {'speaker': Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))}
 
 
+def cut(path, k, off, bg=40):
+    """A pixel-art sheet back down to its own pixels (k screen pixels to each), and what's drawn."""
+    im = Image.open(os.path.join(SRC, path))
+    if im.mode == 'RGBA':
+        src = np.asarray(im).astype(int)[off::k, off::k]
+        return src[..., :3], src[..., 3] > 128
+    px = np.asarray(im.convert('RGB')).astype(int)[off::k, off::k]
+    return px, (np.abs(px - bg).sum(2) > 6) & ~np.all(px == 30, axis=2)
+
+
+def crop(rgb, m):
+    rows, cols = np.flatnonzero(m.any(1)), np.flatnonzero(m.any(0))
+    return rgb[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1], m[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+
+
+def rgba(rgb, m):
+    return Image.fromarray(np.dstack([rgb, m * 255]).astype(np.uint8))
+
+
+def arms():
+    """The creature's arm at each of its five stages (arms_sheet.png, 5 screen pixels to each of
+    theirs), torn off at the shoulder, for the attacks that reach for Crispy. With each, where its
+    shoulder is (the pivot) and how far its fingers go."""
+    px, m = cut('arms_sheet.png', 5, 2)
+    out, meta = [], []
+    rows = m.any(1)
+    spans, start = [], None
+    for y, v in enumerate(list(rows) + [False]):
+        if v and start is None:
+            start = y
+        if not v and start is not None:
+            spans.append((start, y))
+            start = None
+    for a, b in spans[:5]:
+        rgb, mm = crop(px[a:b], m[a:b])
+        h = mm.sum(0)
+        x0 = int(np.argmax(h > h.max() * 0.6))  # where the arm (not its torn bits) starts
+        ys = np.flatnonzero(mm[:, x0])
+        meta.append({'w': int(mm.shape[1]), 'h': int(mm.shape[0]), 'px': x0 + 2, 'py': int((ys[0] + ys[-1]) / 2)})
+        out.append(rgba(rgb, mm))
+    return out, meta
+
+
+def jaw_frames():
+    """The jaw opening, in ten frames from shut to wide open (jaw_frames.png, 3 screen pixels to
+    each of theirs, five to a row), each with its hinge (the back of the jaw) to line them up."""
+    px, m = cut('jaw_frames.png', 3, 1)
+    H, W = m.shape
+    ch, cw = H // 2, W // 5
+    frames, meta = [], []
+    for r in range(2):
+        for c in range(5):
+            rgb, mm = crop(px[r * ch:(r + 1) * ch, c * cw:(c + 1) * cw], m[r * ch:(r + 1) * ch, c * cw:(c + 1) * cw])
+            ys = np.flatnonzero(mm[:, :3].any(1))
+            frames.append(rgba(rgb, mm))
+            meta.append({'w': int(mm.shape[1]), 'h': int(mm.shape[0]), 'hx': 1, 'hy': int((ys[0] + ys[-1]) / 2)})
+    return frames, meta
+
+
+def killer():
+    """The killer (killer_sheet.png, 8 screen pixels to each of his)."""
+    rgb, m = cut('killer_sheet.png', 8, 4)
+    rgb, m = crop(rgb, m)
+    return rgba(rgb, m)
+
+
+def scares():
+    """The pictures that flash past after the killer's jumpscare (scare_1..5 in assets/source,
+    not in the repo): small, dim, a little washed of colour, but clear."""
+    out = []
+    for i in range(1, 6):
+        path = next((os.path.join(SRC, f'scare_{i}.{e}') for e in ('png', 'webp', 'jpg') if os.path.exists(os.path.join(SRC, f'scare_{i}.{e}'))), None)
+        if not path:
+            continue
+        im = Image.open(path).convert('RGB')
+        im.thumbnail((160, 120), Image.LANCZOS)
+        canvas = Image.new('RGB', (160, 120))
+        canvas.paste(im, ((160 - im.width) // 2, (120 - im.height) // 2))
+        a = np.asarray(canvas).astype(float)
+        grey = a @ [0.3, 0.59, 0.11]
+        a = grey[..., None] * 0.35 + a * 0.65
+        a = a * 0.62
+        out.append(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)))
+    return out
+
+
 def memories():
     """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
     item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
@@ -350,6 +437,8 @@ if __name__ == '__main__':
     sprite, anchors = crispy()
     forms = creature()
     things = props()
+    arm_imgs, arm_meta = arms()
+    jaw_imgs, jaw_meta = jaw_frames()
     images = {
         'night': data_url(night(1.0), 'JPEG', quality=86),
         'nightLit': data_url(night(2.6), 'JPEG', quality=86),
@@ -359,6 +448,12 @@ if __name__ == '__main__':
         'creatureMeta': [m for _, m in forms],
         'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}, **{k: data_url(v) for k, v in rg_console().items()}, **{k: data_url(v) for k, v in speaker().items()}},
         'memories': [data_url(m) for m in memories()],
+        'arms': [data_url(a) for a in arm_imgs],
+        'armMeta': arm_meta,
+        'jaw': [data_url(f) for f in jaw_imgs],
+        'jawMeta': jaw_meta,
+        'killer': data_url(killer()),
+        'scares': [data_url(x) for x in scares()],
         'profiles': [data_url(p) for p in profiles()],
     }
     with open(os.path.join(CRISPY, 'js', 'images.js'), 'w') as f:

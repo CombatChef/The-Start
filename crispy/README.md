@@ -33,7 +33,14 @@ picks, Esc or X goes back; or click.
   new body replaces the old in chunks) into its next form every third turn (the oven timer counts down), or
   the moment a form's health runs out; each form has its own stats from the doc and six attacks
   (bites, ceiling drops, the lights cutting out, black bile, calling to Crispy in his family's
-  voices, Andy stealing his jokes and locking the front door...). Only Andy can be killed.
+  voices, Andy stealing his jokes and locking the front door...). When it reaches for Crispy (to
+  claw, grab his shoulders, pat him on the back) its arm comes off at the shoulder, far too long,
+  over his box: a different arm for each stage. When it bites, a jaw clamps shut on him. Only Andy
+  can be killed.
+- **The killer** isn't part of the fight. From round 3, while Crispy is deciding what to do, he
+  may start coming up out of a corner of the screen, slowly, breathing quick and shallow. Click
+  him and he sinks back out of sight. If he gets all the way in: a jumpscare, some pictures flash
+  past, and he takes a chunk of Crispy's health. (Not again for a few rounds.)
 
 ## Three ways out
 
@@ -69,7 +76,9 @@ someone who only goes for SPARE or FLEE gets there almost every time.
 
 The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
 `living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
-in `crispy/assets/source/`. The speaker's songs aren't either: put `clint_eastwood.mp3`,
+in `crispy/assets/source/`; nor are the pictures that flash after the killer's jumpscare
+(`scare_1` to `scare_5`, png or webp, also in `crispy/assets/source/`). The speaker's songs
+aren't either: put `clint_eastwood.mp3`,
 `feel_good_inc.mp3` and `on_melancholy_hill.mp3` in `crispy/assets/audio/songs/` (without them
 the speaker still works, silently). Then:
 
@@ -96,7 +105,7 @@ tests/simulate.js           headless balance test
 tools/                      builds the art, cuts Crispy out, builds the single file
 assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
                             sheet, the wine / pills / phone / keys / text bubble sheet, the
-                            Early Bird clock and bird sheet, the RG 405M console, and
-                            references
+                            Early Bird clock and bird sheet, the RG 405M console, the
+                            speaker, the creature's arms and jaw, the killer, and references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb; the speaker's songs
 ```

@@ -539,6 +539,22 @@
       noise(0, 0.4, 0.35, { f: [3000, 300] });
       tone('square', [900, 60], 0.05, 0.25, 0.06, { filter: ['lowpass', 1500] });
     },
+    // the killer: quick, shallow breaths (louder the closer he is); sinking back when he's
+    // clicked; and the jumpscare
+    pant: (v = 0.5) => {
+      noise(0, 0.13, 0.05 + 0.13 * v, { type: 'bandpass', f: [700, 1500], q: 1.2, attack: 0.04 });
+      noise(0.16, 0.12, 0.04 + 0.11 * v, { type: 'bandpass', f: [1300, 600], q: 1.2, attack: 0.02 });
+    },
+    killerBack: () => {
+      noise(0, 0.35, 0.12, { type: 'bandpass', f: [1800, 300], q: 1, attack: 0.02 });
+      tone('sine', [140, 60], 0, 0.4, 0.05);
+    },
+    jumpscare: () => {
+      noise(0, 1.0, 0.75, { type: 'highpass', f: 700, attack: 0.005, hold: 0.7 });
+      for (const [f, d] of [[466, 0], [494, 13], [523, -17], [233, 7]]) tone('sawtooth', [f, f * 0.7], 0, 1.0, 0.14, { detune: d, vibrato: [23, 60] });
+      thump(0, 50, 1, 0.6);
+      for (let i = 0; i < 6; i++) noise(1.0 + i * 0.16, 0.1, 0.25, { type: 'bandpass', f: 2500 + Math.random() * 3000, q: 2 }); // the pictures, flashing
+    },
     // a pen, crossing a name off
     scratch: () => {
       noise(0, 0.22, 0.12, { type: 'bandpass', f: [2500, 3800], q: 4, attack: 0.02 });
@@ -618,10 +634,10 @@
     },
   };
   A.S = S;
-  A.play = function (name) {
+  A.play = function (name, ...args) {
     if (!A.ctx || !A.sfxOn || !S[name]) return;
     try {
-      S[name]();
+      S[name](...args);
     } catch (e) {
       /* a sound never stops the game */
     }

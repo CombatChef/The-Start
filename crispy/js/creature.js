@@ -105,15 +105,14 @@
       case 'claw':
       case 'rake':
       case 'mimic':
-      case 'pat':
         break;
       case 'reach':
       case 'grab':
-        // an arm far too long for its body
-        o.armL = 1.45 * out;
-        o.stretchL = 1 + 1.3 * out;
-        o.lean = -18 * out;
-        if (a.type === 'grab') o.armR = -0.9 * out;
+      case 'pat':
+        // its arms leave its body (scene.js draws them, torn off at the shoulder, reaching
+        // over Crispy)
+        o.hide = { [-1]: true, [1]: a.type === 'grab' };
+        o.lean = (a.type === 'pat' ? -6 : -18) * out;
         break;
       case 'lunge':
         o.lean = -26 * snap;
@@ -251,7 +250,7 @@
   }
 
   C.act = function (type) {
-    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, bite: 0.6, flicker: 1.0, bile: 1.0, lure: 1.6, drop: 1.3, joke: 1.3, lock: 0.9, smash: 0.9, adjust: 3.6 }[type] || 0.8;
+    const dur = { claw: 0.55, rake: 0.42, pat: 1.0, mimic: 0.7, reach: 1.2, grab: 1.2, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, bite: 0.9, flicker: 1.0, bile: 1.0, lure: 1.6, drop: 1.3, joke: 1.3, lock: 0.9, smash: 0.9, adjust: 3.6 }[type] || 0.8;
     C.action = { type, t0: C.t, dur };
     return dur * 1000;
   };
@@ -351,6 +350,8 @@
       chest: [0, -f.h + f.armpit],
       feet: [0, 0],
       hand: [-f.core - 6, -f.h + f.tips - 6],
+      shoulderL: [-f.core, -f.h + f.armpit - 14], // (its left: the side towards Crispy)
+      shoulderR: [f.core, -f.h + f.armpit - 14],
     }[name] || [0, -f.h * 0.6];
     return [C.x + art[0] * SCALE, C.y + art[1] * SCALE];
   };
@@ -392,6 +393,7 @@
         let src = -1;
         for (const side of [-1, 1]) {
           const a = ang[side];
+          if (o.hide && o.hide[side]) continue;
           if (Math.abs(a) < 0.001 && (side === 1 || o.stretchL === 1)) continue;
           const [px, py] = pivots[side];
           const dx = sx - px;
@@ -413,7 +415,7 @@
           if (bx < 0 || by < 0 || bx >= f.w || by >= f.h) continue;
           const k = by * f.w + bx;
           // an arm that's moved away leaves its place empty (unless it's barely moved)
-          if (f.arm[k] && (Math.abs(ang[f.arm[k]]) > 0.08 || (f.arm[k] === -1 && o.stretchL !== 1))) continue;
+          if (f.arm[k] && (Math.abs(ang[f.arm[k]]) > 0.08 || (f.arm[k] === -1 && o.stretchL !== 1) || (o.hide && o.hide[f.arm[k]]))) continue;
           src = k;
         }
         if (f.data[src * 4 + 3] < 128) continue;

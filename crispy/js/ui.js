@@ -49,6 +49,26 @@
     $('#cine').addEventListener('click', () => {
       if (UI.typing) UI.fast = true;
     });
+    // the killer: click him to send him back (and nothing under him gets the click)
+    const stage = $('#stage');
+    let swallow = false;
+    stage.addEventListener('pointerdown', (e) => {
+      const r = stage.getBoundingClientRect();
+      if (!S().killerHit(((e.clientX - r.left) / r.width) * 1280, ((e.clientY - r.top) / r.height) * 960)) return;
+      swallow = true;
+      A().play('killerBack');
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+    stage.addEventListener('click', (e) => {
+      if (!swallow) return;
+      swallow = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+    // he only moves while Crispy's deciding what to do
+    S().killerCanMove = () => MENU.includes(UI.mode);
+    S().onKiller = killerStrike;
     title();
   };
 
@@ -78,6 +98,7 @@
     $('#screen').className = '';
     $('#hud').style.visibility = 'visible';
     UI.b = new window.CRISPY_BATTLE.Battle(Date.now() & 0xffffff);
+    UI.killerNext = 0;
     UI.stats = { dealt: 0, taken: 0, t0: Date.now() };
     C().reset();
     S().reset();
@@ -99,6 +120,7 @@
   };
   function end(how) {
     UI.mode = 'end';
+    S().killer = null;
     $('#hud').style.visibility = 'hidden';
     if (how === 'lose') {
       const st = UI.stats;
@@ -121,6 +143,7 @@
   }
   // A calming breath, and everything fades to black.
   async function calm(how) {
+    S().killer = null;
     A().stopMusic(2.5);
     await wait(500);
     A().play('breath');
@@ -304,7 +327,34 @@
   }
 
   // ------------------------------------------------------------------ menus
+  // THE KILLER: from round DATA.killer.from, when the menu opens, he may start coming.
+  const MENU = ['main', 'sub', 'target'];
+  function maybeKiller() {
+    const K = DATA.killer;
+    const b = UI.b;
+    if (!b || b.over || S().killer || b.round < K.from || b.round < UI.killerNext || Math.random() >= K.chance) return;
+    UI.killerNext = b.round + K.gap;
+    setTimeout(() => {
+      if (MENU.includes(UI.mode) && !UI.b.over && !S().killer) S().spawnKiller();
+    }, (1.5 + Math.random() * 3) * 1000 * SPEED);
+  }
+  // He got all the way in: the jumpscare, the pictures, and what he does to Crispy.
+  async function killerStrike() {
+    UI.mode = 'busy';
+    $('#keypad').classList.add('off');
+    keypad();
+    A().play('jumpscare');
+    await wait(S().jumpscare());
+    UI.view = snapshot(UI.b);
+    await play(UI.b.killerAttack());
+    UI.view = null;
+    refresh();
+    if (UI.b.over) return;
+    main();
+  }
+
   function main() {
+    maybeKiller();
     UI.mode = 'main';
     UI.sub = null;
     $('#keypad').classList.remove('off');
@@ -456,7 +506,7 @@
 
   // How far into each effect its hit (or heal, or buff) lands, so the HUD moves with it.
   const FX_AT = { speaker: 0.4, swing: 0.45, realSlash: 0.45, trash: 0.6, tear: 0.35, early: 0.75, authority: 0.35, rg: 0.5, wine: 0.6, slice: 0.3, taste: 0.6, nut: 0.32, choc: 0.42, cheese: 0.45, pills: 0.7, keys: 0.5, stance: 0.5 };
-  const FOE_AT = { claw: 0.3, rake: 0.3, reach: 0.55, screech: 0.4, scream: 0.4, lash: 0.4, lash3: 0.4, lunge: 0.4, mimic: 0.45, grab: 0.45, pat: 0.45, bite: 0.32, flicker: 0.55, bile: 0.45, drop: 0.5, joke: 0.55 };
+  const FOE_AT = { claw: 0.3, rake: 0.3, reach: 0.55, screech: 0.4, scream: 0.4, lash: 0.4, lash3: 0.4, lunge: 0.4, mimic: 0.45, grab: 0.45, pat: 0.45, bite: 0.5, flicker: 0.55, bile: 0.45, drop: 0.5, joke: 0.55 };
 
   async function play(events) {
     for (const e of events) {

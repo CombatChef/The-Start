@@ -1643,34 +1643,37 @@
   };
 
   // ------------------------------------------------------------------ turned around
-  // Behind him is the kitchen, all but pitch black. The one behind him is standing on its floor,
-  // somewhere between the back door and Crispy, along the boards, and he's only seen when the
-  // phone's flash goes off. (The picture is a phone's, held about 1.5 m up: CAM is where the
-  // floor meets the horizon, the lens, and how tall he is, so he stands on the floor at every
-  // distance.)
-  const CAM = { cx: 640, hz: 358, f: 922, h: 1.5, tall: 2.0 };
-  // where he stands at `s` (0 in the back doorway .. 4 right there), on the stage: his feet, his
-  // height, and how far off he is (metres)
-  function standAt(s) {
-    const z = 5.25 - s * 0.925;
-    const x = 1.9 - 0.555 * (5.25 - z); // (the boards run off to the right, towards the back door)
-    return { x: CAM.cx + (CAM.f * x) / z, y: CAM.hz + (CAM.f * CAM.h) / z, h: (CAM.f * CAM.tall) / z, z };
+  // Behind him is the kitchen, black but for the windows. The one behind him is in there,
+  // somewhere between the back door and Crispy's face: there's his shape, against the night in
+  // the windows, and there's him, in the circle of the phone's flash when it goes off, his shadow
+  // behind him; then the light dies and he's gone back into the dark. He doesn't move while
+  // Crispy's looking. How close (`b`, 0 at the back door .. 1 on him) is how far off he is (metres), and
+  // so how big he is (CAM: the lens, and his height); his face is in the back doorway far off,
+  // and in the middle of the screen up close.
+  const CAM = { f: 922, tall: 2.0 };
+  const NEAR = 0.3;
+  const FAR_Z = 5.25;
+  const FACE = { row: 18 }; // (his face, in his sprite)
+  function closeAt(b) {
+    const z = NEAR + (FAR_Z - NEAR) * (1 - clamp(b, 0, 1));
+    const t = (1 / z - 1 / FAR_Z) / (1 / NEAR - 1 / FAR_Z); // (in front of the back door's glass till he's close)
+    return { x: 974 + (640 - 974) * t, y: 298 + (400 - 298) * t, h: (CAM.f * CAM.tall) / z, z };
   }
-  S.standAt = standAt;
   // He turns around (or back): a quick turn of the head, through the dark.
   S.turnAround = function (on) {
     S.lookTarget = on ? 1 : 0;
     if (!on) S.flash = null;
     return 320;
   };
-  // The flash: he's seen where he stands (`from`), and he's sent back (`to`) as it dies away.
-  S.flashAt = function (from, to) {
-    S.flash = { t: 0, from, to };
-    if (from >= 3) S.shake = 10;
+  // The flash: he's seen where he is (`b`), for as long as the light lasts.
+  S.flashAt = function (b) {
+    S.flash = { t: 0, b, beam: beamAt(b) };
+    if (b >= 0.6) S.shake = 6 + 10 * b;
   };
   // how much light there is from it, `t` seconds after: all of it, then dying away
   const flashLight = (t) => (t < 0.09 ? 1 : Math.pow(Math.max(0, 1 - (t - 0.09) / 1.15), 1.7));
-  // the killer's shape, all black, for his shadow
+  S.stalker = 0; // how close he is now (the HUD keeps this up to date)
+  // his shape, all black: against the night in the windows, it's all there is to see of him
   let shade;
   function killerShade() {
     const sp = sprites.killer;
@@ -1685,43 +1688,69 @@
     x.fillRect(0, 0, sp.width, sp.height);
     return shade;
   }
+  // (all of him, black: `b` how close)
+  function drawShape(l, b) {
+    const sh = killerShade();
+    if (!sh) return;
+    const at = closeAt(b);
+    const k = at.h / sh.height;
+    l.drawImage(sh, at.x - (sh.width * k) / 2, at.y - FACE.row * k, sh.width * k, at.h);
+  }
+  // The flash lights a circle of the kitchen, on him, never down as far as the floor: the rest
+  // stays black.
+  const BEAM = 270;
+  function beamAt(b) {
+    const at = closeAt(b);
+    const k = at.h / 227;
+    return { x: clamp(at.x, BEAM, W - BEAM), y: clamp(at.y + 22 * k, 250, 340), r: BEAM };
+  }
+  function beamFade(c, B, ox, oy, outside) {
+    // (`outside`: true darkens what's outside the circle; false keeps only what's inside it)
+    const g = c.createRadialGradient(B.x + ox, B.y + oy, B.r * 0.5, B.x + ox, B.y + oy, B.r);
+    g.addColorStop(0, outside ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,1)');
+    g.addColorStop(0.55, outside ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.55)');
+    g.addColorStop(1, outside ? 'rgba(0,0,0,1)' : 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+  }
   function drawStalker(l) {
     const sp = sprites.killer;
     const F = S.flash;
     if (!sp || !F) return;
-    const fl = flashLight(F.t);
+    // (he goes back into the dark a little before the room does)
+    const fl = Math.pow(flashLight(F.t), 1.5);
     if (fl <= 0.01) return;
-    // knocked back as the light dies
-    const at = standAt(F.from + (F.to - F.from) * ease(clamp((F.t - 0.15) / 0.9, 0, 1)));
-    const k = at.h / sp.height;
+    const at = closeAt(F.b);
+    const k = at.h / sp.height; // (screen pixels to each of his)
     const w = sp.width * k;
     const x = at.x - w / 2;
-    const y = at.y - at.h;
-    // his shadow, thrown back from the flash: under his feet, and (in the back doorway) on the
-    // door behind him, just to the side
-    l.globalAlpha = Math.min(1, fl * 2) * 0.6;
-    l.fillStyle = '#000';
-    l.beginPath();
-    l.ellipse(at.x + w * 0.03, at.y - at.h * 0.01, w * 0.55, Math.max(3, at.h * 0.016), 0, 0, Math.PI * 2);
-    l.fill();
-    l.globalAlpha = Math.min(1, fl * 2);
+    const y = at.y - FACE.row * k;
+    // his shadow, thrown onto whatever's behind him, just to the side
     const sh = killerShade();
-    if (sh && at.z > 4.8) l.drawImage(sh, x + w * 0.1, y + at.h * 0.01, w, at.h * 0.99);
-    l.globalAlpha = 1;
+    if (sh) {
+      l.globalAlpha = 0.8;
+      l.drawImage(sh, x + w * 0.12, y + at.h * 0.015, w * 1.04, at.h * 1.02);
+      l.globalAlpha = 1;
+    }
     l.drawImage(sp, x, y, w, at.h);
-    // as lit as the flash leaves him: dim at the back door, blinding up close
+    // as lit as the flash leaves him (dim at the back door, blinding up close), and only in its
+    // circle
     const lit = clamp(1.6 * (1.7 / at.z) ** 2, 0.14, 1.3) * fl;
     l.save();
     l.globalCompositeOperation = 'source-atop';
     if (lit < 1) {
       l.fillStyle = `rgba(0,0,0,${1 - lit})`;
-      l.fillRect(x - w, y - 10, w * 3, at.h + 20);
+      l.fillRect(x - w, y, w * 3, at.h * 1.1);
     } else {
       l.fillStyle = `rgba(214,222,236,${Math.min(0.3, (lit - 1) * 1.2)})`;
       l.fillRect(x, y, w, at.h);
     }
+    // (outside the circle, nothing)
+    l.globalCompositeOperation = 'destination-out';
+    beamFade(l, F.beam, 0, 0, true);
+    l.fillRect(0, -H, W, H * 3);
     l.restore();
   }
+  let lightC;
   function drawKitchen(ctx, ox, oy) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
@@ -1729,18 +1758,34 @@
     const F = S.flash;
     const fl = F ? flashLight(F.t) : 0;
     if (fl > 0.004 && S.kitchenFlash) {
+      // the flash's circle of the kitchen
+      if (!lightC) {
+        lightC = document.createElement('canvas');
+        lightC.width = W;
+        lightC.height = H;
+      }
+      const c = lightC.getContext('2d');
+      c.globalCompositeOperation = 'source-over';
+      c.clearRect(0, 0, W, H);
+      c.drawImage(S.kitchenFlash, ox - 8, oy - 8, W + 16, H + 16);
+      // (and its pop, when it goes off)
+      if (F.t < 0.12) {
+        c.fillStyle = `rgba(236,240,248,${0.85 * (1 - F.t / 0.12)})`;
+        c.fillRect(0, 0, W, H);
+      }
+      c.globalCompositeOperation = 'destination-in';
+      beamFade(c, F.beam, ox, oy, false);
+      c.fillRect(0, 0, W, H);
       ctx.globalAlpha = fl;
-      ctx.drawImage(S.kitchenFlash, ox - 8, oy - 8, W + 16, H + 16);
+      ctx.drawImage(lightC, 0, 0);
       ctx.globalAlpha = 1;
     }
+    // where he is now, in the dark, against the windows (once the light's gone); and in the
+    // flash, as he was
     const low = begin(S.low, ox, oy);
+    if (fl < 0.04) drawShape(low, S.stalker);
     drawStalker(low);
-    blowUp(ctx, S.low, true);
-    // the pop of the flash itself
-    if (F && F.t < 0.12) {
-      ctx.fillStyle = `rgba(236,240,248,${0.9 * (1 - F.t / 0.12)})`;
-      ctx.fillRect(0, 0, W, H);
-    }
+    blowUp(ctx, S.low, fl >= 0.04);
   }
 
   S.play = (name, o) => (FX[name] ? FX[name](o) : 0);

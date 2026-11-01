@@ -350,8 +350,9 @@
       hit: 0.15,
       // ...and the whole time, he's behind Crispy, in the dark kitchen, coming closer: the
       // portrait shows how close (he fades in behind him). `full`: seconds from the back door to
-      // right there, by the creature's stage; he comes in `stages` steps across the floor. Crispy
-      // TURNS AROUND (it isn't a turn) and his phone's flash sends him back `flash` of the way;
+      // right in his face, by the creature's stage (a board creaks under him `stages` times on
+      // the way). Crispy TURNS AROUND (it isn't a turn) and his phone's flash shows him, as close
+      // as he is, and sends him back `flash` of the way;
       // then it needs `cooldown` seconds, and flashing before that brings him `early` closer.
       // Within `scare` of him, the flash shows him close enough to scream. While a turn plays
       // out he comes no closer than `cap`; all the way there (at the menu, or turned around),

@@ -393,10 +393,10 @@
   }
 
   // ------------------------------------------------------------------ THE KILLER, BEHIND CRISPY
-  // He's in the kitchen behind him, in the dark, coming across the floor from the back door, in
-  // steps: the portrait shows how close (he fades in behind Crispy). He comes the whole time
-  // Crispy's deciding, turned around, or a turn's playing out (but not all the way, then); not
-  // during the scares, or the willpower scene. All the way there: it's over.
+  // He's in the kitchen behind him, in the dark, coming from the back door: the portrait shows
+  // how close (he fades in behind Crispy). He comes the whole time Crispy's deciding or a turn's
+  // playing out (but not all the way, then); not while Crispy's looking at him, nor during the
+  // scares, or the willpower scene. All the way there: it's over.
   // Crispy can TURN AROUND whenever he's deciding (it isn't a turn): the HUD goes, there's only
   // the dark, his phone's FLASH and the way back. The flash shows him where he stands, sends him
   // back, and needs BH.cooldown seconds; flashing before that only brings him closer.
@@ -410,6 +410,9 @@
     if (!b || b.over || UI.scaring || !$('#cine').hidden) return;
     const deciding = DECIDING.includes(UI.mode) || UI.mode === 'turned';
     if (!deciding && UI.mode !== 'busy') return;
+    if (UI.behind >= 1 && deciding) return killerStrike(true);
+    // (while Crispy's looking at him, he doesn't move)
+    if (UI.mode === 'turned') return;
     const before = UI.behind;
     const top = deciding ? 1 : BH.cap;
     if (UI.behind < top) UI.behind = Math.min(top, UI.behind + dt / BH.full[Math.min(4, b.foe.stage)]);
@@ -423,6 +426,7 @@
   function drawBehind() {
     // in steps, like the rest of the pixels
     $('#behind').style.opacity = String(Math.round(Math.min(1, UI.behind) * 12) / 12);
+    S().stalker = UI.behind;
   }
   const canTurn = () => UI.b && !UI.b.over && !UI.scaring && DECIDING.includes(UI.mode) && $('#cine').hidden;
   function turnAround() {
@@ -472,7 +476,7 @@
     A().play('flash');
     if (from >= BH.scare) A().play('jumpscare');
     else A().play('killerBack');
-    S().flashAt(stageOf(from), stageOf(to));
+    S().flashAt(from);
     UI.behind = to;
     drawBehind();
   }

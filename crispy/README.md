@@ -45,16 +45,19 @@ picks, Esc or X goes back; or click.
   Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
   and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
-- **And the one behind him.** All the while, he's in the kitchen behind Crispy, in the dark,
-  coming across the floor from the back door in five steps (a minute from the door to right
-  there at first, 34 seconds against Andy). The portrait shows how close he is: the closer, the
-  more he fades in behind Crispy. **TURN AROUND** (the button on the portrait, or T) whenever
-  Crispy's deciding: it isn't a turn. The HUD goes, the kitchen's all but pitch black, and
-  there's only a big **FLASH** button (F) and a little TURN BACK in the corner. The phone's flash
-  shows him, standing on the floor where he's got to, and sends him back two steps (if he was
-  close, it's a scream); then it needs 10 seconds, and flashing before that only brings him a
-  step closer. While a turn plays out he waits just short of Crispy; if he ever gets all the
-  way there, it's over: no WILLPOWER, four more pictures, and Crispy has fallen.
+- **And the one behind him.** All the while, he's in the kitchen behind Crispy, coming from
+  the back door towards him (a minute from the door to right in his face at first, 34 seconds
+  against Andy). The portrait shows how close he is: the closer, the more he fades in behind
+  Crispy. **TURN AROUND** (the button on the portrait, or T) whenever Crispy's deciding: it
+  isn't a turn. The HUD goes, and the kitchen is black but for the night in the windows, where
+  his shape shows against the glass. He doesn't move while Crispy's looking at him. There's a
+  big **FLASH** button (F) and a little TURN BACK in the corner. The phone's flash lights a
+  circle of the kitchen, and him in it, as close as he's got, with his shadow behind him (a
+  scream if he's close; right in Crispy's face if he's a second or two from him); the light
+  dies and he's gone back into the dark, a good way back. Then it needs 10 seconds, and
+  flashing before that only brings him closer. While a turn plays out he waits just short of
+  Crispy; if he ever gets all the way there, it's over: no WILLPOWER, four more pictures, and
+  Crispy has fallen.
 
 ## Three ways out
 

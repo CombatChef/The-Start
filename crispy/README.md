@@ -45,7 +45,8 @@ picks, Esc or X goes back; or click.
   Andy). Click him and he sinks back out of sight. If he gets all the way in: he's right
   in front of the screen, a face flashes up close, more pictures flash past, all through static,
   and he takes a chunk of Crispy's health. (Not again for a couple of rounds.) And all the while
-  he's standing behind Crispy, in his box, slowly fading in (faster as the creature goes on):
+  he's standing behind Crispy, in his box, fading in (18 seconds to all the way there at first,
+  11 against Andy):
   click him, again and again, to fade him back. If he's ever all the way there, he gets Crispy
   for a quarter of his health, with four more pictures.
 

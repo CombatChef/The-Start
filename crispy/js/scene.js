@@ -1488,18 +1488,29 @@
   const KK = PX * 2.2; // screen pixels to each of his
   S.spawnKiller = function (approach = 6) {
     // (he's heard breathing a moment before he starts to come)
-    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, state: 'in', phase: 0, br: 0, puffs: [], approach, wait: 1.3 };
+    S.killer = { corner: Math.floor(Math.random() * CORNERS.length), a: 0, e: 0, state: 'in', phase: 0, br: 0, puffs: [], approach, wait: 1.3 };
   };
+  // is his face (not just the top of his head) on the screen?
+  function faceOnScreen(at) {
+    const r = 25 * at.k;
+    const fx = at.x - Math.sin(at.rot) * r;
+    const fy = at.y + Math.cos(at.rot) * r;
+    return fx > 0 && fx < W && fy > 0 && fy < H;
+  }
+  // He's only ever seen face and all: once he's done breathing out of sight, he comes in quickly
+  // until his face is on the screen (FACE_IN of the way), then creeps the rest, steadily.
+  const FACE_IN = 0.42;
   function killerAt(kl) {
     const c = CORNERS[kl.corner];
-    const e = kl.a; // steadily
+    const e = kl.e;
     return { x: c.from[0] + (c.to[0] - c.from[0]) * e, y: c.from[1] + (c.to[1] - c.from[1]) * e, rot: c.rot, k: KK * (1 + 0.2 * kl.a) };
   }
   // Did a click (in stage pixels) land on him? Then he goes.
   S.killerHit = function (x, y) {
     const kl = S.killer;
-    if (!kl || kl.state !== 'in' || kl.a < 0.02) return false;
+    if (!kl || kl.state !== 'in') return false;
     const at = killerAt(kl);
+    if (!faceOnScreen(at)) return false; // (not before he's really there)
     const ux = -Math.sin(at.rot);
     const uy = Math.cos(at.rot);
     // along his body from the top of his head: how far, and how far off it
@@ -1513,8 +1524,8 @@
     const kl = S.killer;
     if (!kl) return;
     if (kl.state === 'back') {
-      kl.a -= dt * 2.2;
-      if (kl.a <= 0) return (S.killer = null);
+      kl.e -= dt * 1.4;
+      if (kl.e <= 0) return (S.killer = null);
     } else if (kl.state === 'in' && S.killerCanMove && S.killerCanMove()) {
       if (kl.wait > 0) kl.wait -= dt;
       else kl.a += dt / kl.approach;
@@ -1523,6 +1534,11 @@
         kl.state = 'strike';
         if (S.onKiller) S.onKiller();
       }
+    }
+    // where he is: out of sight while he waits; then quickly in, face first; then creeping
+    if (kl.state !== 'back') {
+      const target = kl.wait > 0 || kl.a <= 0 ? 0 : FACE_IN + (1 - FACE_IN) * kl.a;
+      kl.e += (target - kl.e) * Math.min(1, dt * 8);
     }
     // quick, shallow breaths: faster the closer he is
     kl.phase += dt * (2.4 + kl.a * 1.8);
@@ -1538,8 +1554,9 @@
   function drawKiller(l) {
     const kl = S.killer;
     const sp = sprites.killer;
-    if (!kl || !sp || kl.a <= 0) return;
+    if (!kl || !sp || kl.e <= 0.005) return;
     const at = killerAt(kl);
+    const seen = faceOnScreen(at);
     const k = at.k;
     l.save();
     l.imageSmoothingEnabled = false;
@@ -1548,8 +1565,8 @@
     // the chest heaves, a pixel at a time
     const lift = kl.br > 0.5 ? -k : 0;
     l.drawImage(sp, (-sp.width * k) / 2, lift, sp.width * k, sp.height * k * (1 + 0.012 * kl.br));
-    // and his breath, in pixels
-    for (const pf of kl.puffs) {
+    // and his breath, in pixels (once he's there to see)
+    if (seen) for (const pf of kl.puffs) {
       l.fillStyle = `rgba(150,150,156,${0.7 * (1 - pf.age / 0.6)})`;
       l.fillRect((pf.x - sp.width / 2 + pf.vx * pf.age) * k, (pf.y + pf.vy * pf.age) * k + lift, k, k);
     }

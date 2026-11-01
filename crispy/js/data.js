@@ -351,7 +351,7 @@
       // ...and the whole time, he's standing behind Crispy (in his portrait), fading in, faster
       // the further the creature has gone (`full`: seconds from nothing to all the way there).
       // Each click fades him back by `click`; all the way there: `hit` of Crispy's health.
-      behind: { full: [40, 36, 32, 29, 26], click: 0.12, hit: 0.25 },
+      behind: { full: [18, 16, 14, 12.5, 11], click: 0.12, hit: 0.25 },
     },
 
     afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts

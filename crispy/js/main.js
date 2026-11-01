@@ -9,7 +9,7 @@
   fit();
 
   const I = window.CRISPY_IMAGES;
-  window.AUDIO.init('assets/audio/arachnophobia-slowed-reverb.mp3', ['assets/audio/song_1.mp3', 'assets/audio/song_2.mp3', 'assets/audio/song_3.mp3']);
+  window.AUDIO.init('assets/audio/arachnophobia-slowed-reverb.mp3', ['assets/audio/song_1.mp3', 'assets/audio/song_2.mp3', 'assets/audio/song_3.mp3'], 'assets/audio/jumpscare.mp3');
   window.CREATURE.init(I);
   window.SCENE.init(I);
   window.UI.init();

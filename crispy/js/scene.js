@@ -6,7 +6,8 @@
  * effects are muted and grainy, like the item sheet: nothing bright, nothing cheerful. The props
  * are pixel art: the trash bag, the grilled cheese and the sword from one sheet; the wine glass,
  * the pills, the cracked phone, the car keys and the text bubble from another; the alarm clock and
- * the bird from a third; the RG 405M from its own; and little ones drawn here (a gavel...). Words from attacks go in the battle log,
+ * the bird from a third; the RG 405M, the speaker, Authority's gavel and the white flag from their
+ * own; and a few little ones drawn here. Words from attacks go in the battle log,
  * not on screen.
  */
 (function () {
@@ -45,10 +46,6 @@
   // ------------------------------------------------------------------ pixel props
   // Little pixel-art sprites: rows of characters, one colour each.
   const PROPS = {
-    gavel: {
-      pal: { b: '#5e4a36', d: '#3a2c20', l: '#7a6448', y: '#8a7440' },
-      rows: ['..llllllll....', '.lbbbbbbbbd...', 'ylbbbbbbbbdy..', 'ylbbbbbbbbdy..', '.lbbbbbbbbd...', '..dddddddd....', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....bd.......', '.....dd.......'],
-    },
     choc: {
       pal: { f: '#8e9094', F: '#6a6d72', b: '#2a170e', B: '#3e2416', h: '#55341e' },
       rows: ['ffffbbbbbbbbbb', 'FffFbBhbBhbBhb', 'ffffbBBbBBbBBb', 'FffFbbbbbbbbbb', 'ffffbBhbBhbBhb', 'FffFbBBbBBbBBb', 'ffffbbbbbbbbbb'],
@@ -65,10 +62,6 @@
     heart: {
       pal: { r: '#8a5a52', R: '#6a2a26' },
       rows: ['.rr.rr.', 'rRRrRRr', 'rRRRRRr', '.rRRRr.', '..rRr..', '...r...'],
-    },
-    flag: {
-      pal: { p: '#5e4a36', w: '#a8a298', W: '#7e7a72' },
-      rows: ['pwwwwwwwww', 'pwwwwwwwwW', 'pwwwwwwwWW', 'pwwwwwwwww', 'pWwwwwwwww', 'pWWwwwwwwW', 'p.........', 'p.........', 'p.........', 'p.........', 'p.........', 'p.........'],
     },
   };
   const sprites = {};
@@ -202,6 +195,7 @@
     (images.jaw || []).forEach((src, i) => load('jaw' + i, src));
     JAW_META = images.jawMeta || [];
     if (images.killer) load('killer', images.killer);
+    if (images.scareFace) load('scareFace', images.scareFace);
     (images.scares || []).forEach((src, i) => load('scare' + i, src));
     SCARES = (images.scares || []).length;
     // the layers everything but the room is drawn on, small: the creature (under the HUD), and
@@ -440,25 +434,40 @@
       });
     },
     authority(o = {}) {
+      // the gavel swings down (turning about the end of its handle) and strikes its block, by
+      // whoever it's for
+      sfx('gavel', 330);
       const onFoe = o.target === 'foe';
-      const [x, y] = onFoe ? S.foePoint('head') : S.heroPoint('head');
-      sfx('gavel', 380);
+      const bx = onFoe ? C().x - 250 : 470;
+      const by = 610;
+      const k = PX * 1.2;
+      // where the end of the handle is: on the struck gavel's sprite, and on the gavel's own
+      const knob = [bx + (81 - 42) * k, by + (3 - 30.5) * k];
+      let hit = false;
       return add(1300, (ctx, p) => {
-        const drop = ease(clamp(p / 0.3, 0, 1));
-        const lift = p > 0.4 && p < 0.55 ? Math.sin(((p - 0.4) / 0.15) * Math.PI) * 0.5 : 0;
-        drawSprite(ctx, 'gavel', x + 40, y - 40, PX * 3, { rot: -1.2 + drop * 1.2 - lift, ax: 0.45, ay: 0.95, alpha: 1 - clamp((p - 0.85) / 0.15, 0, 1) });
-        if (p > 0.28) {
-          const q = (p - 0.28) / 0.72;
-          ctx.save();
-          ctx.globalAlpha = 0.6 * (1 - q);
-          ctx.strokeStyle = '#2a2420';
-          ctx.lineWidth = PX * 2;
-          ctx.beginPath();
-          ctx.ellipse(x, y + 40, 60 + q * 200, 20 + q * 60, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-          if (p < 0.34) S.shake = Math.max(S.shake, 6);
+        const a = 1 - clamp((p - 0.85) / 0.15, 0, 1);
+        if (p < 0.27) {
+          // raised... and down
+          const q = clamp((p - 0.1) / 0.17, 0, 1);
+          const rot = 0.5 - 1.58 * q * q;
+          drawSprite(ctx, 'gavel', knob[0], knob[1], k, { rot, ax: 61 / 65, ay: 58 / 61, alpha: Math.min(1, p / 0.08) });
+          return;
         }
+        if (!hit) {
+          hit = true;
+          S.shake = Math.max(S.shake, 8);
+        }
+        const bounce = p < 0.33 ? Math.round(Math.sin(((p - 0.27) / 0.06) * Math.PI) * 2) * PX : 0;
+        drawSprite(ctx, 'gavelHit', bx, by - bounce, k, { alpha: a });
+        const q = clamp((p - 0.27) / 0.5, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.6 * (1 - q);
+        ctx.strokeStyle = '#2a2420';
+        ctx.lineWidth = PX * 2;
+        ctx.beginPath();
+        ctx.ellipse(bx, by + 70, 90 + q * 200, 20 + q * 45, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       });
     },
     rg() {
@@ -949,10 +958,26 @@
       });
     },
     spare() {
+      // the white flag, torn and bloody, waving: its cloth in strips, each a little behind the
+      // last, the pole still
       sfx('spare');
-      return add(1500, (ctx, p) => {
-        const a = Math.sin(Math.PI * p);
-        drawSprite(ctx, 'flag', 400, 560, PX * 3, { alpha: a, sx: 1 + Math.sin(S.t * 8) * 0.06 });
+      return add(1700, (ctx, p) => {
+        const sp = sprites.flag;
+        if (!sp) return;
+        const a = Math.min(1, p * 5) * (1 - clamp((p - 0.85) / 0.15, 0, 1));
+        const k = PX * 1.1;
+        const x0 = 420 - (sp.width * k) / 2;
+        const y0 = 580 - (sp.height * k) / 2;
+        const POLE = 7;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = a;
+        ctx.drawImage(sp, 0, 0, POLE, sp.height, x0, y0, POLE * k, sp.height * k);
+        for (let x = POLE; x < sp.width; x += 2) {
+          const d = Math.round(Math.sin(S.t * 6 - x * 0.22) * 2.2 * ((x - POLE) / (sp.width - POLE)));
+          ctx.drawImage(sp, x, 0, 2, sp.height, x0 + x * k, y0 + d * k, 2 * k, sp.height * k);
+        }
+        ctx.restore();
       });
     },
   };
@@ -1392,43 +1417,65 @@
     }
     l.restore();
   }
-  // If he gets all the way in: his face, right up against the screen, then the pictures, very
-  // fast, dim; then back to the room.
+  // If he gets all the way in: he's right in front of the screen; then that face, up close;
+  // then the pictures, very fast, dim; all through static. Then back to the room.
   S.jumpscare = function () {
     S.killer = null;
     const order = [...Array(SCARES).keys()].sort(() => Math.random() - 0.5);
-    const FACE = 1.0;
+    const HIM = 0.6;
+    const FACE = 0.45;
     const EACH = 0.16;
-    const total = FACE + order.length * EACH + 0.3;
+    const total = HIM + FACE + order.length * EACH + 0.3;
+    const fill = (ctx, img) => {
+      // as big as it'll go, and centred
+      const s = Math.min(W / img.width, H / img.height);
+      ctx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+    };
     return add(total * 1000, (ctx, p) => {
       const T = p * total;
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
+      ctx.imageSmoothingEnabled = false;
       const sp = sprites.killer;
-      if (T < FACE) {
-        if (!sp || Math.random() < 0.1) return; // it flickers
-        const rows = 58;
-        const s = ((H * 1.3) / rows) * (1 + T * 0.18);
-        const jx = (Math.random() - 0.5) * 50;
-        const jy = (Math.random() - 0.5) * 40;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(sp, 0, 0, sp.width, rows, W / 2 - (sp.width * s) / 2 + jx, H / 2 - (rows * s) / 2 + jy, sp.width * s, rows * s);
-        S.shake = 16;
-        return;
-      }
-      const t = T - FACE;
-      const i = Math.floor(t / EACH);
-      if (i < order.length && t - i * EACH < EACH * 0.7) {
-        const img = sprites['scare' + order[i]];
-        if (img) {
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(img, 0, 0, W, H);
+      if (T < HIM) {
+        // right up against the screen: his head and shoulders
+        if (sp && Math.random() > 0.08) {
+          const rows = 90;
+          const s = ((H * 1.15) / rows) * (1 + T * 0.25);
+          const jx = (Math.random() - 0.5) * 40;
+          const jy = (Math.random() - 0.5) * 30;
+          ctx.drawImage(sp, 0, 0, sp.width, rows, W / 2 - (sp.width * s) / 2 + jx, H * 0.06 + jy, sp.width * s, rows * s);
         }
+        S.shake = 14;
+      } else if (T < HIM + FACE) {
+        // that face
+        if (sprites.scareFace && Math.random() > 0.12) {
+          ctx.save();
+          ctx.translate((Math.random() - 0.5) * 24, (Math.random() - 0.5) * 18);
+          fill(ctx, sprites.scareFace);
+          ctx.restore();
+        }
+        S.shake = 10;
+      } else {
+        const t = T - HIM - FACE;
+        const i = Math.floor(t / EACH);
+        if (i < order.length && t - i * EACH < EACH * 0.7 && sprites['scare' + order[i]]) fill(ctx, sprites['scare' + order[i]]);
+      }
+      // static, over all of it
+      const n = T < total - 0.3 ? 260 : 60;
+      for (let j = 0; j < n; j++) {
+        const v = 60 + Math.floor(Math.random() * 160);
+        ctx.fillStyle = `rgba(${v},${v},${v},${0.35 + Math.random() * 0.4})`;
+        ctx.fillRect(Math.random() * W, Math.random() * H, PX * (1 + Math.floor(Math.random() * 3)), PX);
+      }
+      for (let j = 0; j < 3; j++) {
+        ctx.fillStyle = `rgba(200,200,200,${0.06 + Math.random() * 0.08})`;
+        ctx.fillRect(0, Math.random() * H, W, PX * (1 + Math.floor(Math.random() * 4)));
       }
     }, { top: true });
   };
 
-  S.play = (name, o) =>  S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
+  S.play = (name, o) => (FX[name] ? FX[name](o) : 0);
   S.foeMove = (name, o) => (FOE[name] ? FOE[name](o) : 0);
 
   // ADJUST: its body snaps into the wrong shapes, one crack at a time (see creature.js); the

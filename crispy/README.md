@@ -37,10 +37,11 @@ picks, Esc or X goes back; or click.
   claw, grab his shoulders, pat him on the back) its arm comes off at the shoulder, far too long,
   over his box: a different arm for each stage. When it bites, a jaw clamps shut on him. Only Andy
   can be killed.
-- **The killer** isn't part of the fight. From round 3, while Crispy is deciding what to do, he
-  may start coming up out of a corner of the screen, slowly, breathing quick and shallow. Click
-  him and he sinks back out of sight. If he gets all the way in: a jumpscare, some pictures flash
-  past, and he takes a chunk of Crispy's health. (Not again for a few rounds.)
+- **The killer** isn't part of the fight. From round 2, while Crispy is deciding what to do, he
+  often starts coming up out of a corner of the screen, breathing quick and shallow. Click him
+  (quick: about 6 seconds) and he sinks back out of sight. If he gets all the way in: he's right
+  in front of the screen, a face flashes up close, more pictures flash past, all through static,
+  and he takes a chunk of Crispy's health. (Not again for a couple of rounds.)
 
 ## Three ways out
 
@@ -77,8 +78,8 @@ someone who only goes for SPARE or FLEE gets there almost every time.
 The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
 `living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
 in `crispy/assets/source/`; nor are the pictures that flash after the killer's jumpscare
-(`scare_1` to `scare_5`, png or webp, also in `crispy/assets/source/`). The speaker's songs
-aren't either: put `clint_eastwood.mp3`,
+(`scare_face.png`, and `scare_1` to `scare_5`, png or webp, also in `crispy/assets/source/`), nor
+its sound (`crispy/assets/audio/jumpscare.mp3`). The speaker's songs aren't either: put `clint_eastwood.mp3`,
 `feel_good_inc.mp3` and `on_melancholy_hill.mp3` in `crispy/assets/audio/songs/` (without them
 the speaker still works, silently). Then:
 
@@ -106,6 +107,7 @@ tools/                      builds the art, cuts Crispy out, builds the single f
 assets/source/              the creature's sprite sheet, the trash bag / grilled cheese / sword
                             sheet, the wine / pills / phone / keys / text bubble sheet, the
                             Early Bird clock and bird sheet, the RG 405M console, the
-                            speaker, the creature's arms and jaw, the killer, and references
+                            speaker, Authority's gavel, the white flag, the creature's arms
+                            and jaw, the killer, and references
 assets/audio/               Arachnophobia (OMORI), slowed with reverb; the speaker's songs
 ```

@@ -13,3 +13,5 @@ crispy/assets/audio/songs/
 crispy/assets/audio/song_*.mp3
 # the pictures flashed after the killer's jumpscare aren't ours to share
 crispy/assets/source/scare_*
+# the killer's jumpscare sound (not ours to share)
+crispy/assets/audio/jumpscare.mp3

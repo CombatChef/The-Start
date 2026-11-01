@@ -12,7 +12,8 @@ From crispy/assets/source/ (the photos aren't in the repo: put them there first)
 the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), the trash bag,
 grilled cheese and sword from theirs (props_sheet.png), the wine glass, pills, phone, car keys
 and text bubble from theirs (items_sheet.png), the alarm clock and the bird from theirs
-(early_sheet.png), the RG 405M console from its own (rg_sheet.png), the speaker from its own (speaker_sheet.png), the creature's doc profiles (the repo's
+(early_sheet.png), the RG 405M console from its own (rg_sheet.png), the speaker from its own (speaker_sheet.png), Authority's gavel (gavel_sheet.png), the white
+flag (flag_sheet.png), the creature's doc profiles (the repo's
 assets/profiles/) for the HUD, the family photos he sees when he falls (memory_1..4.webp, not in
 the repo either), the creature's arms (arms_sheet.png) and jaw (jaw_frames.png), the killer
 (killer_sheet.png), and the pictures after his jumpscare (scare_1..5, not in the repo).
@@ -401,6 +402,39 @@ def scares():
     return out
 
 
+def gavel():
+    """Authority's gavel (gavel_sheet.png, 6 screen pixels to each of its): on its own, raised,
+    and striking its block."""
+    px, m = cut('gavel_sheet.png', 6, 3)
+    cols = m.any(0)
+    spans, start = [], None
+    for x, v in enumerate(list(cols) + [False]):
+        if v and start is None:
+            start = x
+        if not v and start is not None:
+            spans.append((start, x))
+            start = None
+    return {k: rgba(*crop(px[:, a:b], m[:, a:b])) for k, (a, b) in zip(('gavel', 'gavelHit'), spans)}
+
+
+def flag():
+    """The white flag, torn and bloodied, for SPARE (flag_sheet.png, 6 screen pixels to each of
+    its)."""
+    px, m = cut('flag_sheet.png', 6, 3)
+    return {'flag': rgba(*crop(px, m))}
+
+
+def scare_face():
+    """The face that flashes up close in the killer's jumpscare (scare_face.png, not in the
+    repo): pixelated, a little dim, still clear."""
+    path = os.path.join(SRC, 'scare_face.png')
+    if not os.path.exists(path):
+        return None
+    im = Image.open(path).convert('RGB')
+    im = im.resize((im.width // 3, im.height // 3), Image.LANCZOS)
+    return Image.fromarray(np.clip(np.asarray(im).astype(float) * 0.8, 0, 255).astype(np.uint8))
+
+
 def memories():
     """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
     item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
@@ -446,7 +480,7 @@ if __name__ == '__main__':
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],
         'creatureMeta': [m for _, m in forms],
-        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}, **{k: data_url(v) for k, v in rg_console().items()}, **{k: data_url(v) for k, v in speaker().items()}},
+        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}, **{k: data_url(v) for k, v in rg_console().items()}, **{k: data_url(v) for k, v in speaker().items()}, **{k: data_url(v) for k, v in gavel().items()}, **{k: data_url(v) for k, v in flag().items()}},
         'memories': [data_url(m) for m in memories()],
         'arms': [data_url(a) for a in arm_imgs],
         'armMeta': arm_meta,
@@ -454,6 +488,7 @@ if __name__ == '__main__':
         'jawMeta': jaw_meta,
         'killer': data_url(killer()),
         'scares': [data_url(x) for x in scares()],
+        'scareFace': data_url(face) if (face := scare_face()) else None,
         'profiles': [data_url(p) for p in profiles()],
     }
     with open(os.path.join(CRISPY, 'js', 'images.js'), 'w') as f:

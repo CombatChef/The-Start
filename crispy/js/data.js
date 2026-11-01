@@ -322,7 +322,7 @@
     // `chance` he starts coming up out of a corner of the screen (not again for `gap` rounds);
     // he takes `approach` seconds of Crispy deciding to get all the way in, unless he's clicked.
     // Then the jumpscare, and `hit` of Crispy's health.
-    killer: { from: 3, chance: 0.35, gap: 3, approach: 10, hit: 0.15 },
+    killer: { from: 2, chance: 0.6, gap: 2, approach: 6, hit: 0.15 },
 
     afraid: { atk: 0.8, acc: 0.9 }, // AFRAID: his attack and aim, while it lasts
     poisonMax: 30, // poison never does more than this a turn

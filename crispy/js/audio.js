@@ -9,7 +9,9 @@
   const A = { ctx: null, master: null, sfxOn: true, musicOn: true, music: null };
   window.AUDIO = A;
 
-  A.init = function (musicSrc, songs = []) {
+  A.init = function (musicSrc, songs = [], scareSrc = '') {
+    // the killer's jumpscare: a recording (it plays with the static, below)
+    A.scare = scareSrc ? new Audio(scareSrc) : null;
     A.music = new Audio(musicSrc);
     A.music.loop = true;
     A.music.volume = 0.55;
@@ -550,10 +552,15 @@
       tone('sine', [140, 60], 0, 0.4, 0.05);
     },
     jumpscare: () => {
-      noise(0, 1.0, 0.75, { type: 'highpass', f: 700, attack: 0.005, hold: 0.7 });
-      for (const [f, d] of [[466, 0], [494, 13], [523, -17], [233, 7]]) tone('sawtooth', [f, f * 0.7], 0, 1.0, 0.14, { detune: d, vibrato: [23, 60] });
-      thump(0, 50, 1, 0.6);
-      for (let i = 0; i < 6; i++) noise(1.0 + i * 0.16, 0.1, 0.25, { type: 'bandpass', f: 2500 + Math.random() * 3000, q: 2 }); // the pictures, flashing
+      if (A.scare) {
+        A.scare.currentTime = 0;
+        A.scare.volume = 1;
+        A.scare.play().catch(() => {});
+      }
+      // static, all the way through, and a crackle with each picture
+      noise(0, 2.1, 0.22, { type: 'highpass', f: 1500, attack: 0.005, hold: 1.9 });
+      noise(0, 2.1, 0.12, { type: 'bandpass', f: 600, q: 0.5, attack: 0.005, hold: 1.9 });
+      for (let i = 0; i < 7; i++) noise(0.6 + i * 0.16 + Math.random() * 0.04, 0.09, 0.3, { type: 'bandpass', f: 2500 + Math.random() * 3000, q: 2 });
     },
     // a pen, crossing a name off
     scratch: () => {

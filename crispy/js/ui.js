@@ -455,7 +455,7 @@
   }
 
   // How far into each effect its hit (or heal, or buff) lands, so the HUD moves with it.
-  const FX_AT = { swing: 0.45, realSlash: 0.45, trash: 0.6, tear: 0.35, early: 0.75, authority: 0.35, rg: 0.5, wine: 0.6, slice: 0.3, taste: 0.6, nut: 0.32, choc: 0.42, cheese: 0.45, pills: 0.7, keys: 0.5, stance: 0.5 };
+  const FX_AT = { speaker: 0.4, swing: 0.45, realSlash: 0.45, trash: 0.6, tear: 0.35, early: 0.75, authority: 0.35, rg: 0.5, wine: 0.6, slice: 0.3, taste: 0.6, nut: 0.32, choc: 0.42, cheese: 0.45, pills: 0.7, keys: 0.5, stance: 0.5 };
   const FOE_AT = { claw: 0.3, rake: 0.3, reach: 0.55, screech: 0.4, scream: 0.4, lash: 0.4, lash3: 0.4, lunge: 0.4, mimic: 0.45, grab: 0.45, pat: 0.45, bite: 0.32, flicker: 0.55, bile: 0.45, drop: 0.5, joke: 0.55 };
 
   async function play(events) {
@@ -584,6 +584,12 @@
           break;
         case 'door':
           S().setDoor(e.open !== false);
+          break;
+        // the speaker: a song instead of the battle music, till it ends or it's torn apart
+        case 'speaker':
+          if (e.on) A().playSong();
+          else A().stopSong(e.broken ? 0.05 : 1.5);
+          S().setSpeaker(e.on, e.broken);
           break;
         // the endings: Andy falls, it walks out of the front door, or they drive away
         case 'win':

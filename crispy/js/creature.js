@@ -212,6 +212,13 @@
         o.lean = 16 * out;
         o.sway = 0;
         break;
+      case 'smash':
+        // round on the speaker, at its right
+        o.lean = 30 * snap;
+        o.dx = 70 * snap;
+        o.armR = 1.3 * snap;
+        o.armL = -0.4 * snap;
+        break;
       case 'hesitate': {
         // it raises its claws... and lets them down again, slowly
         const rise = p < 0.25 ? p / 0.25 : Math.max(0, 1 - (p - 0.25) / 0.75);
@@ -244,7 +251,7 @@
   }
 
   C.act = function (type) {
-    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, bite: 0.6, flicker: 1.0, bile: 1.0, lure: 1.6, drop: 1.3, joke: 1.3, lock: 0.9, adjust: 3.6 }[type] || 0.8;
+    const dur = { claw: 0.55, rake: 0.42, pat: 0.8, mimic: 0.7, reach: 1.1, grab: 1.1, lunge: 0.6, lash: 0.9, lash3: 1.0, screech: 1.2, scream: 1.2, twitch: 1.2, weep: 1.6, lengthen: 1.2, stare: 1.4, smile: 1.6, harden: 1.0, hurt: 0.45, shield: 1.4, distracted: 1.6, hesitate: 1.6, bite: 0.6, flicker: 1.0, bile: 1.0, lure: 1.6, drop: 1.3, joke: 1.3, lock: 0.9, smash: 0.9, adjust: 3.6 }[type] || 0.8;
     C.action = { type, t0: C.t, dur };
     return dur * 1000;
   };

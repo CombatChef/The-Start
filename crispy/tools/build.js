@@ -14,6 +14,12 @@ html = html.replace('<link rel="stylesheet" href="css/style.css" />', () => `<st
 html = html.replace(/<script src="(js\/[\w.]+)"><\/script>/g, (_, f) => `<script>\n${read(f).replace(/<\/script/g, '<\\/script')}\n</script>`);
 const mp3 = fs.readFileSync(path.join(ROOT, 'assets/audio/arachnophobia-slowed-reverb.mp3')).toString('base64');
 html = html.replace("'assets/audio/arachnophobia-slowed-reverb.mp3'", () => `'data:audio/mpeg;base64,${mp3}'`);
+// the speaker's songs (not in the repo: tools/make_songs.py makes them), if they're there
+for (const n of [1, 2, 3]) {
+  const f = path.join(ROOT, `assets/audio/song_${n}.mp3`);
+  const src = fs.existsSync(f) ? `data:audio/mpeg;base64,${fs.readFileSync(f).toString('base64')}` : '';
+  html = html.replace(`'assets/audio/song_${n}.mp3'`, () => `'${src}'`);
+}
 fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
 const out = path.join(ROOT, 'dist/index.html');
 fs.writeFileSync(out, html);

@@ -60,6 +60,7 @@
       this.shown = 0; // how many steps of 'Show it who he is' he's done
       this.talks = 0;
       this.alarm = 0; // rounds the car alarm still covers any noise
+      this.speaker = 0; // rounds the speaker has left to play
     }
 
     // ------------------------------------------------------------ stats
@@ -125,7 +126,11 @@
       else if (h.sp < sp.sp) why = 'Not enough SP';
       else if (h.nutThisTurn >= sp.perTurn) why = 'Twice a turn';
       skills.push({ id: 'nut', name: sp.name, sp: sp.sp, doc: sp.doc, ok: !why, why, special: true });
-      const items = DATA.items.map((i) => ({ id: i.id, name: i.name, doc: i.doc, count: h.items[i.id], ok: h.items[i.id] > 0, why: h.items[i.id] > 0 ? '' : 'None left' }));
+      const items = DATA.items.map((i) => {
+        let why = h.items[i.id] > 0 ? '' : 'None left';
+        if (i.id === 'speaker' && this.speaker > 0) why = 'It’s already playing';
+        return { id: i.id, name: i.name, doc: i.doc, count: h.items[i.id], ok: !why, why };
+      });
       const acts = DATA.acts.map((a) => {
         let why = '';
         let { name, doc } = a;
@@ -149,7 +154,7 @@
       const safe = this.family >= 3;
       const mercy = [
         { id: 'flee', name: 'FLEE', ok: true, special: safe, doc: safe ? 'Run for the car. Veranda, Justin and Erik are already in it.' : 'Run. (He won’t leave without his family: get them out first.)' },
-        { id: 'spare', name: 'SPARE', ok: true, special: ready, doc: ready ? 'Call a truce. It’s lost interest in him: it might take it.' : `Call a truce. (MERCY ${this.mercy}%: it isn’t done with him yet.)` },
+        { id: 'spare', name: 'SPARE', ok: true, special: ready, doc: ready ? 'Call a truce. It’s lost interest in him: it might take it.' : `Call a truce. (MERCY ${this.mercy}%: it isn’t done with him yet. Each try nudges it up a little.)` },
       ];
       return { skills, items, acts, mercy };
     }
@@ -227,6 +232,10 @@
         }
       }
       if (this.alarm > 0) this.alarm--;
+      if (this.speaker > 0 && --this.speaker === 0) {
+        ev.push({ t: 'log', text: 'The song ends.', tone: 'sys' });
+        this.speakerOff(ev, false);
+      }
       const show = DATA.acts.find((a) => a.id === 'show');
       const creep = show.trickle[Math.min(this.shown, show.trickle.length - 1)];
       if (creep && this.mercy < DATA.mercyRules.full) this.addMercy(creep, ev, true);
@@ -524,15 +533,13 @@
       const p = DATA.family[step];
       let chance = p.chance;
       if (this.door) chance = Math.min(0.95, chance + a.door);
-      const covered = this.alarm > 0 || f.distracted || f.mods.some((m) => m.label === 'EXPOSED');
+      const covered = this.alarm > 0 || this.speaker > 0 || f.distracted || f.mods.some((m) => m.label === 'EXPOSED');
       if (covered) chance = 1; // it's looking the other way
-      const texts = [
-        ['Crispy texts Veranda: "Something’s in the house. Get out the back. Quietly. NOW."', '"ok. be careful."'],
-        ['Crispy texts Justin: "Basement stairs. Slowly. Out the back, to the car."', '"going."'],
-        ['Crispy texts Erik: "Erik. Shoes on. Down the stairs when I say. Don’t look at it."', '"what?? ok ok"'],
-      ][step];
-      say(texts[0]);
-      say(texts[1], 'good');
+      say([
+        'Crispy texts Veranda: "Something’s in the house. Get out the back. Quietly. NOW."',
+        'Crispy texts Justin: "Basement stairs. Slowly. Out the back, to the car."',
+        'Crispy texts Erik: "Erik. Shoes on. Down the stairs when I say. Don’t look at it."',
+      ][step]);
       const fx = { t: 'fx', name: 'family', step, ok: true };
       ev.push(fx);
       if (this.rand() > chance) {
@@ -540,7 +547,7 @@
         say(['A stair creaks under Veranda. Its head snaps towards the stairs.', 'The basement door groans on its hinges. It heard that.', 'Erik finds the one stair that creaks. Its head turns.'][step], 'bad');
         // it goes for them, and he puts himself in the way
         say(`It lunges for ${p.pron}! Crispy throws himself in its path.`, 'foe');
-        const dmg = Math.round(a.caught * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
+        const dmg = Math.round(a.caught * this.shield() * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
         ev.push({ t: 'foe', move: 'lunge' });
         ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'lunge' });
         this.hurtHero(dmg, ev);
@@ -579,6 +586,27 @@
       this.hero.mods = this.hero.mods.filter((m) => m.label !== 'CLEAR-HEADED');
       ev.push(this.addMod(this.hero, { atk: it.self.atk, spd: it.self.spd, acc: it.self.acc }, it.self.turns, 'CLEAR-HEADED'));
     }
+    // ITEM: the speaker. A song, slowed down and loud: for a couple of turns it's distracted, its
+    // hits on Crispy are halved, and anyone he gets out makes it. Unless it smashes the speaker.
+    item_speaker(it, ev) {
+      this.speaker = it.turns;
+      ev.push({ t: 'log', text: 'Crispy sets the speaker down and turns it all the way up.', tone: 'hero' });
+      ev.push({ t: 'fx', name: 'speaker' });
+      ev.push({ t: 'speaker', on: true });
+      ev.push({ t: 'log', text: this.stage.final ? 'Andy tilts his head at the song. He knows the words.' : 'The bass fills the house. Its head turns towards the sound.', tone: 'good' });
+      this.foe.mods = this.foe.mods.filter((m) => m.label !== 'THE MUSIC');
+      ev.push(this.addMod(this.foe, { acc: it.aim }, it.turns, 'THE MUSIC'));
+    }
+    speakerOff(ev, broken) {
+      this.speaker = 0;
+      this.foe.mods = this.foe.mods.filter((m) => m.label !== 'THE MUSIC');
+      if (broken) this.hero.items.speaker = 0;
+      ev.push({ t: 'speaker', on: false, broken });
+    }
+    // what its hits on Crispy are worth while the speaker plays
+    shield() {
+      return this.speaker > 0 ? DATA.items.find((i) => i.id === 'speaker').shield : 1;
+    }
     item_keys(it, ev) {
       ev.push({ t: 'log', text: 'Crispy mashes the panic button on his car keys.', tone: 'hero' });
       ev.push({ t: 'fx', name: 'keys' });
@@ -592,7 +620,7 @@
         ev.push({ t: 'log', text: 'Crispy backs towards the door... and RUNS for the car.', tone: 'hero' });
         if (!this.door && !this.foe.distracted) {
           ev.push({ t: 'log', text: 'It swipes at him on the way out!', tone: 'foe' });
-          const dmg = Math.round(DATA.fleeHit * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
+          const dmg = Math.round(DATA.fleeHit * this.shield() * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
           ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'claw' });
           this.hurtHero(dmg, ev);
           if (this.over) return;
@@ -606,7 +634,7 @@
       ev.push({ t: 'log', text: `Crispy turns to run— but ${inside.length > 1 ? `${inside.slice(0, -1).join(', ')} and ${inside[inside.length - 1]} are` : `${inside[0]} is`} still inside. He can’t leave them.`, tone: 'hero' });
       ev.push({ t: 'fx', name: 'flee' });
       ev.push({ t: 'log', text: 'It catches him with his back turned!', tone: 'foe' });
-      const dmg = Math.round(0.6 * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
+      const dmg = Math.round(0.6 * this.shield() * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2));
       ev.push({ t: 'hit', who: 'hero', amount: dmg, kind: 'claw' });
       this.hurtHero(dmg, ev);
     }
@@ -631,8 +659,8 @@
         ev.push({ t: 'log', text: `When Crispy opens his eyes, ${this.stage.final ? 'Andy is' : 'it’s'} gone. The front door swings in the wind.`, tone: 'special' });
         return;
       }
-      ev.push({ t: 'log', text: this.stage.final ? 'Andy laughs. "A truce? I’m just getting started."' : 'It doesn’t want a truce. It isn’t done with him.', tone: 'foe' });
-      ev.push({ t: 'log', text: `(MERCY ${this.mercy}%)`, tone: 'sys' });
+      ev.push({ t: 'log', text: this.stage.final ? 'Andy laughs. "A truce? I’m just getting started."' : 'It doesn’t want a truce. It isn’t done with him. But it heard him.', tone: 'foe' });
+      this.addMercy(DATA.mercyRules.spareTry, ev);
     }
 
     healHero(n, ev) {
@@ -708,6 +736,13 @@
       if (!this.stage.final && f.turns >= this.D.foe.adjustOn) {
         ev.push({ t: 'log', text: 'It goes very still. Something under its skin moves.', tone: 'foe' });
         this.adjust(ev, false);
+        return;
+      }
+      // the speaker: it might go for that instead
+      if (this.speaker > 0 && this.rand() < DATA.items.find((i) => i.id === 'speaker').smash) {
+        ev.push({ t: 'log', text: this.who('{It} turns on the speaker and tears it apart. The music dies.'), tone: 'foe' });
+        ev.push({ t: 'foe', move: 'smash' });
+        this.speakerOff(ev, true);
         return;
       }
       // the more MERCY, the more often it can't bring itself to attack
@@ -815,7 +850,7 @@
           say('BLOCKED! The foam sword soaks it up.', 'good');
           continue;
         }
-        let dmg = mv.power * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2);
+        let dmg = mv.power * this.shield() * this.foeStat('atk') * (100 / (100 + this.heroStat('def'))) * (0.9 + this.rand() * 0.2);
         let crit = false;
         if (this.rand() < this.stage.stats.smt / 1000) {
           crit = true;

@@ -12,7 +12,7 @@ From crispy/assets/source/ (the photos aren't in the repo: put them there first)
 the creature's five forms from its pixel-art sprite sheet (creature_sheet.webp), the trash bag,
 grilled cheese and sword from theirs (props_sheet.png), the wine glass, pills, phone, car keys
 and text bubble from theirs (items_sheet.png), the alarm clock and the bird from theirs
-(early_sheet.png), the RG 405M console from its own (rg_sheet.png), the creature's doc profiles (the repo's
+(early_sheet.png), the RG 405M console from its own (rg_sheet.png), the speaker from its own (speaker_sheet.png), the creature's doc profiles (the repo's
 assets/profiles/) for the HUD, and the family photos he sees when he falls (memory_1..4.webp,
 not in the repo either).
 """
@@ -302,6 +302,18 @@ def rg_console():
     return {'rg': Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))}
 
 
+def speaker():
+    """The speaker, from its pixel-art sheet (speaker_sheet.png, 7 screen pixels to each of its),
+    with its cable but without its shadow."""
+    src = np.asarray(Image.open(os.path.join(SRC, 'speaker_sheet.png')).convert('RGB')).astype(int)
+    px = src[3::7, 3::7]
+    m = (np.abs(px - 40).sum(2) > 6) & ~np.all(px == 30, axis=2)
+    rows, cols = np.flatnonzero(m.any(1)), np.flatnonzero(m.any(0))
+    rgb = px[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+    al = m[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+    return {'speaker': Image.fromarray(np.dstack([rgb, al * 255]).astype(np.uint8))}
+
+
 def memories():
     """The family photos Crispy sees when he falls, as faded, grainy pixel pictures, like the
     item sheet: small, mostly grey, washed out, speckled. (memory_1..4 in assets/source, not in
@@ -345,7 +357,7 @@ if __name__ == '__main__':
         'crispyAnchors': anchors,
         'creature': [data_url(f) for f, _ in forms],
         'creatureMeta': [m for _, m in forms],
-        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}, **{k: data_url(v) for k, v in rg_console().items()}},
+        'props': {**{k: data_url(v) for k, v in things.items()}, **{k: data_url(v) for k, v in items().items()}, **{k: data_url(v) for k, v in early_bird().items()}, **{k: data_url(v) for k, v in rg_console().items()}, **{k: data_url(v) for k, v in speaker().items()}},
         'memories': [data_url(m) for m in memories()],
         'profiles': [data_url(p) for p in profiles()],
     }

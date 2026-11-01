@@ -86,7 +86,8 @@ const POLICIES = {
       if (h.items.choc) return { type: 'item', id: 'choc' };
     }
     if (!b.door) return { type: 'act', id: 'door' };
-    if (b.family === 2 && h.items.keys) return { type: 'item', id: 'keys' }; // the alarm covers the stairs
+    if (b.family === 1 && h.items.speaker) return { type: 'item', id: 'speaker' }; // the music covers Justin and Erik
+    if (b.family === 2 && h.items.keys && !b.speaker) return { type: 'item', id: 'keys' }; // the alarm covers the stairs
     return { type: 'act', id: 'family' };
   },
   // Only ever presses ATTACK.
@@ -96,7 +97,7 @@ const POLICIES = {
   },
 };
 
-const KNOWN = new Set(['log', 'fx', 'hit', 'miss', 'block', 'heal', 'sp', 'tag', 'adjust', 'revive', 'win', 'lose', 'again', 'round', 'lights', 'sword', 'foe', 'mercy', 'family', 'door', 'spare', 'flee']);
+const KNOWN = new Set(['log', 'fx', 'hit', 'miss', 'block', 'heal', 'sp', 'tag', 'adjust', 'revive', 'win', 'lose', 'again', 'round', 'lights', 'sword', 'foe', 'mercy', 'family', 'door', 'spare', 'flee', 'speaker']);
 let bad = 0;
 for (const [name, policy] of Object.entries(POLICIES)) {
   let wins = 0, rounds = 0, andy = 0, revived = 0, ko = 0, nuts = 0, forced = 0, timed = 0, hpLeft = 0;

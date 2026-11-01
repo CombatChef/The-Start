@@ -8,3 +8,6 @@ crispy/assets/source/father_stats.pdf
 crispy/assets/source/memory_*
 crispy/js/images.js
 crispy/dist/
+# the speaker's songs (and the versions made from them) aren't ours to share either
+crispy/assets/audio/songs/
+crispy/assets/audio/song_*.mp3

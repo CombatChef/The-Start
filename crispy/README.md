@@ -19,8 +19,11 @@ picks, Esc or X goes back; or click.
   one turn. Medium chance of a fatal critical hit, small chance of an instant K.O.
 - **ACT**: Check it (free: doesn't use his turn), turn the lights up (it hates being seen), take a
   fearless stance, talk to it, show it who he is (a different ACT each time), open the front door,
-  or get the family out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys (the alarm makes it
-  lose a turn, once).
+  or get the family out. **ITEM**: 70% dark chocolate, grilled cheese, allergy pills, car keys
+  (the alarm makes it lose a turn, once), and the **speaker**: it plays one of three songs,
+  slowed down and drenched in reverb, instead of the battle music. For 2 turns the music
+  distracts the creature (its aim drops), halves its hits on Crispy, and makes sure anyone he
+  gets out makes it; but each turn it might go for the speaker instead, and tear it apart.
 - **Health** reads as on SlashCo VR's HUD: a coloured word under a heart. The first time it runs
   out, the screen goes red, photos of his family flash past, and he says: *"N-No... You won't
   take this house... Not this man, and not this man's family."* The **pilot light** (his
@@ -39,7 +42,8 @@ picks, Esc or X goes back; or click.
   call a truce, and it's the one that decides to let him live. Its **MERCY** bar (in its box) goes
   up a little with each **Show it who he is** (a new ACT each time: the photos, their names, 4 AM,
   his hands, a staring contest, then holding the line), with **Talk**, and once with **Open the
-  front door**; after three Shows it creeps up on its own every round. Hurting it lowers it. At
+  front door**, and 5% each time he tries **SPARE** before it's ready; after three Shows it
+  creeps up on its own every round. Hurting it lowers it. At
   100%, MERCY > SPARE: Crispy blinks, and when he opens his eyes it's gone. It's the long way:
   about 20 rounds.
 - **Flee**: get the family out, one at a time: **Veranda** (his wife, upstairs), then **Justin**
@@ -59,18 +63,21 @@ the bite, a hit when the claws land, not when the button is pressed.
 
 `node crispy/tests/simulate.js` plays thousands of fights with a few kinds of player to check the
 balance: someone who plays normally wins about 9 times in 10, mashing ATTACK about half the time;
-someone who only goes for SPARE or FLEE gets there about 9 times in 10.
+someone who only goes for SPARE or FLEE gets there almost every time.
 
 ## Building
 
 The family photos aren't in the repo, nor is anything made from them. Put `crispy_photo.webp`,
 `living_room.webp` and the four photos he sees when he falls (`memory_1.webp` to `memory_4.webp`)
-in `crispy/assets/source/`, then:
+in `crispy/assets/source/`. The speaker's songs aren't either: put `clint_eastwood.mp3`,
+`feel_good_inc.mp3` and `on_melancholy_hill.mp3` in `crispy/assets/audio/songs/` (without them
+the speaker still works, silently). Then:
 
 ```
 pip install numpy opencv-python-headless pillow onnxruntime
 python3 crispy/tools/cutout.py u2net_human_seg.onnx   # cut Crispy out of his photo (see the script)
 python3 crispy/tools/make_images.py                   # -> crispy/js/images.js
+python3 crispy/tools/make_songs.py                    # -> the speaker's songs, slowed (needs ffmpeg)
 node crispy/tools/build.js                            # -> crispy/dist/index.html, one file
 ```
 
@@ -91,5 +98,5 @@ assets/source/              the creature's sprite sheet, the trash bag / grilled
                             sheet, the wine / pills / phone / keys / text bubble sheet, the
                             Early Bird clock and bird sheet, the RG 405M console, and
                             references
-assets/audio/               Arachnophobia (OMORI), slowed with reverb
+assets/audio/               Arachnophobia (OMORI), slowed with reverb; the speaker's songs
 ```

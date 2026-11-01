@@ -172,7 +172,7 @@
     ],
     // MERCY: at 100 it's lost interest, and will take a truce (SPARE). Hurting it costs some
     // back; the higher it is, the more often it can't be bothered to attack.
-    mercyRules: { full: 100, hurt: 12, sting: 6, hesitate: 0.0012 },
+    mercyRules: { full: 100, hurt: 12, sting: 6, hesitate: 0.0012, spareTry: 5 }, // spareTry: each SPARE before it's ready
     // Who Crispy gets out, in order, and how likely each is to get past it unheard.
     family: [
       { name: 'Veranda', pron: 'her', who: 'his wife', where: 'upstairs', chance: 0.55 },
@@ -184,6 +184,16 @@
       { id: 'choc', name: '70% Dark Chocolate', count: 3, heal: 0.22, doc: 'Bittersweet. Heals lightly.' },
       { id: 'cheese', name: 'Grilled Cheese', count: 2, heal: 0.45, self: { def: 1.25, turns: 3 }, doc: 'Golden and gooey. Heals significantly and increases defense.' },
       { id: 'pills', name: 'Allergy Pills', count: 2, self: { atk: 1.2, spd: 1.3, acc: 1.15, turns: 4 }, doc: 'Non-drowsy. Increases attack, speed, and accuracy.' },
+      {
+        id: 'speaker',
+        name: 'Speaker',
+        count: 1,
+        turns: 2, // how long the song plays
+        aim: 0.8, // the music distracts it
+        shield: 0.5, // its hits on Crispy, while the music plays
+        smash: 0.3, // the chance, each of its turns, that it goes for the speaker instead
+        doc: 'Turn it all the way up. For 2 turns the music distracts it (its aim drops), its hits on Crispy are halved, and anyone he gets out is sure to make it. It might go for the speaker instead.',
+      },
       { id: 'keys', name: 'Car Keys', count: 1, alarm: 2, doc: 'Starts the car alarm, momentarily distracting the creature (and covering any noise for a moment). One time use.' },
     ],
 

@@ -33,6 +33,7 @@
     splats: [], // blood on the screen while it ADJUSTS
     real: false, // the sword is real
     black: 0, // the room's lights cut out (the creature's Flicker)
+    speaker: null, // the speaker on the floor: { on, fade, broken, debris }
     door: 0, // the front door, 0 shut .. 1 open: the night comes in
     beam: 0, // the car's headlights through the blinds, when they get away
     beamX: 0,
@@ -219,6 +220,7 @@
   // ------------------------------------------------------------------ positions
   const C = () => window.CREATURE;
   // Crispy's portrait, in his box at the bottom left
+  const SPEAKER = [1000, 734]; // where the speaker sits on the floor (its base)
   S.heroPoint = (k) => ({ head: [160, 600], chest: [160, 690], eyes: [165, 620], side: [330, 640] }[k] || [160, 640]);
   S.foePoint = (k) => C().point(k);
 
@@ -620,6 +622,21 @@
         }
       });
     },
+    // ITEM: the speaker, set down on the floor at the right of the room
+    speaker() {
+      sfx('speakerOn');
+      const [x, y] = SPEAKER;
+      const dust = particles(10, x, y, (i, a, b) => ({ vx: (a - 0.5) * 360, vy: -b * 120 }));
+      return add(1300, (ctx, p) => {
+        if (p < 0.45) drawSprite(ctx, 'speaker', x, y - 160 * (1 - ease(Math.min(1, p / 0.3))), PX * 0.9, { ay: 1 });
+        if (p > 0.25) {
+          const tt = (p - 0.25) * 1.3;
+          ctx.fillStyle = `rgba(90,84,76,${0.7 * (1 - p)})`;
+          for (const d of dust) ctx.fillRect(d.x + d.vx * tt, d.y - 6 + d.vy * tt + 400 * tt * tt, PX * 2, PX * 2);
+        }
+        if (p > 0.25 && p < 0.3) S.shake = Math.max(S.shake, 4);
+      });
+    },
     lights() {
       sfx('lights');
       C().act('shield');
@@ -950,6 +967,7 @@
     smile: () => (sfx('smile'), stareFx(1700, true)),
     pat: () => (sfx('pat'), patFx(1000)),
     hesitate: () => (sfx('hesitate'), dots(1500)),
+    smash: () => (sfx('smash', 300), smashFx(1200)),
     bite: () => (sfx('chomp', 220), jaws(800)),
     flicker: () => (sfx('flicker'), blackout(1000)),
     bile: () => (sfx('bile'), spit(1000)),
@@ -1068,6 +1086,37 @@
     S.door = S.doorTarget = 0;
     S.shake = 6;
     return add(dur, () => {});
+  }
+  // It goes for the speaker instead, and tears it apart: the pieces fly, and lie on the floor.
+  function smashFx(dur) {
+    const [x, y] = SPEAKER;
+    let hit = false;
+    const bits = particles(9, x, y - 110, (i, a, b, c) => ({ sx: (i % 3) / 3, sy: Math.floor(i / 3) / 3, vx: (a - 0.4) * 700, vy: -150 - b * 450, spin: (c - 0.5) * 9 }));
+    return add(dur, (ctx, p) => {
+      if (p < 0.3) return;
+      if (!hit) {
+        hit = true;
+        S.shake = Math.max(S.shake, 10);
+        if (S.speaker) S.speaker.broken = true;
+      }
+      const sp = sprites.speaker;
+      if (!sp) return;
+      const q = (p - 0.3) / 0.7;
+      const k = PX * 0.9;
+      const w = sp.width / 3;
+      const h = sp.height / 3;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (const b of bits) {
+        ctx.save();
+        ctx.globalAlpha = 1 - clamp((q - 0.7) / 0.3, 0, 1);
+        ctx.translate(b.x - sp.width * k * 0.5 + (b.sx + 1 / 6) * sp.width * k + b.vx * q * 0.6, b.y - sp.height * k * 0.5 + (b.sy + 1 / 6) * sp.height * k + b.vy * q * 0.6 + 700 * q * q);
+        ctx.rotate(b.spin * q);
+        ctx.drawImage(sp, b.sx * sp.width, b.sy * sp.height, w, h, (-w * k) / 2, (-h * k) / 2, w * k, h * k);
+        ctx.restore();
+      }
+      ctx.restore();
+    });
   }
   // it stops short: a '...' over its head
   function dots(dur) {
@@ -1330,6 +1379,50 @@
   S.setLights = (on) => (S.lightsTarget = on ? 1 : 0);
 
   S.setDoor = (open) => (S.doorTarget = open ? 1 : 0);
+  // The speaker: on (thumping), switched off when its song ends (it fades away), or smashed
+  // (its pieces stay on the floor).
+  S.setSpeaker = function (on, broken) {
+    if (on) S.speaker = { on: true, fade: 1, broken: false };
+    else if (S.speaker) {
+      S.speaker.on = false;
+      if (broken) S.speaker.broken = true;
+    }
+  };
+  function drawSpeaker(l) {
+    const s = S.speaker;
+    if (!s) return;
+    const [x, y] = SPEAKER;
+    if (s.broken) {
+      if (!s.debris) s.debris = particles(16, x, y, (i, a, b) => ({ dx: (a - 0.5) * 200, w: PX * (1 + (i % 3)), c: ['#1e1c1c', '#3a2614', '#2a2a2e', '#5a3a1e'][i % 4], dy: -b * 8 }));
+      for (const d of s.debris) {
+        l.fillStyle = d.c;
+        l.fillRect(d.x + d.dx, d.y + d.dy - d.w, d.w * 2, d.w);
+      }
+      return;
+    }
+    if (!s.on) s.fade = Math.max(0, s.fade - 0.03);
+    if (s.fade <= 0) return (S.speaker = null);
+    // it thumps with the bass: on the jumps above the song's running level
+    const raw = s.on ? A().level() : 0;
+    s.avg = s.avg === undefined ? raw : s.avg * 0.92 + raw * 0.08;
+    const lv = clamp((raw - s.avg) * 5, 0, 1);
+    drawSprite(l, 'speaker', x, y, PX * 0.9 * (1 + lv * 0.05), { ay: 1, alpha: s.fade });
+    if (lv > 0.35) {
+      l.save();
+      l.globalAlpha = (lv - 0.35) * 0.9;
+      l.strokeStyle = '#4a4a50';
+      l.lineWidth = PX;
+      for (const r of [70, 110]) {
+        l.beginPath();
+        l.arc(x, y - 120, r * (0.9 + lv * 0.2), -0.6, 0.6);
+        l.stroke();
+        l.beginPath();
+        l.arc(x, y - 120, r * (0.9 + lv * 0.2), Math.PI - 0.6, Math.PI + 0.6);
+        l.stroke();
+      }
+      l.restore();
+    }
+  }
 
   // FLEE, with the family safe: Crispy is out of the frame, then the car's headlights sweep
   // the blinds and the engine pulls away. The creature turns to watch.
@@ -1486,8 +1579,10 @@
     }
     ctx.restore();
 
-    // the creature, at a third of the resolution
-    C().draw(begin(S.low, sx + wx, sy + wy));
+    // the speaker, if it's out, and the creature, at a third of the resolution
+    const low = begin(S.low, sx + wx, sy + wy);
+    drawSpeaker(low);
+    C().draw(low);
     blowUp(ctx, S.low);
     if (S.black) {
       ctx.fillStyle = '#000';
@@ -1558,6 +1653,7 @@
     S.hero.rising = false;
     S.red = null;
     S.door = S.doorTarget = S.beam = S.black = 0;
+    S.speaker = null;
     S.turned = false;
   };
 })();

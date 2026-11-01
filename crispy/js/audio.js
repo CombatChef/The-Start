@@ -9,10 +9,17 @@
   const A = { ctx: null, master: null, sfxOn: true, musicOn: true, music: null };
   window.AUDIO = A;
 
-  A.init = function (musicSrc) {
+  A.init = function (musicSrc, songs = []) {
     A.music = new Audio(musicSrc);
     A.music.loop = true;
     A.music.volume = 0.55;
+    // the speaker's songs (slowed, reverbed: tools/make_songs.py)
+    A.songs = songs.filter(Boolean).map((src) => {
+      const el = new Audio(src);
+      el.loop = true;
+      return { el };
+    });
+    A.song = null;
   };
   // Browsers only allow sound after a click: the title screen's START does this.
   A.unlock = function () {
@@ -40,28 +47,87 @@
     A.music.volume = 0.55;
     A.music.play().catch(() => {});
   };
-  A.stopMusic = function (fade = 1.5) {
-    if (!A.music) return;
-    const m = A.music;
-    const v0 = m.volume;
+  // an <audio> element's volume, from where it is to `to` over `sec`, then `then`
+  function fadeEl(el, to, sec, then) {
+    const v0 = el.volume;
     const t0 = performance.now();
     const step = () => {
-      const p = (performance.now() - t0) / (fade * 1000);
-      if (p >= 1) {
-        m.pause();
-        m.volume = v0;
-        return;
-      }
-      m.volume = v0 * (1 - p);
-      requestAnimationFrame(step);
+      const p = sec > 0 ? (performance.now() - t0) / (sec * 1000) : 1;
+      el.volume = Math.max(0, Math.min(1, v0 + (to - v0) * Math.min(1, p)));
+      if (p < 1) requestAnimationFrame(step);
+      else if (then) then();
     };
     step();
+  }
+  A.stopMusic = function (fade = 1.5) {
+    A.stopSong(fade, false);
+    if (!A.music) return;
+    const m = A.music;
+    fadeEl(m, 0, fade, () => {
+      m.pause();
+      m.volume = 0.55;
+    });
   };
   A.toggleMusic = function () {
     A.musicOn = !A.musicOn;
-    if (A.musicOn) A.playMusic();
-    else if (A.music) A.music.pause();
+    const el = A.song ? A.song.el : A.music;
+    if (A.musicOn) {
+      if (A.song) A.song.el.play().catch(() => {});
+      else A.playMusic();
+    } else if (el) el.pause();
     return A.musicOn;
+  };
+
+  // The speaker: one of its songs, picked at random, instead of the battle music (which waits,
+  // paused), through an analyser so the speaker can thump with its bass.
+  A.playSong = function () {
+    if (!A.songs.length) return -1;
+    A.stopSong(0, false);
+    const i = Math.floor(Math.random() * A.songs.length);
+    const s = A.songs[i];
+    // (only when the song is inside the page: a file the browser loaded from elsewhere would go
+    // silent through the analyser)
+    if (A.ctx && !s.an && /^data:/.test(s.el.src)) {
+      try {
+        const src = A.ctx.createMediaElementSource(s.el);
+        s.an = A.ctx.createAnalyser();
+        s.an.fftSize = 256;
+        s.bins = new Uint8Array(s.an.frequencyBinCount);
+        src.connect(s.an);
+        s.an.connect(A.ctx.destination);
+      } catch (e) {
+        /* no analyser: it still plays */
+      }
+    }
+    A.song = s;
+    if (A.music && !A.music.paused) fadeEl(A.music, 0, 0.6, () => A.music.pause());
+    s.el.currentTime = 0;
+    s.el.volume = 0;
+    if (A.musicOn) s.el.play().catch(() => {});
+    fadeEl(s.el, 0.9, 0.8);
+    return i;
+  };
+  // The song stops (cut off, or fading out); the battle music comes back where it left off.
+  A.stopSong = function (fade = 1.2, resume = true) {
+    const s = A.song;
+    A.song = null;
+    if (s) fadeEl(s.el, 0, fade, () => s.el.pause());
+    if (resume && A.music && A.musicOn) {
+      A.music.volume = 0;
+      A.music.play().catch(() => {});
+      fadeEl(A.music, 0.55, 1.5);
+    }
+  };
+  // How hard the bass is hitting, 0..1 (0 when no song is playing; a steady thump when it can't
+  // be measured).
+  A.level = function () {
+    const s = A.song;
+    if (!s || s.el.paused) return 0;
+    if (!s.an) return Math.max(0, Math.sin(performance.now() / 1000 * Math.PI * 1.6)) ** 6;
+    s.an.getByteFrequencyData(s.bins);
+    let sum = 0;
+    for (let i = 1; i < 7; i++) sum += s.bins[i];
+    return Math.max(0, (sum / 6 - 120) / 120);
   };
   A.toggleSfx = function () {
     A.sfxOn = !A.sfxOn;
@@ -459,6 +525,19 @@
     phone: () => {
       for (let i = 0; i < 2; i++) tone('sawtooth', 150, i * 0.32, 0.22, 0.08, { filter: ['lowpass', 400] });
       chime(1.1, [1568, 2093], 0.08, 0.05, 'sine', 0.25);
+    },
+    // the speaker: set down, switched on (a thump and the hum of the amp)
+    speakerOn: () => {
+      thump(0, 90, 0.6, 0.25);
+      click(0.25, 0.25, 1200);
+      tone('sawtooth', 60, 0.28, 0.5, 0.04, { filter: ['lowpass', 300], attack: 0.05 });
+    },
+    // ...and torn apart: wood, the cone, a pop
+    smash: () => {
+      thump(0, 70, 0.9, 0.35);
+      for (let i = 0; i < 6; i++) crack(0.02 + i * 0.05 + Math.random() * 0.03, 0.35);
+      noise(0, 0.4, 0.35, { f: [3000, 300] });
+      tone('square', [900, 60], 0.05, 0.25, 0.06, { filter: ['lowpass', 1500] });
     },
     // a pen, crossing a name off
     scratch: () => {

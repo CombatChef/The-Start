@@ -141,8 +141,8 @@ FEET_X = 21.5  # (the middle of his feet, in his sprite: the gun arm sticks out 
 
 def lit_gunman(sp):
     """The gunman as the hall shows him: the one light is behind him and above, so he's dark,
-    with a thin cold edge of light on his head and shoulders and down his arms (less and less
-    towards his feet), and his front just readable in what the floor throws back."""
+    with a thin, faint cold edge of light on his head and shoulders and down his arms (less and
+    less towards his feet), and his front just readable in what the floor throws back."""
     a = np.asarray(sp).astype(np.float32)
     rgb, al = a[..., :3] / 255, a[..., 3] > 0
     h, w = al.shape
@@ -151,10 +151,10 @@ def lit_gunman(sp):
     open_side = (~pad[1:-1, :-2]) | (~pad[1:-1, 2:])
     open_top = ~pad[:-2, 1:-1]
     up = np.clip(1.05 - np.arange(h)[:, None] / h * 1.25, 0.0, 1) ** 1.3
-    rim = al * np.clip(open_side * up + open_top * 1.0 * (np.arange(h)[:, None] < h * 0.5), 0, 1)
+    rim = al * np.clip(open_side * up + open_top * 0.8 * (np.arange(h)[:, None] < h * 0.5), 0, 1)
     grey = rgb @ np.array([0.3, 0.59, 0.11])
     rgb = rgb * 0.4 + grey[..., None] * 0.6
-    rgb = rgb * 0.27 + rim[..., None] * np.array([0.40, 0.50, 0.54])
+    rgb = rgb * 0.27 + rim[..., None] * np.array([0.15, 0.19, 0.21])
     out = np.dstack([np.clip(rgb, 0, 1) * 255, al * 255]).astype(np.uint8)
     return Image.fromarray(out, 'RGBA')
 

@@ -250,8 +250,9 @@ button {
   color: #c9d6ff;
 }
 .portrait {
-  width: 256px;
-  height: 220px;
+  /* (his picture, exactly: 4 screen pixels to each of his) */
+  width: 192px;
+  height: 232px;
   margin: 0 auto 8px;
   overflow: hidden;
   position: relative;
@@ -267,7 +268,6 @@ button {
   height: 232px;
   image-rendering: pixelated;
   display: block;
-  margin-bottom: -12px;
 }
 #me .name {
   display: flex;

@@ -18,3 +18,8 @@ crispy/assets/source/scare_*
 crispy/assets/audio/jumpscare.mp3
 # nor the pictures when the killer behind Crispy gets all the way in
 crispy/assets/source/behind_*
+# Brayan's fight: the school's hallway and his portrait (and what's made from them) stay out too
+brayan/assets/source/hallway.webp
+brayan/assets/source/brayan_portrait.png
+brayan/js/images.js
+brayan/build/

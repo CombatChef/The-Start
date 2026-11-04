@@ -28,6 +28,7 @@
   const TURN = pixels(['.XXXXXX...', 'X......X..', 'X......X..', 'X....XXXXX', 'X.....XXX.', 'X......X..']);
   const BACK = pixels(['...XXXXXX.', '..X......X', '..X......X', 'XXXXX....X', '.XXX.....X', '..X......X']);
   const BOLT = pixels(['...XXX', '..XXX.', '..XX..', '.XXXXX', '...XX.', '..XX..', '.XX...', '.X....']);
+  const LEFT = pixels(['...X', '..XX', '.XXX', 'XXXX', '.XXX', '..XX', '...X']);
   const CMDS = ['fight', 'skill', 'act', 'item', 'mercy'];
   // the sound of each kind of hit landing on the creature
   const IMPACT = { foam: 'foam', real: 'thud', trash: 'thud', garbage: 'thud', elec: 'hurt', slice: 'hurt', nut: 'thud', ko: 'boom', poison: 'poison' };
@@ -555,7 +556,8 @@
     else opts = o.mercy.map((m) => ({ ...m, run: { type: 'mercy', id: m.id } }));
     menu(cmd.toUpperCase(), opts, cmd === 'fight' || cmd === 'mercy' ? 1 : 2);
   }
-  function menu(head, opts, cols = 2) {
+  // (`canBack`: a BACK button, for a tap or a click, as well as ESC / X: not on ONE MORE?)
+  function menu(head, opts, cols = 2, canBack = true) {
     UI.mode = 'sub';
     UI.opts = opts;
     UI.optSel = Math.max(0, opts.findIndex((o) => o.ok));
@@ -564,7 +566,7 @@
     const m = $('#menu');
     m.hidden = false;
     m.classList.toggle('one', cols === 1);
-    m.innerHTML = `<div class="head">${head}</div>` + opts.map((o, i) => `<div class="opt${o.ok ? '' : ' no'}${o.special ? ' special' : ''}" data-i="${i}"><span>${o.name}</span>${o.right ? `<small>${o.right}</small>` : ''}</div>`).join('');
+    m.innerHTML = `<div class="head"><span>${head}</span>${canBack ? `<button class="back" type="button">${LEFT}BACK</button>` : ''}</div>` + opts.map((o, i) => `<div class="opt${o.ok ? '' : ' no'}${o.special ? ' special' : ''}" data-i="${i}"><span>${o.name}</span>${o.right ? `<small>${o.right}</small>` : ''}</div>`).join('');
     m.querySelectorAll('.opt').forEach((el) => {
       el.addEventListener('mouseenter', () => {
         UI.optSel = +el.dataset.i;
@@ -575,6 +577,8 @@
         pick();
       });
     });
+    const bk = m.querySelector('.back');
+    if (bk) bk.addEventListener('click', back);
     drawMenu();
   }
   function drawMenu() {
@@ -687,7 +691,7 @@
     menu('ONE MORE?', [
       { name: 'NUTCRACKAAAA!!! AGAIN', doc: 'He has it in him for one more. (Twice per turn.)', ok: UI.b.canNut(), why: 'Not enough SP', special: true, run: { type: 'special' } },
       { name: 'THAT’S ENOUGH', doc: 'End his turn.', ok: true, run: { type: 'pass' } },
-    ], 1);
+    ], 1, false);
     UI.mode = 'again';
   }
 

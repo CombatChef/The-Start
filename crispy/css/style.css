@@ -658,10 +658,45 @@ img {
 }
 #menu .head {
   grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 15px;
   letter-spacing: 3px;
   color: var(--dim);
   line-height: 20px;
+}
+/* BACK, for phones (as well as ESC / X): big enough to tap */
+#menu .back {
+  position: relative;
+  margin: -7px 2px -3px 0; /* (up into the box's padding: the row stays as it was) */
+  padding: 3px 16px 3px 34px;
+  border: 0;
+  background: #000;
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: 2px;
+  line-height: 24px;
+  box-shadow: 0 0 0 3px var(--frame);
+  touch-action: manipulation;
+}
+#menu .back::after {
+  /* (more to tap than there is to see) */
+  content: '';
+  position: absolute;
+  inset: -12px -8px -4px -14px;
+}
+#menu .back svg {
+  position: absolute;
+  left: 13px;
+  top: 8px;
+  width: 9px;
+  height: 14px;
+  fill: currentColor;
+}
+#menu .back:hover,
+#menu .back:active {
+  color: var(--gold);
 }
 #desc {
   position: absolute;

@@ -21,5 +21,12 @@ crispy/assets/source/behind_*
 # Brayan's fight: the school's hallway and his portrait (and what's made from them) stay out too
 brayan/assets/source/hallway.webp
 brayan/assets/source/brayan_portrait.png
+brayan/assets/source/hallway_a.webp
+brayan/assets/source/classroom.webp
+brayan/assets/source/scare_frames.jpg
+brayan/dist/
+brayan/js/sounds.js
+# its music and the sounds in the classroom aren't ours to share
+brayan/assets/audio/
 brayan/js/images.js
 brayan/build/

@@ -50,15 +50,35 @@ body {
   overflow: hidden;
   background: #000;
 }
-#scene {
+#scene,
+#fx {
   position: absolute;
   inset: 0;
-  width: 1280px;
-  height: 960px;
+  display: block;
+}
+#fx {
+  pointer-events: none; /* the effects play over the HUD */
+}
+[hidden] {
+  display: none !important;
+}
+#hud {
+  transition: opacity 0.2s steps(3);
+}
+#hud.away {
+  opacity: 0;
+  pointer-events: none;
 }
 button {
   font: inherit;
   color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
 }
 .px svg {
   display: block;
@@ -138,6 +158,12 @@ button {
   height: 9px;
   background: #46ff7a;
 }
+.toggle.off {
+  color: var(--dim);
+}
+.toggle.off::before {
+  background: #3a3a3a;
+}
 
 /* ------------------------------------------------------------------ the gunman's box: an incident report */
 #foe {
@@ -199,24 +225,54 @@ button {
   width: 16px;
   height: 16px;
 }
-.mercy {
+.stun {
   margin-top: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 15px;
-  color: #f3e3a0;
+  color: #f3d9a0;
 }
-.mercy .bar {
+.stun .bar {
   flex: 1;
   height: 10px;
   margin: 0 4px;
-  background: #3a3218;
+  background: #3a2c18;
 }
-.mercy b {
+.stun .bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: repeating-linear-gradient(90deg, #ffcf6a 0 8px, #d9a54a 8px 10px);
+  transition: width 0.3s steps(6);
+}
+.stun b {
   min-width: 42px;
   text-align: right;
   font-weight: 600;
+}
+#foe.stunned .stun,
+#foe.stunned .foe-name {
+  color: var(--pencil);
+}
+#foe.stunned .stun b {
+  animation: blink 0.9s steps(2) infinite;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.tag {
+  font-size: 13px;
+  padding: 0 5px;
+  color: #000;
+  background: #8ff0b2;
+  white-space: nowrap;
+}
+.tag.bad {
+  background: #ff9a7a;
 }
 
 /* ------------------------------------------------------------------ Brayan's box: his staff ID, on a lanyard */
@@ -331,11 +387,6 @@ button {
 .bar.pat i {
   /* a pencil: yellow, its sharpened end */
   background: linear-gradient(90deg, transparent calc(100% - 12px), #e9c99a calc(100% - 12px) calc(100% - 4px), #333 calc(100% - 4px)), repeating-linear-gradient(90deg, var(--pat) 0 10px, #c99400 10px 12px);
-}
-.mercy .bar i {
-  display: block;
-  height: 100%;
-  width: 0;
 }
 .wind {
   display: flex;
@@ -463,4 +514,429 @@ button {
 }
 #keypad button.sel .ptr {
   visibility: visible;
+}
+
+/* ------------------------------------------------------------------ his badge: health, the second wind, what he's after */
+.bar i {
+  transition: width 0.3s steps(6);
+}
+#me {
+  --hc: var(--hp-ok);
+}
+#me .heart,
+#me .hpword {
+  color: var(--hc);
+}
+.wind.used {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+.goals {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--dim);
+}
+.goal {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.goal i {
+  width: 12px;
+  height: 12px;
+}
+.goal.got {
+  color: #8dffc4;
+}
+.goal.optional:not(.got) {
+  opacity: 0.6;
+}
+#me.critical .heart {
+  animation: beat 0.9s steps(2) infinite;
+}
+.barcode {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ menus */
+#menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  font-size: 21px;
+  line-height: 28px;
+  position: relative;
+  margin-left: 30px;
+}
+#menu.one {
+  grid-template-columns: 1fr;
+}
+#menu .head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: var(--dim);
+  line-height: 20px;
+}
+#menu .back {
+  position: relative;
+  margin: -7px 2px -3px 0;
+  padding: 3px 16px 3px 34px;
+  border: 0;
+  background: #000;
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: 2px;
+  line-height: 24px;
+  box-shadow: 0 0 0 3px var(--frame);
+}
+#menu .back::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px -4px -14px;
+}
+#menu .back svg {
+  position: absolute;
+  left: 13px;
+  top: 8px;
+  width: 9px;
+  height: 14px;
+  fill: currentColor;
+}
+#menu .back:hover {
+  color: var(--pencil);
+}
+#menu .opt {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 0 30px;
+  position: relative;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#menu .opt i {
+  visibility: hidden;
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 22px;
+  height: 12px;
+  color: var(--pencil);
+}
+#menu .opt.sel i {
+  visibility: visible;
+}
+#menu .opt.sel {
+  color: var(--pencil);
+}
+#menu .opt.no {
+  color: #555b63;
+}
+#menu .opt.special {
+  color: #a8ffcc;
+}
+#menu .opt small {
+  font-size: 17px;
+  color: var(--pat);
+  margin-left: 12px;
+}
+#keypad.off button {
+  color: #4e545c;
+}
+#keypad.off button.sel .ptr {
+  visibility: hidden;
+}
+#keypad button.press {
+  transform: translateX(4px);
+}
+#log .t-hero:not(.old) {
+  color: var(--text);
+}
+#log .t-good:not(.old) {
+  color: #a8ffcc;
+}
+#log .t-bad:not(.old) {
+  color: #ff9a8a;
+}
+#log .t-special:not(.old) {
+  color: var(--pencil);
+}
+#log .n-place {
+  color: #a9c1ff;
+}
+
+/* ------------------------------------------------------------------ DISTRACT: a timing test */
+#timing {
+  position: absolute;
+  left: 50px;
+  right: 24px;
+  top: 16px;
+}
+#timing .head {
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: var(--dim);
+}
+#timing .track {
+  position: relative;
+  height: 34px;
+  margin-top: 14px;
+  background: #11161f;
+  box-shadow: 0 0 0 3px #000, 0 0 0 6px #2b3038;
+}
+#timing .zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(90deg, #4fd38a 0 6px, #2fa368 6px 8px);
+}
+#timing .mark {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 8px;
+  margin-left: -4px;
+  background: var(--frame);
+}
+#timing.hit .mark {
+  background: #4fd38a;
+}
+#timing.miss .mark {
+  background: var(--pen);
+}
+#timing .hint {
+  margin-top: 16px;
+  font-size: 16px;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------------ looking for things */
+#search {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+#search .banner {
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  padding: 8px 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  font-size: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#search .banner b {
+  color: #a9c1ff;
+  letter-spacing: 2px;
+}
+#search .banner .time {
+  color: var(--pencil);
+  min-width: 52px;
+  text-align: right;
+}
+#search .banner .time.soon {
+  color: var(--pen);
+  animation: blink 0.6s steps(2) infinite;
+}
+#search .banner .got {
+  color: #8dffc4;
+  text-decoration: line-through;
+}
+.corner {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  border: 0;
+  background: #000;
+  font-size: 18px;
+  letter-spacing: 2px;
+  padding: 6px 14px;
+  color: var(--dim);
+  box-shadow: 0 0 0 3px #3a3f47;
+}
+.corner:hover {
+  color: var(--text);
+  box-shadow: 0 0 0 3px var(--frame);
+}
+#toast {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  padding: 10px 26px;
+  background: #000;
+  box-shadow: 0 0 0 4px var(--frame);
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: #8dffc4;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ the shot: DODGE */
+#dodge {
+  position: absolute;
+  left: calc(50% - 160px);
+  top: 520px;
+  width: 320px;
+  height: 110px;
+  border: 0;
+  background: #1a0505;
+  color: #ffd2c8;
+  font-size: 54px;
+  letter-spacing: 8px;
+  box-shadow: 0 0 0 5px #e0473c, 0 0 0 10px #000;
+  animation: blink 0.25s steps(2) infinite;
+}
+
+/* ------------------------------------------------------------------ an ear to the door */
+#listen {
+  left: calc(50% - 310px);
+  top: 250px;
+  width: 620px;
+  padding: 14px 26px 18px;
+  text-align: center;
+}
+#listen .head {
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: var(--dim);
+}
+#listen-bars {
+  display: block;
+  margin: 12px auto 0;
+  image-rendering: pixelated;
+}
+#listen p {
+  min-height: 28px;
+  margin: 10px 0 0;
+  font-size: 19px;
+  color: #d8dde2;
+}
+
+/* ------------------------------------------------------------------ the title, and the ends */
+#screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 120px;
+}
+#screen.on {
+  display: flex;
+}
+#screen.title {
+  background: radial-gradient(ellipse at 50% 40%, rgba(10, 14, 22, 0.55), rgba(0, 0, 0, 0.92) 70%);
+}
+#screen .kicker {
+  font-size: 18px;
+  letter-spacing: 6px;
+  color: var(--dim);
+}
+#screen h1 {
+  margin: 14px 0 0;
+  font-size: 64px;
+  line-height: 1.05;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+#screen h1 .vs {
+  display: block;
+  font-size: 26px;
+  color: var(--dim);
+  margin: 6px 0;
+}
+#screen h1 .red {
+  color: var(--pen);
+}
+#screen p {
+  margin-top: 22px;
+  font-size: 21px;
+  color: #c8cdd3;
+  max-width: 760px;
+}
+#screen .go {
+  margin-top: 34px;
+  padding: 10px 30px;
+  border: 0;
+  background: #000;
+  font-size: 30px;
+  letter-spacing: 3px;
+  color: var(--pencil);
+  box-shadow: 0 0 0 4px var(--frame), 0 0 0 8px #000;
+}
+#screen .keys {
+  margin-top: 26px;
+  font-size: 15px;
+  color: var(--dim);
+  letter-spacing: 1px;
+}
+#screen.lose {
+  background: rgba(10, 0, 0, 0.9);
+}
+#screen.lose h1 {
+  color: var(--pen);
+}
+#screen .tally {
+  margin-top: 18px;
+  font-size: 15px;
+  color: var(--dim);
+  letter-spacing: 1px;
+}
+#screen.calm {
+  background: #000;
+}
+#screen.calm .quiet {
+  font-size: 24px;
+  color: #c8cdd3;
+  line-height: 1.6;
+  opacity: 0;
+  animation: appear 1.6s steps(6) 0.4s forwards;
+}
+#screen.calm .go {
+  opacity: 0;
+  font-size: 22px;
+  color: var(--dim);
+  box-shadow: 0 0 0 3px #3a3f47;
+  animation: appear 1.2s steps(4) 2.6s forwards;
+}
+#foe.hit {
+  animation: rattle 0.3s steps(3);
+}
+#me.hit {
+  animation: rattle 0.3s steps(3);
+}
+@keyframes appear {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes beat {
+  50% {
+    transform: scale(1.25);
+  }
+}
+@keyframes rattle {
+  33% {
+    transform: translateX(-6px);
+  }
+  66% {
+    transform: translateX(6px);
+  }
 }

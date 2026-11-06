@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brayan vs The Gunman</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="stage">
+        <canvas id="scene" width="1280" height="960"></canvas>
+
+        <div id="hud">
+          <header id="topbar">
+            <span class="ruler" aria-hidden="true"></span>
+            <span class="where" id="where">THE FRONT HALLWAY · 6:14 PM</span>
+            <span class="round" id="round">PERIOD 01</span>
+            <span class="spacer"></span>
+            <button class="toggle" id="btn-music">MUSIC</button>
+            <button class="toggle" id="btn-sfx">SOUND</button>
+          </header>
+
+          <section id="foe" class="box">
+            <img id="foe-pic" alt="" />
+            <div class="foe-info">
+              <div class="foe-name">The Gunman <span id="foe-tag">(Armed)</span></div>
+              <div class="foe-state" id="foe-state">[GOOD]</div>
+              <div class="stun"><span>STUN</span><div class="bar"><i id="stun-fill"></i></div><b id="stun-num">0%</b></div>
+              <div class="tags" id="foe-tags"></div>
+            </div>
+          </section>
+
+          <section id="me" class="box">
+            <div class="badge-top"><span>STAFF</span><i class="slot"></i><small>BUS 13</small></div>
+            <div class="portrait"><img id="me-pic" alt="Brayan" /></div>
+            <div class="name"><b>BRAYAN</b><span>LV 99</span></div>
+            <div class="title">PARAPROFESSIONAL</div>
+            <div class="vital"><i class="heart px" id="heart"></i><span class="hpword" id="hp-word">[OK]</span><span class="num" id="hp-num">240/240</span></div>
+            <div class="bar hp"><i id="hp-fill"></i></div>
+            <div class="vital pat"><span class="label">PATIENCE</span><span class="num" id="pat-num">100/100</span></div>
+            <div class="bar pat"><i id="pat-fill"></i></div>
+            <div class="wind" id="wind"><i class="whistle px" data-px="whistle"></i><span>WHISTLE · SECOND WIND</span></div>
+            <div class="goals" id="goals">
+              <span class="goal" id="goal-fuel"><i class="px" data-px="can"></i>FUEL <b id="fuel-num">0/1</b></span>
+              <span class="goal" id="goal-keys"><i class="px" data-px="key"></i>KEYS</span>
+              <span class="goal optional" id="goal-bear"><i class="px" data-px="bear"></i>BEAR</span>
+            </div>
+            <div class="tags" id="hero-tags"></div>
+          </section>
+
+          <section id="lcd" class="box">
+            <div id="log"></div>
+            <div id="menu" hidden></div>
+            <div id="timing" hidden>
+              <div class="head">DISTRACT · WAIT FOR IT...</div>
+              <div class="track"><i class="zone" id="timing-zone"></i><i class="mark" id="timing-mark"></i></div>
+              <div class="hint">TAP, OR PRESS SPACE, IN THE GAP</div>
+            </div>
+            <div id="desc"></div>
+          </section>
+
+          <section id="keypad" class="box">
+            <button data-cmd="fight"><i class="ptr px" data-px="pencil"></i>FIGHT</button>
+            <button data-cmd="skill"><i class="ptr px" data-px="pencil"></i>SKILL</button>
+            <button data-cmd="act"><i class="ptr px" data-px="pencil"></i>ACT</button>
+            <button data-cmd="item"><i class="ptr px" data-px="pencil"></i>ITEM</button>
+            <button data-cmd="flee"><i class="ptr px" data-px="pencil"></i>FLEE</button>
+          </section>
+        </div>
+
+        <canvas id="fx" width="1280" height="960"></canvas>
+
+        <!-- looking for something: where, what, how long -->
+        <div id="search" hidden>
+          <div class="banner box"><b id="search-where">HALLWAY A</b><span id="search-what">FIND THE FUEL CAN</span><span class="time" id="search-time"></span></div>
+          <button id="search-back" class="corner" hidden>BACK TO THE DOOR</button>
+        </div>
+        <div id="toast" hidden></div>
+        <!-- the Gunman's shot -->
+        <button id="dodge" hidden>DODGE</button>
+        <!-- an ear to the door of CLASSROOM A -->
+        <div id="listen" class="box" hidden>
+          <div class="head">CLASSROOM A · LISTENING AT THE DOOR</div>
+          <canvas id="listen-bars" width="560" height="150"></canvas>
+          <p id="listen-text"></p>
+        </div>
+        <div id="screen"></div>
+      </div>
+    </div>
+
+    <script src="js/images.js"></script>
+    <script src="js/sounds.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/battle.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/scene.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

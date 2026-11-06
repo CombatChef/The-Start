@@ -9,9 +9,12 @@ Open `index.html` (after making its art and sounds: see below), or build it into
 ## How it plays
 
 - **The Gunman** sways in the hall, too tall for it. Most of his turns go for Brayan's nerve
-  (PATIENCE): the hall goes dark around him; faces made from his own open in the dark; the one
-  light goes out and something breathes right there; he whispers the kids' names; he aims and
-  holds it. Some go for Brayan himself. Now and then (from round 3, never two close together)
+  (PATIENCE): the hall goes dark around him; faces open in the dark (his own, and the faces of
+  the thing in Crispy's kitchen); the one light goes out and something breathes right there; he
+  whispers the kids' names; he aims and holds it; he turns his head toward CLASSROOM A and
+  something moans back (**HEARING THINGS**, for 4 turns: now and then something moans down the
+  hall, and at the classroom door Brayan may hear it moaning, or awake, when it isn't). Some go
+  for Brayan himself. Now and then (from round 3, never two close together)
   he cocks the gun: a **DODGE** button comes up for a moment. Tap it in time (or D / SPACE) and
   Brayan's on the floor when it fires; miss it and it takes nearly half his health. Either way,
   the hall lights up white for an instant, in big pixels, and his ears ring.
@@ -30,16 +33,18 @@ The bus needs the fuel (one can, for now) and the keys.
 
 1. **The front hallway.** Stun the Gunman (damage fills his STUN bar) or distract him, then
    **FLEE**, into HALLWAY A.
-2. **HALLWAY A.** 25 seconds to find the fuel can in the dark and tap it, then he's back. Here he
-   has to be stunned to FLEE: back to the entrance, into CLASSROOM A, or **CHECK CLASSROOM A**
-   first.
-3. **CLASSROOM A.** Something in there makes the sounds. Checking the door shows them on a
-   visualizer, with the music turned right down: nothing (it's quiet), moaning (it's half
-   awake), or the other one (it's awake: walk in and it has him). Inside, there are the keys,
-   and the bear one of the kids asked for. It wakes while he looks: its sounds, lower and
-   quieter; a root grows down out of the ceiling; then it's awake, and the roots come down at
-   his face. Twenty seconds of that and it has him. **BACK TO THE DOOR** gets him out, back to
-   the fight in HALLWAY A.
+2. **HALLWAY A.** Five seconds to find the fuel can in the dark and tap it, then he's back (miss
+   it, and it's another trip). Here he has to be stunned to FLEE: back to the entrance, into
+   CLASSROOM A, or **CHECK CLASSROOM A** first.
+3. **CLASSROOM A.** Something in there makes the sounds, and every round it's a new roll how
+   awake it is. Checking the door shows them on a visualizer, with the music turned right down:
+   nothing (it's quiet), moaning (it's half awake), or the other one (it's awake: walk in and it
+   has him). Unless he's HEARING THINGS: then it may sound worse than it is, and he can't tell.
+   Inside, in the dark, there are the keys, and the bear one of the kids asked for (on a
+   different chair, most games). It wakes fast while he looks: its sounds, lower and quieter; a
+   root grows down out of the ceiling; a few seconds later it's awake, and the roots come down
+   all across the ceiling at his face. Twenty seconds of that and it has him. **BACK TO THE
+   DOOR** gets him out, back to the fight in HALLWAY A.
 4. **Out.** With the fuel and the keys: stun him in HALLWAY A, FLEE back to the entrance, stun or
    distract him there, and FLEE out the front doors to Bus 13. (The bear's for the ending.)
 
@@ -48,7 +53,8 @@ Brayan gets one SECOND WIND: the first time he goes down, he gets back up.
 ## Making it
 
 The photos (the three places, from the school), Brayan's portrait, the classroom's jumpscare
-frames and the sounds aren't in the repo, nor is anything made from them. Put `hallway.webp`,
+frames and the sounds aren't in the repo, nor is anything made from them. (The faces from
+Crispy's fight come from its creature sheet, which is.) Put `hallway.webp`,
 `hallway_a.webp`, `classroom.webp`, `brayan_portrait.png` and `scare_frames.jpg` in
 `brayan/assets/source/`, and `ripple.mp3` (the music), `moan_2.mp3` and `moan_3.mp3` (what's in
 CLASSROOM A, half awake and awake) in `brayan/assets/audio/`. Then:
@@ -60,8 +66,8 @@ CLASSROOM A, half awake and awake) in `brayan/assets/audio/`. Then:
 
 The school's name and logo are taken off its doors, and the teacher's nameplate off the desk;
 the chair in the corner of the first photo is cropped away. The fuel can, the keys and the bear
-are drawn into the dark where they'd really be: the can side on against the wall in a doorway
-of HALLWAY A, the keys flat on the teacher's desk, the bear on a chair.
+are drawn into the dark where they'd really be: the can standing in a doorway of HALLWAY A, the
+keys flat on the teacher's desk, the bear on one of four chairs.
 
     js/data.js     the numbers and the words
     js/battle.js   the rules: each command's events

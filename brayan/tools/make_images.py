@@ -7,17 +7,20 @@ From brayan/assets/source/ (the photos, the portrait and the classroom's frames 
 repo: put them there first):
   hallway.webp, hallway_a.webp, classroom.webp
                        -> the school after hours: the entrance hallway, the hallway further in
-                          (HALLWAY A), and CLASSROOM A, every light off but one (the classroom's:
-                          the smartboard, still on); the school's name and logo, and the teacher's
+                          (HALLWAY A), and CLASSROOM A (darker still), every light off but one (the
+                          classroom's: the smartboard, still on); the school's name and logo, and the teacher's
                           nameplate, taken off; not pixelated. And each hallway as the gunman's
                           shot lights it up, for an instant, in big pixels.
   brayan_portrait.png  -> Brayan, as pixels (12 screen pixels to each of his, on grey)
   gunman_sheet.png     -> the gunman (8 screen pixels to each of his), lit as the hall lights him,
                           and his shadow and reflection on each hallway's floor; and faces made
-                          from his, for his attacks on Brayan's nerve
+                          from his, for his attacks on Brayan's nerve; and his own face, with the
+                          faces of the thing in Crispy's kitchen (crispy/assets/source/), for one
+                          of them
   items_sheet.png      -> the fuel can, the Newports, the bacon egg & cheese, the keys (BUS 13),
                           the bear (4 screen pixels to each); and the can, the keys and the bear
-                          as they sit in the dark, where they're hidden
+                          as they sit in the dark, where they're hidden (the bear: on one of four
+                          chairs, a different one each time)
   tree_sheet.png       -> the thing in CLASSROOM A (3 to each)
   roots_sheet.png      -> its roots, out of the ceiling (3 to each)
   scare_frames.jpg     -> its jumpscare: sixteen frames, four by four
@@ -140,6 +143,7 @@ def hall_flash(name):
 # ---------------------------------------------------------------- CLASSROOM A, after hours
 
 SCREEN = (585, 1134, 808, 1300)  # the smartboard (photo pixels): still on
+CLASS_DIM = 0.36  # (CLASSROOM A is darker than the halls: much)
 
 
 def classroom():
@@ -161,8 +165,8 @@ def classroom():
     door = np.exp(-(((xx - 1240) / 120) ** 2 + ((yy - 520) / 380) ** 2))
     light = (np.array([0.0007, 0.0008, 0.0012], np.float32)
              + blue * (0.042 * glow + 0.03 * fall ** 1.5)[..., None]
-             + np.array([0.6, 0.7, 0.8], np.float32) * (0.012 * door)[..., None])
-    a = a * light * (1 - screen[..., None]) + a * screen[..., None] * blue * 0.35
+             + np.array([0.6, 0.7, 0.8], np.float32) * (0.012 * door)[..., None]) * CLASS_DIM
+    a = a * light * (1 - screen[..., None]) + a * screen[..., None] * blue * 0.22
     v = np.clip(1 - 0.6 * (((xx - cx) / (W * 0.6)) ** 2 + ((yy - H * 0.5) / (H * 0.7)) ** 2), 0.15, 1)
     return a * v[..., None]
 
@@ -329,6 +333,28 @@ def faces():
     return [Image.fromarray(f) for f in out]
 
 
+def crowd():
+    """The faces for his worst one: his own (as it is), and the faces of the thing in Crispy's
+    kitchen, all five of them (from its sheet, in the repo), greyed a little for the dark."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('crispy_art', os.path.join(ROOT, '..', 'crispy', 'tools', 'make_images.py'))
+    crispy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(crispy)
+    out = [gunman().crop((8, 0, 40, 34))]
+    for (img, m), tall in zip(crispy.creature(), (37, 39, 34, 34, 36)):  # (to just under the chin)
+        a = np.asarray(img).copy()
+        x0 = max(0, int(m['cx'] - 11))
+        head = a[:tall, x0:x0 + 23].copy()
+        for k in range(4):  # (gone into the dark at the neck, in a dither)
+            row = head[tall - 4 + k, :, 3]
+            row[(np.arange(row.size) + k) % 4 < k + 1] = 0
+        rgb = head[..., :3].astype(np.float32)
+        grey = rgb @ np.array([0.3, 0.59, 0.11], np.float32)
+        head[..., :3] = np.clip(rgb * 0.6 + grey[..., None] * 0.4, 0, 255).astype(np.uint8)
+        out.append(Image.fromarray(head))
+    return out
+
+
 # ---------------------------------------------------------------- the items, and where they're hidden
 
 ITEM_BOXES = {  # (in the sheet's own pixels)
@@ -343,13 +369,18 @@ def items():
 
 # Where each hidden thing is, on the stage. The keys and the bear: where they sit (`x`, `y`: the
 # middle of their bottom edge) and their size there (the keys lie flat on the desk: squashed).
-# The can stands on the floor against the wall of HALLWAY A, just past the doorway, side on: its
-# long side along the wall (`side`: its corners, top left, top right, bottom right, bottom left,
-# going away down the hall), its end towards Brayan (`end`), darker.
+# The can stands on the floor of HALLWAY A, in a doorway: each of its faces as four corners on the
+# stage (top left, top right, bottom right, bottom left).
 HIDDEN = {
-    'hallA': {'can': dict(side=[(472, 497), (505, 474), (505, 528), (472, 567)], end=[(457, 503), (472, 500), (472, 568), (457, 569)],
-                          color=(19, 10, 9))},
-    'classA': {'keys': dict(x=253, y=537, w=30, h=14, color=(30, 28, 23)), 'bear': dict(x=887, y=682, w=42, h=51, color=(19, 16, 13))},
+    # the can, standing in a doorway of HALLWAY A, turned to Brayan: its big face (the X, the
+    # handles on top) square on, its side going off down the hall towards the far end, its top
+    'hallA': {'can': dict(front=[(446, 503), (499, 500), (499, 569), (446, 572)], side=[(499, 500), (510, 490), (510, 555), (499, 569)],
+                          top=[(446, 503), (499, 500), (510, 490), (459, 493)], color=(21, 11, 10))},
+    # the keys flat on the teacher's desk; the bear on a chair: one of these, a different one
+    # each time (`seats`)
+    'classA': {'keys': dict(x=253, y=537, w=30, h=14, color=(20, 19, 15)),
+               'bear': dict(seats=[dict(x=887, y=682, w=42, h=51), dict(x=654, y=689, w=44, h=53), dict(x=474, y=572, w=30, h=36),
+                                   dict(x=1140, y=551, w=32, h=38)], color=(13, 11, 9))},
 }
 # (`color`: how they come out in the dark, on average: a deep, dull red; grey and a little
 # brass; brown)
@@ -370,34 +401,41 @@ def warp(img, quad, size, off):
     return np.dstack([np.clip(rgb, 0, 1), np.clip(out[..., 3], 0, 1)])
 
 
-def can_on_wall(sp, at):
-    """The fuel can, side on against the wall: its side (the handle and the spout on top) and
-    its end."""
+def can_standing(sp, at):
+    """The fuel can, standing, turned to us: its big face (the sprite: the X, the handles and the
+    spout on top) square on, a little darker (the light's behind it, at the far end); its side,
+    going off towards that light, lighter, with a cold edge; its top, from a little above."""
     a = np.asarray(sp).astype(np.float32) / 255
     widths = (a[..., 3] > 0.5).sum(1)
-    top = int(np.argmax(widths > widths.max() * 0.7))  # (where the can starts, under its handle)
-    TL, TR, BR, BL = (np.array(c, np.float32) for c in at['side'])
+    full = widths > widths.max() * 0.85
+    top = next(y for y in range(len(full)) if full[y:y + 6].all())  # (where the can starts, under its handles)
+    TL, TR, BR, BL = (np.array(c, np.float32) for c in at['front'])
     ext = top / (a.shape[0] - top)
-    side = [tuple(TL + (TL - BL) * ext), tuple(TR + (TR - BR) * ext), tuple(BR), tuple(BL)]
-    pts = np.array(side + at['end'], np.float32)
+    cols = np.flatnonzero((a[top:top + 40, :, 3] > 0.5).sum(0) > 20)  # (its body, left to right: the spout sticks out)
+    bw = cols[-1] + 1 - cols[0]
+    left, right = cols[0] / bw, (a.shape[1] - cols[-1] - 1) / bw
+    TL, BL, TR, BR = TL - (TR - TL) * left, BL - (BR - BL) * left, TR + (TR - TL) * right, BR + (BR - BL) * right
+    front = [tuple(TL + (TL - BL) * ext), tuple(TR + (TR - BR) * ext), tuple(BR), tuple(BL)]
+    pts = np.array(front + at['side'] + at['top'], np.float32)
     x0, y0 = np.floor(pts.min(0)).astype(int) - 2
     x1, y1 = np.ceil(pts.max(0)).astype(int) + 2
     size = (x1 - x0, y1 - y0)
-    face = warp(a, side, size, (x0, y0))
-    # its top, seen from a little above (between its end and the far end of its side), a little
-    # lighter; and its end, square on to us, much darker
-    patch = a[top + 2:top + 12, 12:32].copy()
-    patch[..., :3] *= 1.15
-    patch[..., 3] = 1
-    eA, eB = np.array(at['end'][0], np.float32), np.array(at['end'][1], np.float32)
-    lid = [tuple(eA), tuple(eB), tuple(TR), tuple(eA + (TR - TL))]
-    lid = warp(patch, lid, size, (x0, y0))
-    strip = a[top:, 2:10].copy()
-    strip[..., :3] *= 0.35
-    strip[..., 3] = 1  # (solid: the sprite's corners are rounded, the can's end isn't)
-    end = warp(strip, at['end'], size, (x0, y0))
+    body = a.copy()
+    body[..., :3] *= 0.88
+    face = warp(body, front, size, (x0, y0))
+    strip = a[top:, 4:14].copy()
+    strip[..., :3] *= 1.12
+    strip[..., 3] = 1
+    strip[:, -1, :3] = np.clip(strip[:, -1, :3] * 1.5 + 0.06, 0, 1)  # (the far edge, catching the light)
+    side = warp(strip, at['side'], size, (x0, y0))
+    solid = a[top:][a[top:, :, 3] > 0.5, :3]
+    patch = np.ones((10, 24, 4), np.float32)
+    patch[..., :3] = np.median(solid, 0) * 1.1  # (plain painted metal, a little lighter: it faces up)
+    patch[:, :, :3] *= np.linspace(0.9, 1.15, 10)[:, None, None]  # (lighter going back, towards the light)
+    patch[::2, ::2, :3] *= 0.9  # (worn)
+    lid = warp(patch, at['top'], size, (x0, y0))
     out = lid
-    for layer in (face, end):
+    for layer in (side, face):
         al = layer[..., 3:4]
         out = np.dstack([layer[..., :3] * al + out[..., :3] * (1 - al), al + out[..., 3:4] * (1 - al)])
     return out, int(x0), int(y0)
@@ -410,12 +448,15 @@ def hidden(place, bg):
     sprites = items()
     out = {}
     b = np.asarray(bg).astype(np.float32) / 255
-    for name, at in HIDDEN[place].items():
+    for name, spec in HIDDEN[place].items():
+      spots = [{**seat, 'color': spec['color']} for seat in spec['seats']] if 'seats' in spec else [spec]
+      made = []
+      for at in spots:
         sp = sprites[name]
-        if 'side' in at:
-            small, x0, y0 = can_on_wall(sp, at)
+        if 'front' in at:
+            small, x0, y0 = can_standing(sp, at)
             h, w = small.shape[:2]
-            base = np.array([at['end'][3], at['end'][2], at['side'][2]], np.float32)  # its bottom edge
+            base = np.array([at['front'][3], at['front'][2], at['side'][2]], np.float32)  # its bottom edge
         else:
             w, h = at['w'], at['h']
             small = np.asarray(sp.resize((w, h), Image.BOX)).astype(np.float32) / 255
@@ -442,8 +483,9 @@ def hidden(place, bg):
         region[..., :3] = rgb * a
         region[..., 3:4] = a + region[..., 3:4] * (1 - a)
         img = Image.fromarray((np.clip(canvas, 0, 1) * 255).astype(np.uint8), 'RGBA')
-        out[name] = {'src': data_url(img), 'x': x0 - pad, 'y': y0 - pad, 'w': img.width, 'h': img.height,
-                     'hit': [x0 - 12, y0 - 12, w + 24, h + 24]}
+        made.append({'src': data_url(img), 'x': x0 - pad, 'y': y0 - pad, 'w': img.width, 'h': img.height,
+                     'hit': [x0 - 12, y0 - 12, w + 24, h + 24]})
+      out[name] = made if 'seats' in spec else made[0]
     return out
 
 
@@ -505,6 +547,7 @@ if __name__ == '__main__':
         'muzzle': MUZZLE,
         'gunmanPic': data_url(gunman_pic()),
         'faces': [data_url(f) for f in faces()],
+        'crowd': [data_url(f) for f in crowd()],
         'items': {k: data_url(v) for k, v in sprites.items()},
         'tree': data_url(tree()),
         'roots': [data_url(r) for r in roots()],

@@ -22,14 +22,13 @@
       this.rand = rng(seed);
       const h = DATA.hero;
       const f = DATA.foe;
-      this.hero = { hp: h.hp, hpMax: h.hp, pat: h.pat, patMax: h.pat, mods: [], frozen: false, secondWind: true, ears: 0, focus: 0, talk: 0 };
+      this.hero = { hp: h.hp, hpMax: h.hp, pat: h.pat, patMax: h.pat, mods: [], frozen: false, secondWind: true, ears: 0, halluc: 0, focus: 0, talk: 0 };
       this.foe = { hp: f.hp, hpMax: f.hp, mods: [], stunDmg: 0, stunned: 0, distracted: 0, shotAt: -99 };
       this.items = Object.fromEntries(DATA.items.map((i) => [i.id, i.count]));
       this.round = 1;
       this.loc = 'entrance';
       this.have = { fuel: 0, keys: false, bear: false };
-      this.seen = { hallA: false }; // (been there: the search is the first time)
-      this.rootOffset = Math.floor(this.rand() * DATA.root.cycle.length);
+      this.rolled = {}; // the thing in CLASSROOM A, this round: how awake it is, and what Brayan hears
       this.over = null; // 'win' (it's dead), 'escape' (they're gone), 'lose'
       this.lostTo = null; // 'gunman' or 'root'
       this.pending = null; // the shot, waiting on Brayan's dodge
@@ -63,9 +62,27 @@
       if (this.loc === 'entrance') return this.hasAll() ? ['out'] : ['hallA'];
       return ['entrance', 'classA'];
     }
+    // how awake it is this round (a new roll each round)
     rootStage() {
-      const c = DATA.root.cycle;
-      return c[(this.round + this.rootOffset) % c.length];
+      const r = this.rolled;
+      if (r.round !== this.round) {
+        let x = this.rand();
+        let st = 1;
+        for (const p of DATA.root.odds) {
+          if ((x -= p) < 0) break;
+          st++;
+        }
+        Object.assign(r, { round: this.round, stage: Math.min(3, st), heard: null });
+      }
+      return r.stage;
+    }
+    // what Brayan hears at its door: what's there, or, HEARING THINGS, maybe more than that
+    heardStage() {
+      const real = this.rootStage();
+      if (!this.hero.halluc) return real;
+      const r = this.rolled;
+      if (r.heard == null) r.heard = Math.max(real, this.rand() < DATA.root.phantom ? 3 : 2);
+      return r.heard;
     }
     options() {
       const h = this.hero;
@@ -284,6 +301,11 @@
         if (this.over) return;
       }
       if (mv.pat) this.hurtPat(Math.round(mv.pat * (0.85 + this.rand() * 0.3)), ev);
+      if (mv.halluc) {
+        this.hero.halluc = mv.halluc;
+        this.rolled.heard = null;
+        ev.push({ t: 'tag' });
+      }
     }
     // the DODGE, done (or not)
     shot(dodged) {
@@ -347,6 +369,10 @@
       if (h.ears) {
         h.ears--;
         if (!h.ears) ev.push({ t: 'tag' });
+      }
+      if (h.halluc) {
+        h.halluc--;
+        if (!h.halluc) ev.push({ t: 'tag' });
       }
       h.pat = Math.min(h.patMax, h.pat + DATA.hero.patRegen);
       this.round++;

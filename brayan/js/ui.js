@@ -1,7 +1,7 @@
 /*
  * The HUD and the flow of Brayan's fight: the commands (FIGHT, SKILL, ACT, ITEM, FLEE) and
  * their menus, his badge and the Gunman's box, playing out each turn's events; and the parts in
- * real time: the 25 seconds to find the fuel in HALLWAY A, CLASSROOM A (the keys, the bear, and
+ * real time: the five seconds to find the fuel in HALLWAY A, CLASSROOM A (the keys, the bear, and
  * what's waking up in there), an ear to its door, the DODGE when the gun comes up, the timing
  * when he tries to DISTRACT it.
  */
@@ -156,6 +156,7 @@
   function heroTags(b) {
     const t = b.hero.mods.map((m) => ({ text: m.label, good: true }));
     if (b.hero.ears) t.push({ text: 'SHARP EARS', good: true });
+    if (b.hero.halluc) t.push({ text: 'HEARING THINGS', good: false });
     if (b.hero.frozen) t.push({ text: 'FROZEN', good: false });
     return t;
   }
@@ -377,7 +378,7 @@
   }
 
   const FX_AT = { attack: 0.45, voice: 0.5, chair: 0.42, bec: 0.6, newports: 0.5, breath: 0.6, squint: 0.9, brace: 0.5, kids: 0.6 };
-  const FOE_AT = { loom: 0.75, whisper: 0.7, faces: 0.65, lightsout: 0.7, aim: 0.85, lunge: 0.35 };
+  const FOE_AT = { loom: 0.75, whisper: 0.7, faces: 0.65, lightsout: 0.7, aim: 0.85, lunge: 0.35, echo: 0.75 };
   async function play(events) {
     const b = UI.b;
     for (const e of events) {
@@ -484,6 +485,8 @@
         case 'round':
           if (v) Object.assign(v, snapshot(b));
           refresh();
+          // HEARING THINGS: now and then, from down the hall, something moans. Or doesn't.
+          if (b.hero.halluc && Math.random() < 0.6) setTimeout(() => A().sample(Math.random() < 0.5 ? 'moan2' : 'moan3', { rate: 0.6 + Math.random() * 0.3, vol: 0.14, dur: 2.5 + Math.random() * 1.5 }), 500 + Math.random() * 2500);
           break;
         case 'flee':
           UI.travel = e.to;
@@ -547,7 +550,7 @@
     clearTimeout(t._h);
     t._h = setTimeout(() => (t.hidden = true), ms);
   }
-  // HALLWAY A: 25 seconds to find the can in the dark, before it's there again
+  // HALLWAY A: five seconds (DATA.search) to find the can in the dark, before it's there again
   function searchHall() {
     return new Promise((resolve) => {
       UI.mode = 'search';
@@ -698,8 +701,8 @@
     A().stopMusic(0.3);
     A().stopLoops(0.1);
     A().sample('moan3', { rate: 1.2, vol: 1 });
-    A().play('static', 3.2);
     const ms = S().rootScare();
+    A().play('static', ms / 1000 + 0.3);
     await real(ms);
     S().toBlack(true, 0.01);
     if (!b.over) b.lose('root', []);
@@ -708,13 +711,15 @@
   }
 
   // An ear to the door of CLASSROOM A: what's in there, on a visualizer, the music down low.
-  // With SHARP EARS (Newports) it's loud and clear, and he can say what it is.
+  // With SHARP EARS (Newports) it's loud and clear, and he can say what it is. HEARING THINGS
+  // (the Gunman's Echo), what he hears may be louder than what's there, and he can't tell.
   async function listen() {
     const b = UI.b;
     UI.mode = 'listen';
     keypadOff(true);
-    const stage = b.rootStage();
+    const stage = b.heardStage();
     const ears = b.hero.ears > 0;
+    const halluc = b.hero.halluc > 0;
     A().duck(0.06, 0.5);
     const catcher = $('#listen-catch');
     catcher.hidden = false;
@@ -750,9 +755,11 @@
         for (let y = cv.height - 6; y > cv.height - hgt; y -= 6) x.fillRect(i * bw + 2, y, bw - 4, 4);
       }
       if (now - t0 > 2500 && !$('#listen-text').textContent) {
-        $('#listen-text').textContent = ears
-          ? ['Nothing. Not a sound. It’s quiet in there.', 'Something in there is moaning, low. Half asleep, maybe.', 'It’s awake in there. It’s right against the door, breathing. Don’t go in.'][stage - 1]
-          : 'Over his own heartbeat, Brayan can’t be sure what he’s hearing.';
+        $('#listen-text').textContent = halluc
+          ? 'It sounds like it’s in there. It sounded like it was in the hall, too, a minute ago. Brayan can’t tell anymore what’s behind the door and what’s in his own head.'
+          : ears
+            ? ['Nothing. Not a sound. It’s quiet in there.', 'Something in there is moaning, low. Half asleep, maybe.', 'It’s awake in there. It’s right against the door, breathing. Don’t go in.'][stage - 1]
+            : 'Over his own heartbeat, Brayan can’t be sure what he’s hearing.';
       }
       if (now - t0 > 45000) stop(); // (he doesn't stand there forever)
       requestAnimationFrame(draw);

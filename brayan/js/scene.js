@@ -29,6 +29,7 @@
     // the Gunman: there or not (a: how much), and how he is
     gun: { on: false, a: 0, stunned: 0, away: 0, lunge: 0, lungeTarget: 0, hit: 0, glint: 0, down: 0 },
     found: {}, // the hidden things he's taken
+    seat: 0, // which chair the bear's on, this time
     // CLASSROOM A: how awake it is, how far its root has grown, the roots coming down at him,
     // and it, at the back
     room: { stage: 1, grow: 0, fall: 0, tree: 0 },
@@ -60,13 +61,17 @@
       load(name + ':bg', p.bg);
       load(name + ':shadow', p.shadow);
       load(name + ':flash', p.flash);
-      for (const [k, h] of Object.entries(p.hidden || {})) load(name + ':' + k, h.src);
+      for (const [k, h] of Object.entries(p.hidden || {})) {
+        if (Array.isArray(h)) h.forEach((o, i) => load(name + ':' + k + ':' + i, o.src));
+        else load(name + ':' + k, h.src);
+      }
     }
     load('gunman', images.gunman);
     images.faces.forEach((src, i) => load('face' + i, src));
+    (images.crowd || []).forEach((src, i) => load('crowd' + i, src));
     for (const [k, src] of Object.entries(images.items)) load('item:' + k, src);
-    load('tree', images.tree, 0.45);
-    images.roots.forEach((src, i) => load('root' + i, src, 0.55));
+    load('tree', images.tree, 0.36);
+    images.roots.forEach((src, i) => load('root' + i, src, 0.45));
     images.scare.forEach((src, i) => load('scare' + i, src));
     // the low layers: under the HUD, over it
     const layer = () => {
@@ -135,7 +140,7 @@
 
   // ------------------------------------------------------------------ effects
   function add(dur, draw, o = {}) {
-    S.effects.push({ t0: S.t, dur: dur / 1000, draw, top: !!o.top });
+    S.effects.push({ t0: S.t, dur: dur / 1000, draw, top: !!o.top, cover: !!o.cover });
     return dur;
   }
   S.popup = function (text, x, y, o = {}) {
@@ -164,9 +169,10 @@
     }
     l.fill();
   }
-  // a face of his, at x, y (its middle), k screen pixels to each of its own
+  // a face of his (or, by name, one of the crowd's), at x, y (its middle), k screen pixels to
+  // each of its own
   function face(l, i, x, y, k, alpha = 1, jitter = 0) {
-    const im = sprites['face' + i];
+    const im = sprites[typeof i === 'string' ? i : 'face' + i];
     if (!im) return;
     l.save();
     l.globalAlpha = alpha;
@@ -375,7 +381,12 @@
       A().play('faces');
       S.darkTarget = 0.8;
       const fs = [];
-      for (let i = 0; i < 8; i++) fs.push({ i: Math.floor(Math.random() * 5), x: 120 + Math.random() * 1040, y: 90 + Math.random() * 560, k: 4 + Math.floor(Math.random() * 5), d: Math.random() * 0.4 });
+      // (his own face, as it is, and the faces of the thing in Crispy's house: 0 is his)
+      const n = (I.crowd || []).length || 1;
+      for (let i = 0; i < 9; i++) {
+        const c = i < 3 ? 0 : 1 + Math.floor(Math.random() * (n - 1));
+        fs.push({ i: 'crowd' + c, x: 120 + Math.random() * 1040, y: 90 + Math.random() * 560, k: 4 + Math.floor(Math.random() * 5), d: Math.random() * 0.4 });
+      }
       setTimeout(() => (S.darkTarget = 0), 2300);
       return add(2700, (l, p) => {
         for (const f of fs) {
@@ -394,6 +405,30 @@
       // (just the dark, and the breathing: no face at the screen. Only the thing in CLASSROOM A
       // gets one of those.)
       return 2200;
+    },
+    // HEARING THINGS: the dark, and from the side of the hall the classroom's on, the sound of
+    // what's in there, rippling out at him (or what he thinks is)
+    echo() {
+      A().play('whisper');
+      if (A().sample) setTimeout(() => A().sample(Math.random() < 0.5 ? 'moan2' : 'moan3', { rate: 0.7, vol: 0.32, dur: 2.6 }), 300);
+      S.darkTarget = 0.7;
+      setTimeout(() => (S.darkTarget = 0), 2400);
+      const [ox, oy] = S.place === 'hallA' ? [150, 470] : [60, 430];
+      return add(2800, (l, p) => {
+        l.save();
+        for (let i = 0; i < 6; i++) {
+          const q = p * 1.6 - i * 0.14;
+          if (q <= 0 || q > 1) continue;
+          const r = 30 + q * 760;
+          l.strokeStyle = i % 2 ? '#7a2a22' : '#a8584a';
+          l.globalAlpha = (1 - q) * 0.55;
+          l.lineWidth = 6;
+          l.beginPath();
+          l.arc(ox, oy, r, -1.1, 1.1);
+          l.stroke();
+        }
+        l.restore();
+      });
     },
     aim() {
       A().play('aim');
@@ -501,6 +536,12 @@
   // where its root hangs from the ceiling, and where it is, at the back
   const HANG = [640, 40];
   const BACK = [790, 556];
+  // the roots that come down at him: which (from the biggest: -1), where across the ceiling,
+  // when (how far into it being awake), and which way round; the far ones first
+  const FALL = [
+    [-3, 90, 0.0, 0], [-4, 1190, 0.04, 1], [-2, 330, 0.1, 1], [-5, 960, 0.14, 0],
+    [-1, 760, 0.22, 0], [-2, 520, 0.3, 0], [-3, 1080, 0.38, 1], [-1, 200, 0.45, 1], [-1, 640, 0.55, 0],
+  ];
   S.roomState = function (o) {
     Object.assign(S.room, o);
   };
@@ -529,20 +570,31 @@
         ctx.drawImage(rt, 0, y, rt.width, 1, HANG[0] - (rt.width * k) / 2 + s * k, HANG[1] + y * k, rt.width * k, k);
       }
     }
-    // and, awake, the roots coming down at him: bigger, closer, till they're all there is
+    // and, awake, the roots coming down at him, all across the ceiling: bigger, closer,
+    // spreading out as they come, till they're all there is
     if (r.fall > 0) {
-      const big = [n - 1, n - 2, n - 4];
-      big.forEach((ri, j) => {
-        const im = sprites['root' + ri];
+      FALL.forEach(([ri, x0, delay, flip], j) => {
+        const im = sprites['root' + Math.max(0, n + ri)];
         if (!im) return;
-        const q = clamp(r.fall * 1.2 - j * 0.1, 0, 1);
-        const k = 3 + q * q * 16;
-        const x = [520, 820, 660][j] + (640 - [520, 820, 660][j]) * q * 0.5;
-        const y = -im.height * k + (im.height * k * 0.35 + q * (H * 0.9));
-        for (let row = 0; row < im.height; row++) {
-          const s = Math.sin(S.t * 2.2 + row * 0.2 + j) * 1.2 * (row / im.height);
-          ctx.drawImage(im, 0, row, im.width, 1, x - (im.width * k) / 2 + s * k, y + row * k, im.width * k, k + 1);
+        const q = clamp((r.fall - delay) / (1 - delay), 0, 1);
+        if (q <= 0) return;
+        const k = 2 + q * q * 9;
+        const x = x0 + (x0 - 640) * q * 0.55;
+        const y = -im.height * k + im.height * k * 0.3 + q * (H * 0.8);
+        ctx.save();
+        if (flip) {
+          ctx.translate(2 * x, 0);
+          ctx.scale(-1, 1);
         }
+        // (in strips of a few rows, each swaying its own way: one row at a time is too slow, with
+        // this many this big)
+        const step = 3;
+        for (let row = 0; row < im.height; row += step) {
+          const rows = Math.min(step, im.height - row);
+          const s = Math.sin(S.t * 2.2 + row * 0.2 + j) * 1.2 * (row / im.height);
+          ctx.drawImage(im, 0, row, im.width, rows, x - (im.width * k) / 2 + s * k, y + row * k, im.width * k, rows * k + 1);
+        }
+        ctx.restore();
       });
     }
     ctx.restore();
@@ -550,7 +602,7 @@
   // It had him: the frames, too fast, through static.
   S.rootScare = function () {
     const order = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-    const each = [0.3, 0.3, 0.3, 0.3, 0.12, 0.25, 0.3, 0.25, 0.2, 0.14, 0.12, 0.12, 0.16, 0.1, 0.12, 0.3, 0.6];
+    const each = [0.12, 0.1, 0.1, 0.1, 0.05, 0.1, 0.12, 0.1, 0.08, 0.06, 0.05, 0.05, 0.07, 0.05, 0.06, 0.14, 0.35];
     const total = each.reduce((a, b) => a + b, 0);
     return add(total * 1000, (l, p, ctx) => {
       let T = p * total;
@@ -567,7 +619,7 @@
       }
       ctx.restore();
       S.shake = i > 7 ? 14 : 0;
-    }, { top: true });
+    }, { top: true, cover: true });
   };
 
   // ------------------------------------------------------------------ every frame
@@ -680,6 +732,12 @@
   }
 
   S.draw = function (ctx) {
+    // (all of it covered, by its jumpscare: nothing under it to draw)
+    if (S.effects.some((e) => e.cover)) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
     const sx = S.shake ? Math.round(((Math.random() - 0.5) * S.shake) / PX) * PX : 0;
     const sy = (S.shake ? Math.round(((Math.random() - 0.5) * S.shake) / PX) * PX : 0) + Math.round(Math.sin((S.drop || 0) * Math.PI) * 70);
     const p = P();
@@ -696,9 +754,10 @@
       ctx.globalAlpha = 1;
     }
     // what's hidden here, where it is, till he takes it
-    for (const [k, h] of Object.entries(p.hidden || {})) {
+    for (const k of Object.keys(p.hidden || {})) {
       if (S.found[k]) continue;
-      const im = sprites[S.place + ':' + k];
+      const h = S.spot(k);
+      const im = sprites[h.key];
       if (im) ctx.drawImage(im, h.x + sx, h.y + sy, h.w, h.h);
     }
     if (S.place === 'classA') drawRoom(ctx);
@@ -750,17 +809,25 @@
 
   // ------------------------------------------------------------------ the searches
   // Did a tap (stage pixels) land on something hidden here (and not taken yet)?
+  // (where a hidden thing is, here: the bear's on one of its chairs, `S.seat`)
+  S.spot = function (k) {
+    const h = P().hidden && P().hidden[k];
+    if (!h) return null;
+    if (!Array.isArray(h)) return { ...h, key: S.place + ':' + k };
+    const i = S.seat % h.length;
+    return { ...h[i], key: S.place + ':' + k + ':' + i };
+  };
   S.hitItem = function (x, y) {
-    for (const [k, h] of Object.entries(P().hidden || {})) {
+    for (const k of Object.keys(P().hidden || {})) {
       if (S.found[k]) continue;
-      const [hx, hy, hw, hh] = h.hit;
+      const [hx, hy, hw, hh] = S.spot(k).hit;
       if (x >= hx && x <= hx + hw && y >= hy && y <= hy + hh) return k;
     }
     return null;
   };
   // taken: it lifts out of the dark, and it's gone
   S.take = function (k) {
-    const h = P().hidden[k];
+    const h = S.spot(k);
     S.found[k] = true;
     A().play('find');
     const key = { can: 'can', keys: 'keys', bear: 'bear' }[k];
@@ -796,6 +863,7 @@
     S.effects = [];
     S.popups = [];
     S.found = {};
+    S.seat = Math.floor(Math.random() * 4); // (a different chair, most times)
     S.dark = S.darkTarget = 0;
     S.black = S.blackTarget = 0;
     S.gun = { on: false, a: 0, stunned: 0, away: 0, lunge: 0, lungeTarget: 0, hit: 0, glint: 0, down: 0 };

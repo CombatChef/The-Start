@@ -55,14 +55,16 @@
     moves: {
       loom: { name: 'Loom', pat: 14, line: 'The Gunman leans in, closer, without taking a step.' },
       whisper: { name: 'Whisper', pat: 18, line: 'From the dark, it whispers the kids’ names. It gets every one right.' },
-      faces: { name: 'Faces', pat: 20, hp: 0.08, line: 'Faces open in the dark all around it. Every one of them is its own.' },
+      faces: { name: 'Faces', pat: 20, hp: 0.08, line: 'Faces open in the dark all around it: its own, over and over, and others. Long, grey ones, from somebody else’s house.' },
       lightsout: { name: 'Lights Out', pat: 24, hp: 0.12, line: 'The light at the end of the hall goes out. Something breathes right in front of Brayan.' },
       aim: { name: 'Aim', pat: 22, line: 'It points the gun at Brayan, and holds it there. And holds it there.' },
+      // (and for `halluc` turns Brayan hears things at the door of CLASSROOM A that aren't there)
+      echo: { name: 'Echo', pat: 12, halluc: 4, line: 'It turns its head toward CLASSROOM A, and something behind the door moans back. Or Brayan only thinks it does. He’s HEARING THINGS.' },
       lunge: { name: 'Lunge', power: 1.8, line: 'It comes down the hall at him all at once.' },
       gunshot: { name: 'Gunshot', line: 'It cocks the gun.' },
     },
     // how often each, early on and once it's hurt
-    weights: { fresh: { loom: 3, whisper: 3, faces: 3, lightsout: 2, aim: 2, lunge: 2 }, hurt: { loom: 2, whisper: 2, faces: 3, lightsout: 3, aim: 2, lunge: 4 } },
+    weights: { fresh: { loom: 3, whisper: 3, faces: 3, lightsout: 2, aim: 2, lunge: 2, echo: 2 }, hurt: { loom: 2, whisper: 2, faces: 3, lightsout: 3, aim: 2, lunge: 4, echo: 2 } },
 
     // Where he has to go, and what's there. FUEL: how many cans the bus needs (one, for now).
     places: {
@@ -71,11 +73,13 @@
       classA: { name: 'CLASSROOM A', where: 'CLASSROOM A' },
     },
     fuel: 1,
-    search: 25, // seconds to find the can in HALLWAY A before the Gunman's back
-    // THE THING IN CLASSROOM A: quiet (1), moaning (2), awake (3), round by round. Inside, it
-    // wakes: `inside` seconds at each stage, then `awake` seconds of it awake, and then it has him.
-    // Walk in while it's awake and it has him right away.
-    root: { cycle: [1, 1, 1, 2, 2, 3, 3, 2], inside: [0, 15, 14], awake: 20 },
+    search: 5, // seconds to find the can in HALLWAY A before the Gunman's back
+    // THE THING IN CLASSROOM A: quiet (1), moaning (2) or awake (3), a new roll every round
+    // (`odds`, for each). Inside, it wakes, fast: `inside` seconds at each stage, then `awake`
+    // seconds of it awake, and then it has him. Walk in while it's awake and it has him right away.
+    // HEARING THINGS (the Gunman's Echo), Brayan hears it moan, or wake, when it might not have:
+    // `phantom`, the chance it sounds awake (otherwise half awake), if it isn't louder already.
+    root: { odds: [0.4, 0.35, 0.25], inside: [0, 4, 4], awake: 20, phantom: 0.6 },
     health: [
       { id: 'OK', upTo: 100 },
       { id: 'STABLE', upTo: 80 },

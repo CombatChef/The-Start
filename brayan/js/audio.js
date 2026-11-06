@@ -122,16 +122,29 @@
     return h;
   };
   A.stopLoops = (fade) => [...A.loops].forEach((h) => h.stop(fade));
-  A.sample = function (name, { rate = 1, vol = 0.8 } = {}) {
+  // (`dur`: just a piece of it, that long, from somewhere in it, faded in and out)
+  A.sample = function (name, { rate = 1, vol = 0.8, dur = 0 } = {}) {
     if (!A.ctx || !A.buffers[name] || !A.sfxOn) return;
+    const buf = A.buffers[name];
     const src = A.ctx.createBufferSource();
-    src.buffer = A.buffers[name];
+    src.buffer = buf;
     src.playbackRate.value = rate;
     const g = A.ctx.createGain();
-    g.gain.value = vol;
     src.connect(g);
     g.connect(A.sampleOut);
-    src.start();
+    const t = A.ctx.currentTime;
+    if (!dur) {
+      g.gain.value = vol;
+      src.start();
+      return;
+    }
+    const at = Math.random() * Math.max(0, buf.duration - dur * rate);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.6, dur / 3));
+    g.gain.setValueAtTime(vol, t + dur - Math.min(0.8, dur / 3));
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    src.start(t, at);
+    src.stop(t + dur + 0.05);
   };
   // (in bands spaced as the ear hears them: 50 Hz to 6 kHz)
   A.levels = function (n = 24) {

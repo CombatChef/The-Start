@@ -1,7 +1,9 @@
 // Plays Brayan's fight many times without the HUD, to see how the numbers hold up:
 //   node brayan/tests/simulate.js [fights]
 // smart: the escape route (stun, FLEE, find what's there, back out); killer: only fights;
-// random: anything. The searches always find the thing; a dodge lands `dodge` of the time.
+// random: anything. The five-second search finds the can `find` of the time (and CLASSROOM A
+// always gives up the keys); a dodge lands `dodge` of the time. Smart goes into CLASSROOM A when
+// it doesn't sound awake (HEARING THINGS, it may sound awake when it isn't).
 const { Battle } = require('../js/battle.js');
 const DATA = require('../js/data.js');
 
@@ -9,6 +11,7 @@ function play(style, seed) {
   const b = new Battle(seed);
   const rnd = b.rand;
   const dodge = { smart: 0.7, killer: 0.7, random: 0.4 }[style];
+  const find = 0.75;
   let guard = 0;
   let inClass = false;
   while (!b.over && guard++ < 300) {
@@ -24,7 +27,7 @@ function play(style, seed) {
         const to = o.flee.to;
         if (to.includes('out')) cmd = { type: 'flee', to: 'out' };
         else if (b.loc === 'entrance') cmd = { type: 'flee', to: 'hallA' };
-        else if (!b.have.keys && b.rootStage() < 3) cmd = { type: 'flee', to: 'classA' };
+        else if (!b.have.keys && b.heardStage() < 3) cmd = { type: 'flee', to: 'classA' };
         else if (b.have.keys) cmd = { type: 'flee', to: 'entrance' };
       }
       if (!cmd) cmd = h.pat >= 18 && rnd() < 0.3 ? { type: 'skill', id: 'chair' } : { type: 'attack' };
@@ -39,7 +42,7 @@ function play(style, seed) {
     const ev = b.command(cmd);
     for (const e of ev) {
       if (e.t !== 'flee') continue;
-      if (e.to === 'hallA' && !b.seen.hallA) { b.seen.hallA = true; b.collect('can'); }
+      if (e.to === 'hallA' && b.have.fuel < DATA.fuel && rnd() < find) b.collect('can');
       if (e.to === 'classA') { b.collect('keys'); b.collect('bear'); b.leaveClass(); }
     }
   }

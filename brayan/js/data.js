@@ -78,7 +78,7 @@
     // (`odds`, for each). Inside, it wakes, fast: `inside` seconds at each stage, then `awake`
     // seconds of it awake, and then it has him. Walk in while it's awake and it has him right away.
     // HEARING THINGS (the Gunman's Echo), at its door Brayan hears all of it at once, and can't tell.
-    root: { odds: [0.4, 0.35, 0.25], inside: [0, 4, 4], awake: 20 },
+    root: { odds: [0.4, 0.35, 0.25], inside: [0, 4, 4], awake: 8 },
     health: [
       { id: 'OK', upTo: 100 },
       { id: 'STABLE', upTo: 80 },

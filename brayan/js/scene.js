@@ -32,7 +32,7 @@
     seat: 0, // which chair the bear's on, this time
     // CLASSROOM A: how awake it is, how far its root has grown, the roots coming down at him,
     // and it, at the back
-    room: { stage: 1, grow: 0, fall: 0, tree: 0 },
+    room: { stage: 1, grow: 0, fall: 0 },
     hero: { shake: 0, flash: 0, down: 0, gold: 0 },
   };
   window.SCENE = S;
@@ -535,7 +535,10 @@
   // ------------------------------------------------------------------ CLASSROOM A
   // where its root hangs from the ceiling, and where it is, at the back
   const HANG = [640, 40];
-  const BACK = [790, 556];
+  // where it stands, in the dark corner at the back of the room (between the office chair and
+  // the door), where its feet are; and its size there
+  const CORNER = [1206, 606];
+  const CORNER_K = 0.85;
   // the roots that come down at him: which (from the biggest: -1), where across the ceiling,
   // when (how far into it being awake), and which way round; the far ones first
   const FALL = [
@@ -545,18 +548,21 @@
   S.roomState = function (o) {
     Object.assign(S.room, o);
   };
+  // It, standing in the corner, the whole time he's in there, watching him: not moving, but for
+  // breathing. (Behind the chair by it, and what's on the chair.)
+  function drawCreature(ctx, sx, sy) {
+    const tr = sprites.tree;
+    if (!tr) return;
+    const k = CORNER_K;
+    const h = tr.height * k * (1 + Math.sin(S.t * 1.1) * 0.006);
+    ctx.save();
+    ctx.globalAlpha = 0.62;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tr, CORNER[0] - (tr.width * k) / 2 + sx, CORNER[1] - h + sy, tr.width * k, h);
+    ctx.restore();
+  }
   function drawRoom(ctx) {
     const r = S.room;
-    // it, at the back of the room, in the dark: barely, then more
-    const tr = sprites.tree;
-    if (tr && r.tree > 0.01) {
-      ctx.save();
-      ctx.globalAlpha = r.tree;
-      ctx.imageSmoothingEnabled = false;
-      const k = 1;
-      ctx.drawImage(tr, BACK[0] - (tr.width * k) / 2, BACK[1] - tr.height * k, tr.width * k, tr.height * k);
-      ctx.restore();
-    }
     ctx.save();
     // its root, hanging from the ceiling, growing, writhing
     const n = I.roots.length;
@@ -753,6 +759,7 @@
       ctx.drawImage(sh, sx, sy, W, H);
       ctx.globalAlpha = 1;
     }
+    if (S.place === 'classA') drawCreature(ctx, sx, sy);
     // what's hidden here, where it is, till he takes it
     for (const k of Object.keys(p.hidden || {})) {
       if (S.found[k]) continue;
@@ -867,7 +874,7 @@
     S.dark = S.darkTarget = 0;
     S.black = S.blackTarget = 0;
     S.gun = { on: false, a: 0, stunned: 0, away: 0, lunge: 0, lungeTarget: 0, hit: 0, glint: 0, down: 0 };
-    S.room = { stage: 1, grow: 0, fall: 0, tree: 0 };
+    S.room = { stage: 1, grow: 0, fall: 0 };
     S.hero = { shake: 0, flash: 0, down: 0, gold: 0 };
     S.setPlace('entrance');
   };

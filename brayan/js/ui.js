@@ -604,9 +604,10 @@
     if (UI.found) UI.found(k);
   }
 
-  // CLASSROOM A: the keys, and the bear one of the kids asked for. It's in there with him,
-  // waking up: a root grows down out of the ceiling; then it's awake, and the roots come down
-  // at him; in DATA.root.awake seconds it has him. Its sounds, all the while, lower and quieter.
+  // CLASSROOM A: the keys, and the bear one of the kids asked for. It's in there with him, in
+  // the corner, waking up: a root grows down out of the ceiling; then it's awake, and the roots
+  // come down at him; in DATA.root.awake seconds it has him. Its sounds, all the while, lower
+  // and quieter.
   function classroom(stage) {
     const b = UI.b;
     UI.mode = 'class';
@@ -642,7 +643,7 @@
         if (st === 3) A().play('creak');
       }
       const grow = st === 1 ? (t / R.inside[1]) * 0.3 : st === 2 ? 0.3 + (t / R.inside[2]) * 0.5 : 0.8 + (t / R.awake) * 0.2;
-      S().roomState({ stage: st, grow: Math.min(1, grow), fall: st === 3 ? t / R.awake : 0, tree: st === 1 ? 0 : st === 2 ? 0.12 : 0.25 + (t / R.awake) * 0.4 });
+      S().roomState({ stage: st, grow: Math.min(1, grow), fall: st === 3 ? t / R.awake : 0 });
       if (st === 3 && t >= R.awake) {
         done = true;
         if (sound) sound.stop(0.1);
@@ -668,7 +669,7 @@
       b.leaveClass();
       A().play('run');
       await real(S().toBlack(true, 0.4));
-      S().roomState({ stage: 1, grow: 0, fall: 0, tree: 0 });
+      S().roomState({ stage: 1, grow: 0, fall: 0 });
       S().setPlace('hallA');
       A().duck(1);
       hudAway(false);

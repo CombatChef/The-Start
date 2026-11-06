@@ -42,10 +42,11 @@ The bus needs the fuel (one can, for now) and the keys.
    nothing (it's quiet), moaning (it's half awake), or the other one (it's awake: walk in and it
    has him). Unless he's HEARING THINGS: then he hears all of it, and can't tell.
    Inside, in the dark, there are the keys, and the bear one of the kids asked for (on a
-   different chair, most games). It wakes fast while he looks: its sounds, lower and quieter; a
-   root grows down out of the ceiling; a few seconds later it's awake, and the roots come down
-   all across the ceiling at his face. Twenty seconds of that and it has him. **BACK TO THE
-   DOOR** gets him out, back to the fight in HALLWAY A.
+   different chair, most games). And it: standing in the dark corner at the back, the whole time,
+   watching him. It wakes fast while he looks: its sounds, lower and quieter; a root grows down
+   out of the ceiling; a few seconds later it's awake, and the roots come down all across the
+   ceiling at his face, fast. Eight seconds of that and it has him. **BACK TO THE DOOR** gets
+   him out, back to the fight in HALLWAY A.
 4. **Out.** With the fuel and the keys: stun him in HALLWAY A, FLEE back to the entrance, stun or
    distract him there, and FLEE out the front doors to Bus 13. (The bear's for the ending.)
 

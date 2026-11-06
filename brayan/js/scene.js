@@ -391,12 +391,9 @@
       S.darkTarget = 1;
       S.dark = 0.6;
       setTimeout(() => (S.darkTarget = 0), 1900);
-      return add(2200, (l, p) => {
-        if (p > 0.45 && p < 0.6 && Math.random() < 0.8) {
-          face(l, 1, 640, 470, 15, 0.9, 2);
-          S.shake = 10;
-        }
-      }, { top: true });
+      // (just the dark, and the breathing: no face at the screen. Only the thing in CLASSROOM A
+      // gets one of those.)
+      return 2200;
     },
     aim() {
       A().play('aim');

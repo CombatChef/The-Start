@@ -183,10 +183,15 @@ def cut(name, k, bg=None, box=None):
 
 
 def portrait():
-    """Brayan, as pixels, his grey taken away (his badge puts its own behind him)."""
+    """Brayan, as pixels, his grey taken away (his badge puts its own behind him); a little
+    greyer and dimmer than the picture, for the dark he's standing in."""
     im = Image.open(os.path.join(SRC, 'brayan_portrait.png')).convert('RGBA')
     a = np.asarray(im)[6::12, 6::12].copy()
     a[(np.abs(a[..., :3].astype(int) - 40).sum(2) < 6), 3] = 0
+    rgb = a[..., :3].astype(np.float32)
+    grey = rgb @ np.array([0.3, 0.59, 0.11], np.float32)
+    rgb = (rgb * 0.62 + grey[..., None] * 0.38) * 0.92 + np.array([0, 2, 6], np.float32)
+    a[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
     return Image.fromarray(a)
 
 

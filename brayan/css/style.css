@@ -306,9 +306,9 @@ body {
   color: #c9d6ff;
 }
 .portrait {
-  /* (his picture, exactly: 4 screen pixels to each of his) */
-  width: 192px;
-  height: 232px;
+  /* (his picture, exactly: 5 screen pixels to each of his, as wide as the badge lets it be) */
+  width: 240px;
+  height: 290px;
   margin: 0 auto 8px;
   overflow: hidden;
   position: relative;
@@ -320,8 +320,8 @@ body {
   justify-content: center;
 }
 #me-pic {
-  width: 192px;
-  height: 232px;
+  width: 240px;
+  height: 290px;
   image-rendering: pixelated;
   display: block;
 }
@@ -798,7 +798,14 @@ body {
 }
 
 /* ------------------------------------------------------------------ an ear to the door */
+#listen-catch {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.25);
+}
 #listen {
+  pointer-events: none;
   left: calc(50% - 310px);
   top: 250px;
   width: 620px;
@@ -814,6 +821,13 @@ body {
   display: block;
   margin: 12px auto 0;
   image-rendering: pixelated;
+}
+#listen .hint {
+  margin-top: 10px;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  animation: blink 1.4s steps(2) infinite;
 }
 #listen p {
   min-height: 28px;

@@ -325,6 +325,7 @@
     $('#desc').textContent = o ? (o.ok ? o.doc || '' : `${o.why}. ${o.doc || ''}`) : '';
   }
   async function pick() {
+    if (UI.mode !== 'sub') return;
     const o = UI.opts[UI.optSel];
     if (!o) return;
     if (!o.ok) return A().play('deny');
@@ -715,43 +716,65 @@
     const stage = b.rootStage();
     const ears = b.hero.ears > 0;
     A().duck(0.06, 0.5);
+    const catcher = $('#listen-catch');
+    catcher.hidden = false;
     $('#listen').hidden = false;
     $('#listen-text').textContent = '';
     A().play('door');
-    await real(500);
+    let stop;
+    const stopped = new Promise((r) => (stop = r));
+    // (a tap, anywhere, or a key: it stops; the tap goes nowhere else)
+    const onTap = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      stop();
+    };
+    catcher.addEventListener('pointerdown', onTap);
+    UI.stopListening = stop;
     const h = stage === 2 ? A().loop('moan2', { vol: ears ? 0.6 : 0.16 }) : stage === 3 ? A().loop('moan3', { vol: ears ? 0.65 : 0.18 }) : null;
     const cv = $('#listen-bars');
     const x = cv.getContext('2d');
     const t0 = performance.now();
-    const LEN = 5500;
-    await new Promise((resolve) => {
-      const draw = (now) => {
-        const p = (now - t0) / LEN;
-        x.fillStyle = '#05070b';
-        x.fillRect(0, 0, cv.width, cv.height);
-        const lv = A().levels(28);
-        const n = lv.length;
-        const bw = Math.floor(cv.width / n);
-        for (let i = 0; i < n; i++) {
-          const v = Math.min(1, lv[i] * (ears ? 1.4 : 1) + Math.random() * 0.04);
-          const hgt = Math.round((v * (cv.height - 10)) / 6) * 6 + 6;
-          x.fillStyle = v > 0.5 ? '#e0473c' : v > 0.2 ? '#f5b800' : '#3c6f5a';
-          for (let y = cv.height - 6; y > cv.height - hgt; y -= 6) x.fillRect(i * bw + 2, y, bw - 4, 4);
-        }
-        if (p > 0.45 && !$('#listen-text').textContent) {
-          $('#listen-text').textContent = ears
-            ? ['Nothing. Not a sound. It’s quiet in there.', 'Something in there is moaning, low. Half asleep, maybe.', 'It’s awake in there. It’s right against the door, breathing. Don’t go in.'][stage - 1]
-            : 'Over his own heartbeat, Brayan can’t be sure what he’s hearing.';
-        }
-        if (p < 1) requestAnimationFrame(draw);
-        else resolve();
-      };
+    let done = false;
+    const draw = (now) => {
+      if (done) return;
+      x.fillStyle = '#05070b';
+      x.fillRect(0, 0, cv.width, cv.height);
+      const lv = A().levels(28);
+      const n = lv.length;
+      const bw = Math.floor(cv.width / n);
+      for (let i = 0; i < n; i++) {
+        const v = Math.min(1, lv[i] * (ears ? 1.4 : 1) + Math.random() * 0.04);
+        const hgt = Math.round((v * (cv.height - 10)) / 6) * 6 + 6;
+        x.fillStyle = v > 0.5 ? '#e0473c' : v > 0.2 ? '#f5b800' : '#3c6f5a';
+        for (let y = cv.height - 6; y > cv.height - hgt; y -= 6) x.fillRect(i * bw + 2, y, bw - 4, 4);
+      }
+      if (now - t0 > 2500 && !$('#listen-text').textContent) {
+        $('#listen-text').textContent = ears
+          ? ['Nothing. Not a sound. It’s quiet in there.', 'Something in there is moaning, low. Half asleep, maybe.', 'It’s awake in there. It’s right against the door, breathing. Don’t go in.'][stage - 1]
+          : 'Over his own heartbeat, Brayan can’t be sure what he’s hearing.';
+      }
+      if (now - t0 > 45000) stop(); // (he doesn't stand there forever)
       requestAnimationFrame(draw);
-    });
-    if (h) h.stop(0.6);
-    await real(900);
+    };
+    requestAnimationFrame(draw);
+    await stopped;
+    done = true;
+    UI.stopListening = null;
+    catcher.removeEventListener('pointerdown', onTap);
+    if (h) h.stop(0.4);
     $('#listen').hidden = true;
+    A().play('back');
     A().duck(1);
+    // the catcher stays a moment longer, so the rest of the tap (and any second one) lands on it
+    const swallow = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    catcher.addEventListener('click', swallow);
+    await real(350);
+    catcher.removeEventListener('click', swallow);
+    catcher.hidden = true;
     open('flee');
   }
 
@@ -850,6 +873,11 @@
     }
     if (UI.mode === 'class') {
       if (k === 'Escape' || k === 'x') UI.leave && UI.leave();
+      return;
+    }
+    if (UI.mode === 'listen') {
+      if (UI.stopListening) UI.stopListening();
+      e.preventDefault();
       return;
     }
     if (UI.typing && (k === 'Enter' || k === 'z' || k === ' ')) {

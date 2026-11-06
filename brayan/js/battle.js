@@ -28,7 +28,7 @@
       this.round = 1;
       this.loc = 'entrance';
       this.have = { fuel: 0, keys: false, bear: false };
-      this.rolled = {}; // the thing in CLASSROOM A, this round: how awake it is, and what Brayan hears
+      this.rolled = {}; // the thing in CLASSROOM A: how awake it is, this round
       this.over = null; // 'win' (it's dead), 'escape' (they're gone), 'lose'
       this.lostTo = null; // 'gunman' or 'root'
       this.pending = null; // the shot, waiting on Brayan's dodge
@@ -72,17 +72,14 @@
           if ((x -= p) < 0) break;
           st++;
         }
-        Object.assign(r, { round: this.round, stage: Math.min(3, st), heard: null });
+        Object.assign(r, { round: this.round, stage: Math.min(3, st) });
       }
       return r.stage;
     }
-    // what Brayan hears at its door: what's there, or, HEARING THINGS, maybe more than that
+    // what Brayan hears at its door: what's there; or, HEARING THINGS, all of it at once, and
+    // he can't tell (null)
     heardStage() {
-      const real = this.rootStage();
-      if (!this.hero.halluc) return real;
-      const r = this.rolled;
-      if (r.heard == null) r.heard = Math.max(real, this.rand() < DATA.root.phantom ? 3 : 2);
-      return r.heard;
+      return this.hero.halluc ? null : this.rootStage();
     }
     options() {
       const h = this.hero;
@@ -303,7 +300,6 @@
       if (mv.pat) this.hurtPat(Math.round(mv.pat * (0.85 + this.rand() * 0.3)), ev);
       if (mv.halluc) {
         this.hero.halluc = mv.halluc;
-        this.rolled.heard = null;
         ev.push({ t: 'tag' });
       }
     }

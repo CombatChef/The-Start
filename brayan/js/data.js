@@ -58,7 +58,7 @@
       faces: { name: 'Faces', pat: 20, hp: 0.08, line: 'Faces open in the dark all around it: its own, over and over, and others. Long, grey ones, from somebody else’s house.' },
       lightsout: { name: 'Lights Out', pat: 24, hp: 0.12, line: 'The light at the end of the hall goes out. Something breathes right in front of Brayan.' },
       aim: { name: 'Aim', pat: 22, line: 'It points the gun at Brayan, and holds it there. And holds it there.' },
-      // (and for `halluc` turns Brayan hears things at the door of CLASSROOM A that aren't there)
+      // (and for `halluc` turns Brayan hears things at the door of CLASSROOM A, all of them at once)
       echo: { name: 'Echo', pat: 12, halluc: 4, line: 'It turns its head toward CLASSROOM A, and something behind the door moans back. Or Brayan only thinks it does. He’s HEARING THINGS.' },
       lunge: { name: 'Lunge', power: 1.8, line: 'It comes down the hall at him all at once.' },
       gunshot: { name: 'Gunshot', line: 'It cocks the gun.' },
@@ -77,9 +77,8 @@
     // THE THING IN CLASSROOM A: quiet (1), moaning (2) or awake (3), a new roll every round
     // (`odds`, for each). Inside, it wakes, fast: `inside` seconds at each stage, then `awake`
     // seconds of it awake, and then it has him. Walk in while it's awake and it has him right away.
-    // HEARING THINGS (the Gunman's Echo), Brayan hears it moan, or wake, when it might not have:
-    // `phantom`, the chance it sounds awake (otherwise half awake), if it isn't louder already.
-    root: { odds: [0.4, 0.35, 0.25], inside: [0, 4, 4], awake: 20, phantom: 0.6 },
+    // HEARING THINGS (the Gunman's Echo), at its door Brayan hears all of it at once, and can't tell.
+    root: { odds: [0.4, 0.35, 0.25], inside: [0, 4, 4], awake: 20 },
     health: [
       { id: 'OK', upTo: 100 },
       { id: 'STABLE', upTo: 80 },

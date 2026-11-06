@@ -3,7 +3,7 @@
 // smart: the escape route (stun, FLEE, find what's there, back out); killer: only fights;
 // random: anything. The five-second search finds the can `find` of the time (and CLASSROOM A
 // always gives up the keys); a dodge lands `dodge` of the time. Smart goes into CLASSROOM A when
-// it doesn't sound awake (HEARING THINGS, it may sound awake when it isn't).
+// it doesn't sound awake (HEARING THINGS, it can't tell, so it doesn't).
 const { Battle } = require('../js/battle.js');
 const DATA = require('../js/data.js');
 
@@ -27,7 +27,7 @@ function play(style, seed) {
         const to = o.flee.to;
         if (to.includes('out')) cmd = { type: 'flee', to: 'out' };
         else if (b.loc === 'entrance') cmd = { type: 'flee', to: 'hallA' };
-        else if (!b.have.keys && b.heardStage() < 3) cmd = { type: 'flee', to: 'classA' };
+        else if (!b.have.keys && (b.heardStage() || 3) < 3) cmd = { type: 'flee', to: 'classA' };
         else if (b.have.keys) cmd = { type: 'flee', to: 'entrance' };
       }
       if (!cmd) cmd = h.pat >= 18 && rnd() < 0.3 ? { type: 'skill', id: 'chair' } : { type: 'attack' };

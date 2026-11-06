@@ -40,17 +40,28 @@
       A.sampleOut.connect(A.analyser);
       A.analyser.connect(A.ctx.destination);
       A.bins = new Uint8Array(A.analyser.frequencyBinCount);
+      // (from the text of them, here: a page can be kept from fetching even its own data: URLs,
+      // and some browsers only take the callbacks)
       for (const [k, src] of Object.entries(A.samples || {})) {
         if (!src) continue;
-        fetch(src)
-          .then((r) => r.arrayBuffer())
-          .then((buf) => A.ctx.decodeAudioData(buf))
-          .then((b) => (A.buffers[k] = b))
-          .catch(() => {});
+        try {
+          const done = (b) => (A.buffers[k] = b);
+          const p = A.ctx.decodeAudioData(bytes(src), done, () => {});
+          if (p && p.catch) p.catch(() => {});
+        } catch (e) {
+          /* (no sound from the classroom, then) */
+        }
       }
     }
     if (A.ctx.state === 'suspended') A.ctx.resume();
   };
+
+  function bytes(dataUrl) {
+    const bin = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  }
 
   // ------------------------------------------------------------------ music
   A.playMusic = function () {
@@ -109,6 +120,8 @@
     src.start();
     const h = {
       name,
+      src,
+      rate,
       stop(fade = 0.6) {
         const t = A.ctx.currentTime;
         g.gain.cancelScheduledValues(t);

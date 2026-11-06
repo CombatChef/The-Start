@@ -712,14 +712,15 @@
 
   // An ear to the door of CLASSROOM A: what's in there, on a visualizer, the music down low.
   // With SHARP EARS (Newports) it's loud and clear, and he can say what it is. HEARING THINGS
-  // (the Gunman's Echo), what he hears may be louder than what's there, and he can't tell.
+  // (the Gunman's Echo), he hears all of it at once, its moaning and the other one over each
+  // other, drifting, the bars jumping and flashing, and he can't tell what's really in there.
   async function listen() {
     const b = UI.b;
     UI.mode = 'listen';
     keypadOff(true);
-    const stage = b.heardStage();
-    const ears = b.hero.ears > 0;
     const halluc = b.hero.halluc > 0;
+    const stage = halluc ? 0 : b.heardStage();
+    const ears = b.hero.ears > 0;
     A().duck(0.06, 0.5);
     const catcher = $('#listen-catch');
     catcher.hidden = false;
@@ -736,22 +737,40 @@
     };
     catcher.addEventListener('pointerdown', onTap);
     UI.stopListening = stop;
-    const h = stage === 2 ? A().loop('moan2', { vol: ears ? 0.6 : 0.16 }) : stage === 3 ? A().loop('moan3', { vol: ears ? 0.65 : 0.18 }) : null;
+    const hs = halluc
+      ? [A().loop('moan2', { vol: 0.55, rate: 0.95 }), A().loop('moan3', { vol: 0.6, rate: 1.05 })]
+      : [stage === 2 ? A().loop('moan2', { vol: ears ? 0.6 : 0.16 }) : stage === 3 ? A().loop('moan3', { vol: ears ? 0.65 : 0.18 }) : null];
     const cv = $('#listen-bars');
     const x = cv.getContext('2d');
     const t0 = performance.now();
     let done = false;
+    // (HEARING THINGS: what isn't there, on every band, in bursts)
+    const ghost = new Array(28).fill(0);
+    let burst = 0;
+    let flash = false;
     const draw = (now) => {
       if (done) return;
-      x.fillStyle = '#05070b';
-      x.fillRect(0, 0, cv.width, cv.height);
       const lv = A().levels(28);
       const n = lv.length;
+      if (halluc) {
+        if (now - burst > 70 + Math.random() * 140) {
+          burst = now;
+          flash = Math.random() < 0.3;
+          for (let i = 0; i < n; i++) if (Math.random() < 0.55) ghost[i] = 0.3 + Math.random() * 0.7;
+        }
+        for (let i = 0; i < n; i++) ghost[i] *= 0.9;
+        // (the two of them drifting against each other)
+        const s = (now - t0) / 1000;
+        hs.forEach((h, j) => h && h.src.playbackRate.setValueAtTime(h.rate * (1 + Math.sin(s * (0.7 + j * 0.45)) * 0.08), A().ctx.currentTime));
+        cv.style.transform = flash ? `translate(${Math.round((Math.random() - 0.5) * 6)}px, ${Math.round((Math.random() - 0.5) * 4)}px)` : '';
+      }
+      x.fillStyle = halluc && flash ? '#240707' : '#05070b';
+      x.fillRect(0, 0, cv.width, cv.height);
       const bw = Math.floor(cv.width / n);
       for (let i = 0; i < n; i++) {
-        const v = Math.min(1, lv[i] * (ears ? 1.4 : 1) + Math.random() * 0.04);
+        const v = Math.min(1, halluc ? Math.max(lv[i] * 1.4, ghost[i]) + Math.random() * 0.06 : lv[i] * (ears ? 1.4 : 1) + Math.random() * 0.04);
         const hgt = Math.round((v * (cv.height - 10)) / 6) * 6 + 6;
-        x.fillStyle = v > 0.5 ? '#e0473c' : v > 0.2 ? '#f5b800' : '#3c6f5a';
+        x.fillStyle = halluc ? (flash || Math.random() < 0.5 ? '#e0473c' : '#f5b800') : v > 0.5 ? '#e0473c' : v > 0.2 ? '#f5b800' : '#3c6f5a';
         for (let y = cv.height - 6; y > cv.height - hgt; y -= 6) x.fillRect(i * bw + 2, y, bw - 4, 4);
       }
       if (now - t0 > 2500 && !$('#listen-text').textContent) {
@@ -769,7 +788,8 @@
     done = true;
     UI.stopListening = null;
     catcher.removeEventListener('pointerdown', onTap);
-    if (h) h.stop(0.4);
+    hs.forEach((h) => h && h.stop(0.4));
+    cv.style.transform = '';
     $('#listen').hidden = true;
     A().play('back');
     A().duck(1);

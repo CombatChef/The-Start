@@ -13,8 +13,9 @@ Open `index.html` (after making its art and sounds: see below), or build it into
   the thing in Crispy's kitchen); the one light goes out and something breathes right there; he
   whispers the kids' names; he aims and holds it; he turns his head toward CLASSROOM A and
   something moans back (**HEARING THINGS**, for 4 turns: now and then something moans down the
-  hall, and at the classroom door Brayan may hear it moaning, or awake, when it isn't). Some go
-  for Brayan himself. Now and then (from round 3, never two close together)
+  hall, and at the classroom door Brayan hears all of it at once, its moaning and the other one
+  over each other, the bars flashing red and yellow, and can't tell what's really in there).
+  Some go for Brayan himself. Now and then (from round 3, never two close together)
   he cocks the gun: a **DODGE** button comes up for a moment. Tap it in time (or D / SPACE) and
   Brayan's on the floor when it fires; miss it and it takes nearly half his health. Either way,
   the hall lights up white for an instant, in big pixels, and his ears ring.
@@ -39,7 +40,7 @@ The bus needs the fuel (one can, for now) and the keys.
 3. **CLASSROOM A.** Something in there makes the sounds, and every round it's a new roll how
    awake it is. Checking the door shows them on a visualizer, with the music turned right down:
    nothing (it's quiet), moaning (it's half awake), or the other one (it's awake: walk in and it
-   has him). Unless he's HEARING THINGS: then it may sound worse than it is, and he can't tell.
+   has him). Unless he's HEARING THINGS: then he hears all of it, and can't tell.
    Inside, in the dark, there are the keys, and the bear one of the kids asked for (on a
    different chair, most games). It wakes fast while he looks: its sounds, lower and quieter; a
    root grows down out of the ceiling; a few seconds later it's awake, and the roots come down
